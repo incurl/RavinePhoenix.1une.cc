@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Custom components ─────────────────────────────────────── */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-6 py-3 rounded-lg
+           bg-po33-600 hover:bg-po33-700 text-white font-semibold
+           transition-colors shadow-md hover:shadow-lg
+           focus:outline-none focus:ring-2 focus:ring-po33-400
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-lg
+           border border-po33-500 text-po33-600 dark:text-po33-400
+           hover:bg-po33-50 dark:hover:bg-po33-900/30 font-medium
+           transition-colors;
+  }
+  .card {
+    @apply rounded-xl border border-slate-200 dark:border-slate-800
+           bg-white dark:bg-slate-900 p-6 shadow-sm hover:shadow-md
+           transition-shadow;
+  }
+  .card-title {
+    @apply text-lg font-semibold mb-2 text-slate-900 dark:text-slate-100;
+  }
+  .card-text {
+    @apply text-sm text-slate-600 dark:text-slate-400 leading-relaxed;
+  }
+  .terminal {
+    @apply font-mono text-sm bg-slate-900 text-slate-100
+           border-l-4 border-po33-500 p-4 rounded-md overflow-x-auto;
+  }
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold mb-3
+           text-slate-900 dark:text-slate-100;
+  }
+  .section-lede {
+    @apply text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-2xl;
+  }
+  .badge {
+    @apply inline-block px-2.5 py-0.5 text-xs font-mono
+           rounded-full bg-po33-100 dark:bg-po33-900/40
+           text-po33-700 dark:text-po33-300;
+  }
+}
+
+/* ─── esp-web-tools button styling ──────────────────────────── */
+esp-web-install-button {
+  --esp-tools-button-color: #ea580c;
+  --esp-tools-button-text-color: #ffffff;
+  --esp-tools-button-border-radius: 0.5rem;
+}
+
+/* ─── Code highlighting (minimal) ───────────────────────────── */
+.prose code,
+.prose pre {
+  font-family: theme("fontFamily.mono");
+}
+.prose pre {
+  @apply bg-slate-900 text-slate-100 p-4 rounded-md overflow-x-auto text-sm;
+}
+.prose code:not(pre code) {
+  @apply bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-sm
+         text-po33-700 dark:text-po33-300;
+}

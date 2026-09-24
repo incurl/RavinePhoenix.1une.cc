@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} — {% endif %}{{ site.name }}</title>
+  <meta name="description" content="{{ description or site.description }}">
+  <meta name="theme-color" content="#ea580c">
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="{{ site.canonical_url }}{{ page.url }}">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="{{ title or site.name }}">
+  <meta property="og:description" content="{{ description or site.description }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ site.canonical_url }}{{ page.url }}">
+
+  <link rel="stylesheet" href="/assets/css/main.css">
+
+  <!-- Inline theme bootstrap to avoid FOUC -->
+  <script>
+    (function () {
+      const saved = localStorage.getItem('po33-theme');
+      if (saved === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <!-- esp-web-tools loader -->
+  <script type="module"
+          src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head>
+<body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
+
+  {% include "navbar.njk" %}
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+    {{ content | safe }}
+  </main>
+
+  {% include "footer.njk" %}
+
+  <script src="/assets/js/theme.js" defer></script>
+  <script src="/assets/js/nav.js" defer></script>
+</body>
+</html>

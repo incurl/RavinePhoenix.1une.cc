@@ -1,0 +1,77 @@
+---
+layout: base.njk
+title: Docs
+description: Build instructions, UART shell reference, and project documentation for the PO-33 K.O! ESP32-S3 firmware.
+permalink: /docs/
+---
+
+<section class="pt-12 pb-8">
+  <h1 class="section-title">Documentation</h1>
+  <p class="section-lede">
+    Everything you need to build, flash, and extend the firmware.
+  </p>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Building from source</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Requires ESP-IDF v6.0 or newer. AMY sources must be vendored
+    under <code>components/amy/src/</code> — see the
+    <a href="{{ site.repo_url }}/blob/main/components/amy/README.md"
+       target="_blank" rel="noopener"
+       class="text-po33-600 hover:underline">vendor instructions</a>.
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">$</span> git clone --recursive https://github.com/espressif/esp-idf.git -b v6.0<br>
+    <span class="text-po33-300">$</span> cd esp-idf &amp;&amp; ./install.sh esp32s3 &amp;&amp; source export.sh<br>
+    <span class="text-po33-300">$</span> cd /path/to/RavinePhoenix.1une.cc<br>
+    <span class="text-po33-300">$</span> git clone --depth 1 https://github.com/shorepine/amy.git /tmp/amy<br>
+    <span class="text-po33-300">$</span> cp -r /tmp/amy/src/* components/amy/src/<br>
+    <span class="text-po33-300">$</span> idf.py set-target esp32s3<br>
+    <span class="text-po33-300">$</span> idf.py build<br>
+    <span class="text-po33-300">$</span> idf.py -p /dev/ttyUSB0 flash monitor
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Populating the firmware binaries</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    After <code>idf.py build</code>, copy the four output files into
+    <code>website/public/firmware/</code>:
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">$</span> cp build/bootloader/bootloader.bin     website/public/firmware/<br>
+    <span class="text-po33-300">$</span> cp build/partition_table/partition-table.bin website/public/firmware/partitions.bin<br>
+    <span class="text-po33-300">$</span> cp build/boot_app0.bin                website/public/firmware/<br>
+    <span class="text-po33-300">$</span> cp build/po33.bin                     website/public/firmware/firmware.bin
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">UART shell reference</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Connect at 115 200 baud and press <kbd>Enter</kbd>:
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">po33&gt;</span> help          <span class="text-slate-400"># show all commands</span><br>
+    <span class="text-po33-300">po33&gt;</span> play          <span class="text-slate-400"># start sequencer</span><br>
+    <span class="text-po33-300">po33&gt;</span> stop          <span class="text-slate-400"># stop sequencer</span><br>
+    <span class="text-po33-300">po33&gt;</span> bpm 140       <span class="text-slate-400"># set tempo (60..240)</span><br>
+    <span class="text-po33-300">po33&gt;</span> pattern 5     <span class="text-slate-400"># choose pattern 0..15</span><br>
+    <span class="text-po33-300">po33&gt;</span> rec 2         <span class="text-slate-400"># record into slot 2</span><br>
+    <span class="text-po33-300">po33&gt;</span> stoprec       <span class="text-slate-400"># stop recording</span><br>
+    <span class="text-po33-300">po33&gt;</span> free          <span class="text-slate-400"># heap stats</span><br>
+    <span class="text-po33-300">po33&gt;</span> save          <span class="text-slate-400"># persist patterns + samples</span><br>
+    <span class="text-po33-300">po33&gt;</span> load          <span class="text-slate-400"># reload from flash</span><br>
+    <span class="text-po33-300">po33&gt;</span> sleep         <span class="text-slate-400"># enter deep sleep immediately</span>
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Project README</h2>
+  <p>
+    <a class="btn-secondary"
+       href="{{ site.repo_url }}/blob/main/README.md"
+       target="_blank" rel="noopener">Read full README on GitHub ↗</a>
+  </p>
+</section>

@@ -1,0 +1,9 @@
+_site/
+node_modules/
+package-lock.json
+.DS_Store
+*.log
+
+# Real firmware binaries (placeholders are committed; real ones are large)
+public/firmware/*.bin
+!public/firmware/.gitkeep

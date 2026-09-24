@@ -1,0 +1,80 @@
+---
+layout: base.njk
+title: Download
+description: Download the PO-33 K.O! ESP32-S3 firmware binaries and source code.
+permalink: /download/
+---
+
+<section class="pt-12 pb-8">
+  <h1 class="section-title">Download</h1>
+  <p class="section-lede">
+    One-click browser flash, or grab the raw binaries and source.
+  </p>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">⚡ Web flasher</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-4">
+    Plug in your board and click below. Requires Chrome 89+, Edge 89+,
+    or Firefox 113+ over HTTPS.
+  </p>
+  <div class="card max-w-xl text-center">
+    <esp-web-install-button manifest="/firmware/manifest.json">
+      <button slot="activate" class="btn-primary">⚡ Flash from browser</button>
+      <span slot="unsupported">
+        <div class="text-amber-600 dark:text-amber-400 mt-4">
+          Web Serial not supported. Use Chrome, Edge, or Firefox over HTTPS.
+        </div>
+      </span>
+      <span slot="not-allowed">
+        <div class="text-red-600 dark:text-red-400 mt-4">
+          HTTPS is required for flashing.
+        </div>
+      </span>
+    </esp-web-install-button>
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Raw binaries</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Direct downloads (use <code>esptool.py</code> if you prefer the CLI).
+    The <code>firmware.bin</code> here is a <strong>placeholder</strong>
+    — replace it with the real build output before flashing.
+  </p>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <a class="btn-secondary" href="/firmware/bootloader.bin">bootloader.bin (placeholder)</a>
+    <a class="btn-secondary" href="/firmware/partitions.bin">partitions.bin (placeholder)</a>
+    <a class="btn-secondary" href="/firmware/boot_app0.bin">boot_app0.bin (placeholder)</a>
+    <a class="btn-secondary" href="/firmware/firmware.bin">firmware.bin (placeholder)</a>
+  </div>
+  <p class="mt-3 text-sm text-slate-500">
+    Manifest: <a href="/firmware/manifest.json" class="text-po33-600 hover:underline">/firmware/manifest.json</a>
+  </p>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Source code</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Clone the repository or browse on GitHub.
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">$</span> git clone {{ site.repo_url }}.git<br>
+    <span class="text-po33-300">$</span> cd RavinePhoenix.1une.cc<br>
+    <span class="text-po33-300">$</span> idf.py set-target esp32s3 &amp;&amp; idf.py build
+  </div>
+  <p class="mt-3">
+    <a class="btn-secondary"
+       href="{{ site.repo_url }}"
+       target="_blank" rel="noopener">Browse on GitHub ↗</a>
+  </p>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Schematics</h2>
+  <p class="text-slate-600 dark:text-slate-400">
+    Schematic PDFs and KiCad source coming soon. For now, the
+    <a href="/hardware/" class="text-po33-600 hover:underline">hardware page</a>
+    lists every pin and BOM item.
+  </p>
+</section>

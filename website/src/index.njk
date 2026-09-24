@@ -1,0 +1,168 @@
+---
+layout: base.njk
+title: Home
+description: A pocket-sized PO-33 K.O! emulator on ESP32-S3. Browser-flashable firmware with 40s sampling, 16-step sequencer, and 16 punch-in effects.
+---
+
+<section class="pt-12 md:pt-20 pb-12">
+  <div class="max-w-3xl">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="badge">ESP-IDF v6.0</span>
+      <span class="badge">AMY synth</span>
+      <span class="badge">ESP32-S3</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight">
+      <span class="text-po33-600">PO-33</span> K.O!
+      <span class="block text-2xl md:text-3xl font-semibold text-slate-600 dark:text-slate-400 mt-2">
+        for ESP32-S3
+      </span>
+    </h1>
+    <p class="mt-6 text-xl text-slate-600 dark:text-slate-400 max-w-2xl">
+      A pocket-sized sampler on a $5 dev board. AMY-powered, 16-step,
+      16 punch-in effects, 40&nbsp;s of sampling. Flash from your browser
+      — no toolchain required.
+    </p>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a href="#flash" class="btn-primary">⚡ Flash Firmware</a>
+      <a href="{{ site.repo_url }}"
+         target="_blank" rel="noopener"
+         class="btn-secondary">View Source ↗</a>
+      <a href="/hardware/" class="btn-secondary">Hardware Guide →</a>
+    </div>
+  </div>
+</section>
+
+<!-- Flasher -->
+<section id="flash" class="py-12 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="section-title">⚡ Flash from your browser</h2>
+  <p class="section-lede">
+    Plug in your ESP32-S3 dev board, click the button, and
+    <a href="https://esphome.github.io/esp-web-tools/" target="_blank" rel="noopener"
+       class="text-po33-600 hover:underline">ESP Web Tools</a>
+    will do the rest. No <code>esptool</code>, no Python, no PlatformIO.
+  </p>
+
+  <div class="card max-w-xl mx-auto text-center">
+    <esp-web-install-button manifest="/firmware/manifest.json">
+      <button slot="activate" class="btn-primary text-lg">
+        ⚡ Flash PO-33 K.O! Firmware
+      </button>
+      <span slot="unsupported">
+        <div class="text-amber-600 dark:text-amber-400 mt-4">
+          Web Serial not supported in this browser.
+          Please use Chrome, Edge, or Firefox over HTTPS.
+        </div>
+      </span>
+      <span slot="not-allowed">
+        <div class="text-red-600 dark:text-red-400 mt-4">
+          HTTPS is required for flashing.
+        </div>
+      </span>
+    </esp-web-install-button>
+
+    <div class="mt-4 text-xs text-slate-500 dark:text-slate-500">
+      Requires Chrome 89+, Edge 89+, or Firefox 113+ over HTTPS.
+    </div>
+  </div>
+
+  <div class="mt-6 text-sm text-amber-700 dark:text-amber-400 max-w-2xl mx-auto">
+    <strong>Note:</strong> The <code>firmware.bin</code> shipped on this site is a
+    placeholder. Build the firmware from source with
+    <code>idf.py build</code> and replace the placeholder files in
+    <code>public/firmware/</code> before flashing for real.
+    See the <a href="/docs/" class="underline">docs page</a>.
+  </div>
+</section>
+
+<!-- Features -->
+<section class="py-12 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="section-title">Features</h2>
+  <p class="section-lede">
+    Everything you need to make beats in a coffee cup.
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="card">
+      <div class="text-3xl mb-2">🎙️</div>
+      <div class="card-title">40 seconds of sampling</div>
+      <p class="card-text">
+        Mono <code class="text-po33-600">@44100&nbsp;Hz</code> × 16-bit,
+        PSRAM-backed, 16 slots split into 8 drum + 8 melodic voices.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="text-3xl mb-2">🎼</div>
+      <div class="card-title">16-step sequencer</div>
+      <p class="card-text">
+        16 patterns, 128-song chain mode, 2 parameter locks per step,
+        chromatic pitch shifting on melodic slots.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="text-3xl mb-2">🎛️</div>
+      <div class="card-title">16 punch-in effects</div>
+      <p class="card-text">
+        Loop variants, unison, octave, stutter, scratch, reverse,
+        retrigger, 6/8 quantize, filter sweep, bitcrush — and more.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="text-3xl mb-2">🎹</div>
+      <div class="card-title">AMY synth engine</div>
+      <p class="card-text">
+        Built on
+        <a href="https://github.com/shorepine/amy" target="_blank" rel="noopener"
+           class="text-po33-600 hover:underline">AMY</a>
+        — Juno-6, DX7, partial-breakpoint, and PCM sampler. All your
+        synth voices live next to your samples.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="text-3xl mb-2">📺</div>
+      <div class="card-title">2.4″ TFT UI</div>
+      <p class="card-text">
+        ILI9341 240×320 SPI display with custom 2D draw API.
+        Shows step position, pattern, BPM, slot, FX, and clock.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="text-3xl mb-2">🔌</div>
+      <div class="card-title">USB-C powered</div>
+      <p class="card-text">
+        Or LiPo with deep-sleep wake-on-button. 5&nbsp;min idle →
+        10&nbsp;µA standby. PO-33 battery life, ESP32-S3 horsepower.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Start -->
+<section class="py-12 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="section-title">Quick start</h2>
+  <ol class="space-y-4 text-slate-700 dark:text-slate-300 list-decimal list-inside">
+    <li>
+      <strong>Wire up</strong> the dev board — DAC, mic, TFT, button matrix.
+      See the <a href="/hardware/" class="text-po33-600 hover:underline">hardware guide</a>.
+    </li>
+    <li>
+      <strong>Flash</strong> the firmware from this page, or build from source.
+    </li>
+    <li>
+      <strong>Press REC + STEP&nbsp;1</strong> to record a sample into slot 1.
+      <strong>Press REC</strong> again to stop.
+    </li>
+    <li>
+      <strong>Press STEP&nbsp;N</strong> to add the recorded sample to step N.
+      <strong>Press PLAY</strong> to start the sequencer.
+    </li>
+    <li>
+      <strong>Connect UART @ 115200</strong> for the shell: <code>help</code>,
+      <code>bpm 140</code>, <code>pattern 5</code>, <code>save</code>.
+    </li>
+  </ol>
+</section>

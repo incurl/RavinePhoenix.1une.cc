@@ -1,0 +1,97 @@
+---
+layout: base.njk
+title: Workflow
+description: How to record, sequence, and perform with the PO-33 K.O! ESP32-S3 firmware.
+permalink: /workflow/
+---
+
+<section class="pt-12 pb-8">
+  <h1 class="section-title">Workflow</h1>
+  <p class="section-lede">
+    From blank board to first beat in about ten minutes.
+  </p>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">1. Record a sample</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Press and hold <span class="badge">REC</span>, tap a step button
+    (1–8 for drum slots, 9–16 for melodic slots), and the firmware
+    starts capturing mic input into that slot's PSRAM region. Press
+    <span class="badge">REC</span> again to stop.
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">po33&gt;</span> rec 0
+    <span class="text-slate-400"># records into slot 0 (drum)</span><br>
+    <span class="text-po33-300">po33&gt;</span> stoprec
+    <span class="text-slate-400"># stops; sample is finalized in PSRAM</span>
+  </div>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">2. Trim and slice</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Each slot has a start and end point. Use the <span class="badge">FUNC</span>
+    + step buttons combo to nudge the start/end markers, or send raw
+    commands over UART.
+  </p>
+  <p class="text-slate-600 dark:text-slate-400">
+    Drum loops can be auto-sliced into 16 equal parts; melodic slots
+    play as a single sample with chromatic pitch shifting.
+  </p>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">3. Sequence</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Press step buttons to drop the recorded sample onto a step. Press
+    <span class="badge">PLAY</span> to start the sequencer. The 2.4″ TFT
+    shows the playhead.
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">po33&gt;</span> bpm 140<br>
+    <span class="text-po33-300">po33&gt;</span> pattern 0<br>
+    <span class="text-po33-300">po33&gt;</span> play<br>
+    <span class="text-po33-300">po33&gt;</span> status<br>
+    <span class="text-slate-400">seq: playing bpm=140 step=4 pattern=0</span>
+  </div>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">4. Apply punch-in FX</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Hold <span class="badge">FX</span>, then press one of the 16 effect
+    buttons. The active effect name shows on the OLED. Some highlights:
+  </p>
+  <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1">
+    <li><strong>Loop 16/12/Short/Shorter</strong> — different loop lengths</li>
+    <li><strong>Octave Up/Down</strong> — pitch shift by ±12 semitones</li>
+    <li><strong>Stutter 4/3</strong> — granular repeat</li>
+    <li><strong>Reverse</strong> — plays the slot backwards</li>
+    <li><strong>Bitcrush</strong> — 4-bit downsample distortion</li>
+    <li><strong>Filter Sweep</strong> — automated low-pass cutoff</li>
+  </ul>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">5. Save patterns + samples</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-3">
+    Patterns are saved to flash via the LittleFS partition. Samples
+    stay in PSRAM and reload after a reboot.
+  </p>
+  <div class="terminal">
+    <span class="text-po33-300">po33&gt;</span> save
+    <span class="text-slate-400"># writes patterns + per-slot sample blobs</span><br>
+    <span class="text-po33-300">po33&gt;</span> load
+    <span class="text-slate-400"># reloads from flash</span>
+  </div>
+</section>
+
+<section class="py-6 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-3">6. Sync &amp; chain</h2>
+  <p class="text-slate-600 dark:text-slate-400">
+    Pulse OUT fires on every 16th note for syncing with other Pocket
+    Operators or analog gear. Use the shell to chain patterns into
+    full songs (up to 128 patterns in sequence).
+  </p>
+</section>

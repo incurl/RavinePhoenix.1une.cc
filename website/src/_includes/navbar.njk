@@ -1,0 +1,40 @@
+<header class="sticky top-0 z-40 backdrop-blur bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16">
+      <a href="/" class="flex items-center gap-2 font-bold text-lg">
+        <span class="inline-block w-8 h-8 rounded bg-po33-600 text-white text-center leading-8 font-mono">P33</span>
+        <span class="hidden sm:inline">{{ site.short_name }}</span>
+      </a>
+
+      <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
+        <a href="/" class="hover:text-po33-600 dark:hover:text-po33-400">Home</a>
+        <a href="/hardware/" class="hover:text-po33-600 dark:hover:text-po33-400">Hardware</a>
+        <a href="/workflow/" class="hover:text-po33-600 dark:hover:text-po33-400">Workflow</a>
+        <a href="/docs/" class="hover:text-po33-600 dark:hover:text-po33-400">Docs</a>
+        <a href="/download/" class="hover:text-po33-600 dark:hover:text-po33-400">Download</a>
+      </nav>
+
+      <div class="flex items-center gap-2">
+        <button id="theme-toggle"
+                class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                aria-label="Toggle dark mode">
+          <span class="dark:hidden">🌙</span>
+          <span class="hidden dark:inline">☀️</span>
+        </button>
+        <a href="{{ site.repo_url }}"
+           class="hidden sm:inline-flex btn-secondary text-sm"
+           target="_blank" rel="noopener">GitHub ↗</a>
+        <button id="nav-toggle" class="md:hidden p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                aria-label="Open menu">☰</button>
+      </div>
+    </div>
+
+    <div id="nav-mobile" class="hidden md:hidden pb-4 flex flex-col gap-2 text-sm">
+      <a href="/" class="py-2">Home</a>
+      <a href="/hardware/" class="py-2">Hardware</a>
+      <a href="/workflow/" class="py-2">Workflow</a>
+      <a href="/docs/" class="py-2">Docs</a>
+      <a href="/download/" class="py-2">Download</a>
+    </div>
+  </div>
+</header>

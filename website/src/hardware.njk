@@ -1,0 +1,134 @@
+---
+layout: base.njk
+title: Hardware
+description: Wiring diagram and bill of materials for the PO-33 K.O! ESP32-S3 firmware.
+permalink: /hardware/
+---
+
+<section class="pt-12 pb-8">
+  <h1 class="section-title">Hardware</h1>
+  <p class="section-lede">
+    The firmware runs on any ESP32-S3 board with at least 4&nbsp;MB of
+    Octal PSRAM. The reference build targets the
+    <strong>ESP32-S3-WROOM-1-N16R8</strong> dev kit.
+  </p>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Bill of materials</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-100 dark:bg-slate-800">
+        <tr>
+          <th class="text-left p-2">Component</th>
+          <th class="text-left p-2">Part</th>
+          <th class="text-left p-2">Notes</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+        <tr><td class="p-2">MCU</td>
+            <td class="p-2 font-mono">ESP32-S3-WROOM-1-N16R8</td>
+            <td class="p-2">16&nbsp;MB flash, 8&nbsp;MB Octal PSRAM</td></tr>
+        <tr><td class="p-2">DAC</td>
+            <td class="p-2 font-mono">PCM5102A</td>
+            <td class="p-2">I²S stereo DAC (we feed L=R mono)</td></tr>
+        <tr><td class="p-2">Mic</td>
+            <td class="p-2 font-mono">INMP441</td>
+            <td class="p-2">I²S MEMS mic, left channel</td></tr>
+        <tr><td class="p-2">Display</td>
+            <td class="p-2 font-mono">2.4″ TFT ILI9341</td>
+            <td class="p-2">240×320, SPI</td></tr>
+        <tr><td class="p-2">Buttons</td>
+            <td class="p-2 font-mono">16× 6&nbsp;mm tact</td>
+            <td class="p-2">4×4 matrix, momentary-to-GND</td></tr>
+        <tr><td class="p-2">Status LEDs</td>
+            <td class="p-2 font-mono">2× 3&nbsp;mm LED</td>
+            <td class="p-2">REC + PLAY indicators</td></tr>
+        <tr><td class="p-2">Power</td>
+            <td class="p-2 font-mono">USB-C 5&nbsp;V</td>
+            <td class="p-2">Or single-cell LiPo + TP4056</td></tr>
+        <tr><td class="p-2">Optional amp</td>
+            <td class="p-2 font-mono">MAX98357A</td>
+            <td class="p-2">I²S class-D amp for built-in speaker</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Pin map</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-6">
+    All pins below are configured in
+    <code class="text-po33-600">main/config.h</code>. Edit there if your
+    board differs.
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="card">
+      <h3 class="card-title">Audio (PCM5102A + INMP441)</h3>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">DAC BCLK</td><td class="py-1.5 text-right">GPIO9</td></tr>
+          <tr><td class="py-1.5">DAC LRCK</td><td class="py-1.5 text-right">GPIO10</td></tr>
+          <tr><td class="py-1.5">DAC DIN</td><td class="py-1.5 text-right">GPIO8</td></tr>
+          <tr><td class="py-1.5">Mic BCLK</td><td class="py-1.5 text-right">GPIO15</td></tr>
+          <tr><td class="py-1.5">Mic LRCK</td><td class="py-1.5 text-right">GPIO16</td></tr>
+          <tr><td class="py-1.5">Mic DOUT</td><td class="py-1.5 text-right">GPIO17</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">2.4″ TFT (ILI9341 SPI)</h3>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">MOSI</td><td class="py-1.5 text-right">GPIO6</td></tr>
+          <tr><td class="py-1.5">SCK</td><td class="py-1.5 text-right">GPIO7</td></tr>
+          <tr><td class="py-1.5">CS</td><td class="py-1.5 text-right">GPIO5</td></tr>
+          <tr><td class="py-1.5">DC</td><td class="py-1.5 text-right">GPIO4</td></tr>
+          <tr><td class="py-1.5">RST</td><td class="py-1.5 text-right">GPIO48</td></tr>
+          <tr><td class="py-1.5">BL (PWM)</td><td class="py-1.5 text-right">GPIO47</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">4×4 button matrix</h3>
+      <p class="card-text mt-2">
+        Row-major mapping: <code>btn_id = row × 4 + col</code>.
+        Internal pull-ups enabled on column inputs.
+      </p>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">Rows</td><td class="py-1.5 text-right">GPIO35, 36, 37, 38</td></tr>
+          <tr><td class="py-1.5">Cols</td><td class="py-1.5 text-right">GPIO33, 34, 39, 40</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Sync + LEDs</h3>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">Sync OUT</td><td class="py-1.5 text-right">GPIO18</td></tr>
+          <tr><td class="py-1.5">Sync IN</td><td class="py-1.5 text-right">GPIO19</td></tr>
+          <tr><td class="py-1.5">LED REC</td><td class="py-1.5 text-right">GPIO21</td></tr>
+          <tr><td class="py-1.5">LED PLAY</td><td class="py-1.5 text-right">GPIO14</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Power</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-4">
+    The firmware draws ~10&nbsp;µA in deep sleep, so a 1500&nbsp;mAh
+    LiPo will last ~6 months on standby. Active power depends on which
+    voice engine is running; expect 60–120&nbsp;mA at moderate polyphony.
+  </p>
+  <p class="text-slate-600 dark:text-slate-400">
+    The 5-minute idle timer drops the chip into deep sleep automatically.
+    Any button press wakes it back up via GPIO interrupt on the column pins.
+  </p>
+</section>
