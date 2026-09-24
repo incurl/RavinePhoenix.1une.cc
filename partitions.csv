@@ -1,8 +1,8 @@
 # ESP-IDF Partition Table
 # Name,   Type, SubType, Offset,  Size
+# Note: samples live entirely in PSRAM (40 s × 44.1 kHz × 2 B = ~3.4 MB).
+# Only patterns are persisted to flash.
 nvs,      data, nvs,     0x9000,   0x6000
 phy_init, data, phy,     0xf000,   0x1000
 factory,  app,  factory, 0x10000,  0x300000
-storage,  data, fat,     0x310000, 0x100000
-samples,  data, littlefs,0x410000, 0x600000
-patterns, data, littlefs,0xA10000, 0x100000
+patterns, data, littlefs,0x310000, 0x40000

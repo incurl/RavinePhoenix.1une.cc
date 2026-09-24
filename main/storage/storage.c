@@ -7,33 +7,24 @@
 #include "storage.h"
 #include "config.h"
 #include "sequencer/pattern.h"
-#include "audio/sample_manager.h"
+#include "audio/amy_bridge.h"
 #include "esp_littlefs.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 static const char *TAG = "storage";
 
-#define SAMPLES_BASE  "/samples"
 #define PATTERNS_BASE "/patterns"
 
-static esp_littlefs_handle_t s_samples_fs  = NULL;
 static esp_littlefs_handle_t s_patterns_fs = NULL;
 
 esp_err_t storage_init(void)
 {
-    /* Init partitions — partitions.csv declares the labels. */
-    esp_vfs_littlefs_conf_t samples_conf = {
-        .base_path          = SAMPLES_BASE,
-        .partition_label    = "samples",
-        .format_if_mount_failed = true,
-        .dont_mount         = false,
-    };
-    ESP_ERROR_CHECK(esp_littlefs_create(&samples_conf, &s_samples_fs));
-
+    /* Samples live entirely in PSRAM; only patterns are persisted. */
     esp_vfs_littlefs_conf_t patterns_conf = {
         .base_path          = PATTERNS_BASE,
         .partition_label    = "patterns",
@@ -42,7 +33,7 @@ esp_err_t storage_init(void)
     };
     ESP_ERROR_CHECK(esp_littlefs_create(&patterns_conf, &s_patterns_fs));
 
-    ESP_LOGI(TAG, "LittleFS mounted at %s and %s", SAMPLES_BASE, PATTERNS_BASE);
+    ESP_LOGI(TAG, "LittleFS mounted at %s", PATTERNS_BASE);
     return ESP_OK;
 }
 
@@ -87,23 +78,20 @@ esp_err_t storage_save_all(void)
             return e;
         }
     }
-    /* Sample pool save (one big file). */
-    const int16_t *p = sample_manager_slot_ptr(0);  /* v1: dump contiguous pool */
-    /* Total bytes used by all slots. */
-    uint32_t total = 0;
-    for (int i = 0; i < SLOT_COUNT; i++) {
-        total += sample_manager_slot_len_samples((uint8_t)i) *
-                 SAMPLE_BYTES_PER_SAMPLE;
+    /* Sample pool save: one raw int16 file per slot. */
+    for (int s = 0; s < SLOT_COUNT; s++) {
+        const int16_t *p = amy_bridge_slot_ptr((uint8_t)s);
+        size_t n = amy_bridge_slot_len_samples((uint8_t)s);
+        if (!p || n == 0) continue;
+
+        char path[64];
+        snprintf(path, sizeof(path), "%s/s%u.bin",
+                 PATTERNS_BASE, (unsigned)s);
+        FILE *f = fopen(path, "wb");
+        if (!f) return ESP_FAIL;
+        fwrite(p, sizeof(int16_t), n, f);
+        fclose(f);
     }
-    if (total == 0) {
-        ESP_LOGI(TAG, "Sample pool empty, skipping");
-        return ESP_OK;
-    }
-    FILE *f = fopen(SAMPLES_BASE "/pool.bin", "wb");
-    if (!f) return ESP_FAIL;
-    fwrite(p, 1, total, f);
-    fclose(f);
-    ESP_LOGI(TAG, "Saved pool (%u bytes)", (unsigned)total);
     return ESP_OK;
 }
 
@@ -113,22 +101,24 @@ esp_err_t storage_load_all(void)
     for (int i = 0; i < PATTERN_COUNT; i++) {
         storage_load_pattern((uint8_t)i);
     }
-    FILE *f = fopen(SAMPLES_BASE "/pool.bin", "rb");
-    if (!f) {
-        ESP_LOGW(TAG, "No sample pool file yet");
-        return ESP_OK;
+    for (int s = 0; s < SLOT_COUNT; s++) {
+        char path[64];
+        snprintf(path, sizeof(path), "%s/s%d.bin",
+                 PATTERNS_BASE, s);
+        FILE *f = fopen(path, "rb");
+        if (!f) continue;
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (sz <= 0) { fclose(f); continue; }
+        int16_t *tmp = malloc(sz);
+        if (!tmp) { fclose(f); return ESP_ERR_NO_MEM; }
+        fread(tmp, 1, sz, f);
+        fclose(f);
+        amy_bridge_register_slot((uint8_t)s, tmp, sz / sizeof(int16_t),
+                                 SAMPLE_RATE_HZ,
+                                 s < SLOT_DRUM_COUNT);
+        free(tmp);
     }
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return ESP_OK; }
-
-    /* Naive: dump into slot 0 only for v1. */
-    int16_t *tmp = malloc(sz);
-    if (!tmp) { fclose(f); return ESP_ERR_NO_MEM; }
-    fread(tmp, 1, sz, f);
-    fclose(f);
-    sample_manager_write(0, tmp, sz / SAMPLE_BYTES_PER_SAMPLE);
-    free(tmp);
     return ESP_OK;
 }

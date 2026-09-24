@@ -4,11 +4,10 @@ idf_component_register(
     PRIV_REQUIRES
         driver
         esp_lcd
-        esp_audio_effects
+        amy
         esp_littlefs
         esp_timer
         nvs_flash
-        fatfs
         esp_lcd_ili9341
     EMBED_FILES
     REQUIRES

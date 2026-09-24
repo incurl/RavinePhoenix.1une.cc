@@ -17,11 +17,8 @@
 #include "nvs_flash.h"
 
 #include "config.h"
-#include "audio/i2s_driver.h"
-#include "audio/sample_manager.h"
-#include "audio/audio_engine.h"
+#include "audio/amy_bridge.h"
 #include "sequencer/sequencer.h"
-#include "effects/effects.h"
 #include "ui/buttons.h"
 #include "ui/display.h"
 #include "ui/leds.h"
@@ -32,12 +29,10 @@
 
 static const char *TAG = "po33";
 
-static void audio_mixer_task(void *arg);
 static void button_scan_task(void *arg);
 static void display_task(void *arg);
 static void po33_shell_task(void *arg);
 
-static TaskHandle_t s_audio_task_handle = NULL;
 static TaskHandle_t s_button_task_handle = NULL;
 static TaskHandle_t s_display_task_handle = NULL;
 
@@ -60,13 +55,10 @@ void app_main(void)
     /* 3. Power management early */
     power_mgmt_init();
 
-    /* 4. Audio */
-    ESP_ERROR_CHECK(audio_i2s_init());
-    ESP_ERROR_CHECK(sample_manager_init());
-    ESP_ERROR_CHECK(audio_engine_init());
+    /* 4. Audio (all handled by AMY) */
+    ESP_ERROR_CHECK(amy_bridge_init());
 
-    /* 5. Effects + sequencer */
-    effects_init();
+    /* 5. Sequencer */
     sequencer_init();
 
     /* 6. Sync, clock, LEDs */
@@ -81,12 +73,8 @@ void app_main(void)
     /* 8. Boot splash */
     display_show_boot_screen();
 
-    /* 9. Spawn tasks */
+    /* 9. Spawn tasks. AMY runs its own render task on core 1. */
     BaseType_t ok;
-
-    ok = xTaskCreate(audio_mixer_task, "audio_mixer",
-                     4096, NULL, 23, &s_audio_task_handle);
-    configASSERT(ok == pdPASS);
 
     ok = xTaskCreate(button_scan_task, "button_scan",
                      4096, NULL, 10, &s_button_task_handle);
@@ -103,22 +91,6 @@ void app_main(void)
     ESP_LOGI(TAG, "Boot complete.");
 }
 
-/* ─── Audio mixer task ─────────────────────────────────────────── */
-static void audio_mixer_task(void *arg)
-{
-    (void)arg;
-    const TickType_t period = pdMS_TO_TICKS(5);
-    TickType_t last = xTaskGetTickCount();
-
-    while (1) {
-        TickType_t now = xTaskGetTickCount();
-        (void)now;
-        sequencer_tick();
-        audio_engine_render_block();
-        vTaskDelayUntil(&last, period);
-    }
-}
-
 /* ─── Button scan ─────────────────────────────────────────────── */
 static void button_scan_task(void *arg)
 {
@@ -128,6 +100,7 @@ static void button_scan_task(void *arg)
 
     while (1) {
         buttons_tick();
+        amy_bridge_pump_capture();
         vTaskDelayUntil(&last, period);
     }
 }
@@ -155,6 +128,7 @@ static void po33_shell_help(void)
            "  stop              stop sequencer\n"
            "  bpm <60..240>     set tempo\n"
            "  rec <0..15>       record into slot\n"
+           "  stoprec           stop recording\n"
            "  pattern <0..15>   select pattern\n"
            "  free              show free heap\n"
            "  save              save patterns + samples\n"
@@ -209,11 +183,14 @@ static void po33_shell_task(void *arg)
             } else if (strncmp(line, "rec ", 4) == 0) {
                 int s = atoi(line + 4);
                 if (s >= 0 && s < SLOT_COUNT) {
-                    sample_manager_start_record((uint8_t)s);
+                    amy_bridge_start_record((uint8_t)s);
                     printf("recording into slot %d\n", s);
                 } else {
                     printf("invalid slot\n");
                 }
+            } else if (strcmp(line, "stoprec") == 0) {
+                amy_bridge_stop_record();
+                printf("recording stopped\n");
             } else if (strncmp(line, "pattern ", 8) == 0) {
                 int p = atoi(line + 8);
                 if (p >= 0 && p < PATTERN_COUNT) {

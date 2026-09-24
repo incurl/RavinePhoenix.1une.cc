@@ -5,7 +5,7 @@
  */
 #include "sequencer/pattern.h"
 #include "sequencer/sequencer.h"
-#include "audio/sample_manager.h"
+#include "audio/amy_bridge.h"
 #include <string.h>
 
 /* Soft-load demo pattern 0: kick on 0,4,8,12; hat on 2,6,10,14; bass every other. */

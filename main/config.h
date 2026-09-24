@@ -10,13 +10,13 @@
 #include <stdbool.h>
 
 /* ─── Audio sample pool ──────────────────────────────────────── */
-#define SAMPLE_RATE_HZ            22050
+#define SAMPLE_RATE_HZ            44100
 #define SAMPLE_BITS               16
 #define SAMPLE_BYTES_PER_SAMPLE   (SAMPLE_BITS / 8)
 #define SAMPLE_BYTES_PER_SECOND   (SAMPLE_RATE_HZ * SAMPLE_BYTES_PER_SAMPLE)
 
-/** Total pool: 60 s mono @ 22050 Hz 16-bit = 2 646 000 B ≈ 2.6 MB PSRAM. */
-#define SAMPLE_TOTAL_SECONDS      60
+/** Total pool: 40 s mono @ 44100 Hz 16-bit = 3 528 000 B ≈ 3.37 MB PSRAM. */
+#define SAMPLE_TOTAL_SECONDS      40
 #define SAMPLE_POOL_SIZE_BYTES    (SAMPLE_TOTAL_SECONDS * SAMPLE_BYTES_PER_SECOND)
 
 /** Slot count and per-slot caps. */
@@ -24,12 +24,12 @@
 #define SLOT_DRUM_COUNT           8
 #define SLOT_MELODIC_COUNT        8
 
-#define SLOT_DRUM_MAX_SECONDS     3.0f
-#define SLOT_MELODIC_MAX_SECONDS  4.5f
+#define SLOT_DRUM_MAX_SECONDS     2.0f
+#define SLOT_MELODIC_MAX_SECONDS  3.0f
 #define SLOT_DRUM_MAX_BYTES       ((uint32_t)(SLOT_DRUM_MAX_SECONDS * SAMPLE_BYTES_PER_SECOND))
 #define SLOT_MELODIC_MAX_BYTES    ((uint32_t)(SLOT_MELODIC_MAX_SECONDS * SAMPLE_BYTES_PER_SECOND))
 
-/* Polyphony */
+/* Polyphony (AMY synth voices per note) */
 #define VOICE_COUNT               4
 
 /* ─── I2S pins (external DAC + mic) ───────────────────────────── */

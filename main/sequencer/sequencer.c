@@ -1,13 +1,13 @@
 /*
- * sequencer.c — GPTimer-driven 16-step sequencer.
+ * sequencer.c — 16-step sequencer driving AMY via amy_bridge.
  *
- * Uses esp_timer for stepping instead of GPTimer to keep code portable
- * to v6.0 RC; can be upgraded to gptimer_handle_t + gptimer_register_
- * event_callbacks when target toolchain confirms symbol availability.
+ * Uses esp_timer for stepping; can be upgraded to gptimer_handle_t +
+ * gptimer_register_event_callbacks when target toolchain confirms
+ * symbol availability.
  */
 #include "sequencer.h"
 #include "pattern.h"
-#include "audio/audio_engine.h"
+#include "audio/amy_bridge.h"
 #include "config.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -84,18 +84,14 @@ static void on_step(void *arg)
     step_t s;
     pattern_get_step(s_pattern, s_step, &s);
     if (s.slot_id != 0xFF) {
-        int v = audio_engine_alloc_voice();
-        if (v >= 0) {
-            audio_engine_trigger_voice(v, s.slot_id, s.note, s.velocity,
-                                        s.filter_cutoff,
-                                        s.effect, s.effect_p1, s.effect_p2);
-        }
+        amy_bridge_play_note(s.slot_id, s.note, s.velocity,
+                             (po33_fx_t)s.effect,
+                             s.effect_p1, s.effect_p2);
     }
     s_step++;
     if (s_step >= STEPS_PER_PATTERN) {
         s_step = 0;
         if (g_chain_len > 0 && s_pattern == g_chain[g_chain_len - 1]) {
-            /* loop the chain */
             static uint8_t chain_idx = 0;
             chain_idx = (chain_idx + 1) % g_chain_len;
             s_pattern = g_chain[chain_idx];

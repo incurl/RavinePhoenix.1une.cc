@@ -81,3 +81,6 @@ dependencies.lock
 # python
 __pycache__/
 *.pyc
+
+# Vendored AMY sources (fetch with components/amy/README.md instructions)
+components/amy/src/
