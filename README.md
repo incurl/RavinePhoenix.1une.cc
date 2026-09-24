@@ -40,12 +40,35 @@ A complete firmware project that emulates the **Teenage Engineering PO-33 K.O!**
 | Mic LRCK | GPIO16 |
 | Mic DOUT | GPIO17 |
 
-### 4×4 Button Matrix
+### 4x4 Button Matrix
 
-| Row pins | GPIO35, GPIO36, GPIO37, GPIO38 |
-| Col pins | GPIO33, GPIO34, GPIO39, GPIO40 |
+A 4-row by 4-column scanned matrix (16 buttons total):
 
-Buttons are wired row × column, momentary-to-GND. Internal pull-ups enabled on column inputs.
+| Row / Col | GPIO |
+|---|---|
+| Row 0 | GPIO35 |
+| Row 1 | GPIO36 |
+| Row 2 | GPIO37 |
+| Row 3 | GPIO38 |
+| Col 0 | GPIO33 |
+| Col 1 | GPIO34 |
+| Col 2 | GPIO39 |
+| Col 3 | GPIO40 |
+
+Buttons are wired at the intersections of each row and column, momentary-to-GND. Internal pull-ups are enabled on the column inputs. Logical button IDs follow row-major order: `btn_id = row * 4 + col` (so btn 0 = R0C0, btn 15 = R3C3).
+
+**Mapping** (matches `BTN_*` enum in `main/config.h`):
+
+| ID | Function | ID | Function |
+|---|---|---|---|
+| 0  | REC      | 8  | STEP7    |
+| 1  | PLAY     | 9  | STEP8    |
+| 2  | STEP1    | 10 | FUNC     |
+| 3  | STEP2    | 11 | FX       |
+| 4  | STEP3    | 12 | BPM_UP   |
+| 5  | STEP4    | 13 | BPM_DN   |
+| 6  | STEP5    | 14 | PAT_UP   |
+| 7  | STEP6    | 15 | PAT_DN   |
 
 ### 2.4″ TFT (ILI9341, SPI)
 
