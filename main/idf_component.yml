@@ -1,0 +1,13 @@
+## ESP-IDF Component manifest for ESP32-S3 PO-33 K.O! firmware
+## Targets ESP-IDF v6.0
+dependencies:
+  espressif/esp_lcd:
+    version: "^3.0"
+  espressif/esp_lcd_ili9341:
+    version: "^1.0"
+  espressif/esp_audio_effects:
+    version: "^1.0"
+  joltwallet/littlefs:
+    version: "^1.7"
+  espressif/esp_lcd_panel_io_additions:
+    version: "^1.0"
