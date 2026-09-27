@@ -27,7 +27,7 @@ You will be working with:
 
 - **A soldering iron at ~350 °C.** It will burn you instantly if touched. Treat it like a stovetop burner: never rest your hand near it, always return it to its stand, never touch the metal tip.
 - **A USB-C cable.** The ESP32-S3 is powered through USB. The board is 5 V. There is no mains voltage at any point in this build.
-- **A battery (optional).** If you wire a LiPo, do not puncture it, do not short the + and − terminals together, and do not charge a damaged battery.
+- **A battery.** This guide's default is a single **2800 mAh protected Li-ion cell** (18650 form factor). It is *not* optional in the BOM — §3 part #8 — because the device's deep-sleep standby lifetime depends on it. If you are determined to skip the battery, run on USB only; the runtime tables in §4.10 will not apply. Safety rules: do not puncture the cell, do not short the + and − terminals together, do not charge a damaged battery, do not dispose of a spent cell in the trash.
 
 If you are unsure about any step, **stop and ask**. The [project Discussions page](https://github.com/peter/RavinePhoenix.1une.cc/discussions) (or wherever the project is hosted) is a good place to ask. There is no urgency.
 
@@ -70,7 +70,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 | 5 | 4×4 matrix of 16 tactile buttons | Either a pre-built 4×4 membrane keypad (Amazon "4x4 matrix keypad") OR 16 individual 6 mm tactile switches + a small PCB or perfboard | **Yes** | 1 (or 16) | $2–$4 | Amazon, SparkFun, Adafruit, Digikey |
 | 6 | Speaker | 4 Ω or 8 Ω small loudspeaker, 0.5 W–3 W | Optional | 1 | $2–$5 | Amazon, any electronics store; you can also cannibalize from an old set of powered speakers |
 | 7 | I²S class-D amplifier (drives the speaker) | **MAX98357A** breakout (Adafruit #3006 or SparkFun) | Optional (only if you add a speaker) | 1 | $6–$10 | Adafruit, SparkFun, Amazon |
-| 8 | LiPo battery, single cell, 3.7 V, ≥ 500 mAh | Any 503450 or 603450 LiPo (with built-in protection circuit) | Optional | 1 | $3–$8 | Amazon, Adafruit, SparkFun, eBay |
+| 8 | LiPo battery, **single cell, 3.7 V nominal (4.2 V max), 2800 mAh** | A 18650-size protected Li-ion cell (e.g. **Panasonic NCR18650B**, **Samsung INR18650-30Q**, or an Adafruit #328-equivalent LiPo pouch). Must include a built-in protection circuit (PCM/BMS) against over-discharge, over-charge, and short circuit. | Recommended (chosen for this guide) | 1 | $5–$12 | Amazon, Adafruit, SparkFun, eBay, 18650BatteryStore, Illumn |
 | 9 | LiPo charging module (if you use a battery) | **TP4056** module (with protection, no separate load-share needed) | Optional (only with battery) | 1 | $1 | Amazon, AliExpress |
 | 10 | USB-C breakout (only if your dev board has micro-USB, not USB-C) | Generic USB-C breakout | Only if needed | 1 | $1 | Amazon, Adafruit |
 | 11 | Jumper wires (Dupont, female-to-female, 10 cm, 40-pin ribbon) | — | **Yes** | 1 strip of 40 | $1–$2 | Amazon, any electronics store |
@@ -82,7 +82,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 |---|---|
 | **Minimal** (parts 1–5 + 11): no speaker, no battery, no amp | **$15–$25** |
 | **With speaker** (add parts 6, 7): | **$25–$40** |
-| **With battery** (add parts 8, 9): | **$30–$50** |
+| **With battery** (add parts 8, 9): the **2800 mAh LiPo + TP4056 charger** | **$30–$45** |
 | **Everything** (parts 1–12): | **$35–$60** |
 
 ### 3.2 What to look for when ordering
@@ -94,6 +94,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 - **4×4 keypad** — the cheap membrane keypads from Amazon work great. Look for "4x4 matrix array 16 key" or similar. Avoid the ones with 8 pins (we need 8: 4 rows + 4 cols) — wait, that's correct, 8 pins.
 - **Speaker** — any small 4 Ω or 8 Ω speaker works. 0.5 W is plenty for a tabletop device.
 - **MAX98357A** — Adafruit #3006 or SparkFun breakout. Verify the gain-select pin (GAIN) is broken out so you can set it to 9 dB.
+- **Battery (2800 mAh LiPo / Li-ion)** — this guide picks a single 18650-format protected Li-ion cell at **2800 mAh**, which is the sweet spot of capacity, size, and cost for a tabletop device. A genuine **Panasonic NCR18650B** is rated 3400 mAh but is commonly de-rated to 2800 mAh at 0.2C continuous discharge (real-world capacity, not the marketing number). For the most honest number, use 2800 mAh as the *effective* capacity, not the printed 3400 mAh. **Always buy protected cells** (the protection circuit prevents over-discharge below ~2.5 V, which permanently damages Li-ion). Avoid cheap "3000 mAh", "4000 mAh", "5000 mAh" cells on Amazon — those numbers are routinely fabricated. Stick to name-brand cells (Panasonic, Samsung, LG, Sony, Murata) from reputable sellers. **Do not buy cells without a protection circuit.**
 
 ---
 
@@ -104,8 +105,9 @@ This section describes the schematic. There is no picture — text + tables is m
 ### 4.1 Power
 
 - **USB-C 5 V** → dev board's USB-C jack. This powers everything else.
-- If you wire a LiPo: TP4056's `OUT+` → dev board's `5V` pin; TP4056's `OUT-` → dev board's `GND`; TP4056's `IN+`/`IN-` to a separate USB-C input (do not back-feed power into the dev board's USB-C jack).
+- **Battery (this guide's default):** a single **2800 mAh protected Li-ion cell** (18650 form factor, 3.7 V nominal, 4.2 V max) charges via the **TP4056** module and powers the dev board's `5V` rail. Wire as: battery `+` → TP4056's `B+` and `OUT+`; battery `−` → TP4056's `B−` and `OUT−`; TP4056's `OUT+` → dev board's `5V` pin; TP4056's `OUT−` → dev board's `GND`. The TP4056's `IN+/IN−` go to a USB-C breakout's +/−. **Do not** back-feed 5 V into the dev board's USB-C jack — power either the + (when charging) or the TP4056 (when discharging), not both simultaneously.
 - If using a battery without the dev board's USB: most ESP32-S3 dev boards do not include a LiPo charger on-board; the TP4056 handles charging.
+- See **§4.10 Battery: capacity, charging, life estimate** for the expected runtime on the 2800 mAh cell.
 
 ### 4.2 The audio DAC (PCM5102A)
 
@@ -210,9 +212,11 @@ Sync uses the Pocket Operator "SY2/SY3/SY4" protocol (pulse on every 16th note, 
 
 ### 4.8 Battery monitor (optional)
 
-The dev board has an ADC pin exposed. Our config uses **ADC1 channel 3**, which on the ESP32-S3-DevKitC maps to **GPIO 4**.
+The dev board has an ADC pin exposed. Our config uses **ADC1 channel 3**, which on the ESP32-S3-DevKitC maps to **GPIO 4**. With the **2800 mAh Li-ion cell** from §3, you can read the cell voltage to display a battery percentage on the TFT (planned; not yet implemented in v1 firmware — see [DESIGN.md §3.12 F-035](../DESIGN.md)).
 
-You need a voltage divider because a fully charged LiPo is 4.2 V but the ESP32-S3's ADC tops out at 3.3 V. The simplest divider is two equal resistors (say 100 kΩ each) between the battery's + terminal and GND, with the midpoint connected to the ADC pin. We document the divider ratio as 2.0:1 in `config.h` (`BATTERY_DIVIDER_RATIO`). If you use different resistors, update that constant.
+You need a voltage divider because a fully charged Li-ion cell is 4.2 V but the ESP32-S3's ADC tops out at 3.3 V. The simplest divider is two equal resistors (say 100 kΩ each) between the cell's + terminal and GND, with the midpoint connected to the ADC pin. We document the divider ratio as 2.0:1 in `config.h` (`BATTERY_DIVIDER_RATIO`). If you use different resistors, update that constant. The divider draws about 21 µA continuously — negligible vs the rest of the system.
+
+> **Note:** Li-ion cells below ~3.0 V should be considered discharged. The protection circuit on a protected 18650 will cut off at ~2.5 V to prevent damage. The voltage-divider reading is not perfectly linear because the cell has a non-linear discharge curve; the firmware-side mapping (when implemented) should account for this.
 
 ### 4.9 The I²S class-D amp (MAX98357A, optional)
 
@@ -230,6 +234,83 @@ The wiring in short:
 | GAIN | tied to GND (15 dB) or to 3.3 V (9 dB, recommended) |
 | SD | tied to 3.3 V (always on) — but our v1 firmware doesn't drive this pin |
 | OUT+ / OUT- | speaker terminals |
+
+---
+
+### 4.10 Battery: capacity, charging, life estimate
+
+This section assumes you built with the **2800 mAh protected Li-ion cell** (part #8) and the **TP4056 charger** (part #9).
+
+#### 4.10.1 Capacity, voltage, and charge cycle
+
+- **Nominal voltage:** 3.7 V (a single Li-ion cell's average operating voltage).
+- **Maximum voltage (full charge):** 4.2 V.
+- **Cutoff voltage (empty, protected):** ~2.5 V. The TP4056 cuts off charging at 4.2 V; the protection circuit on the cell cuts off *discharging* at ~2.5 V.
+- **Effective capacity:** **2800 mAh** at the 0.2C continuous discharge rate (about 560 mA draw). Above this current the cell delivers slightly less — see §4.10.4.
+- **Charging current:** the TP4056 module's default charge rate is set by a single resistor (`R3` on most TP4056 boards). With the stock 1.2 kΩ resistor the module charges at ~1000 mA (1 A). For our 2800 mAh cell, that's a C/2.8 charge rate — safe for overnight charging, but the cell will be warm during the first hour. **If you want a gentler charge (better for cell longevity), replace R3 with a 2 kΩ resistor to drop the charge current to ~580 mA.** Then a full 0 → 100 % charge takes roughly 2800 / 580 ≈ 5 hours.
+- **Charge cycle life:** name-brand protected 18650 cells (Panasonic, Samsung) are typically rated for **500–1000 full charge cycles** before capacity drops below 80 % of original. A 0.5 C charge current is gentler than 1 C and roughly doubles cycle life in real-world use.
+
+#### 4.10.2 What consumes power
+
+The numbers below are *typical*, drawn from datasheets + Espressif's published ESP32-S3 power numbers. **They are estimates**, not measured on this exact build. To get real numbers, put a USB power meter (~$10) between the TP4056 output and the dev board's `5V` pin.
+
+| Subsystem | Active current | Notes |
+|---|---|---|
+| ESP32-S3 CPU, both cores @ 240 MHz, WiFi off, AMY rendering 4 voices | **~50 mA** | from Espressif's ESP32-S3 hardware design guide; rises slightly with active WiFi/BLE (~+200 mA peak when transmitting) |
+| I²S DAC (PCM5102A), 44.1 kHz stereo out | **~10 mA** | from PCM5102A datasheet |
+| TFT backlight (ILI9341), 70 % duty PWM, white pixels | **~60 mA** | dominant load; backlight is the biggest knob |
+| TFT backlight, 30 % duty | **~20 mA** | |
+| TFT backlight, off (e.g. while in deep sleep) | **< 1 mA** | |
+| Microphone (INMP441), always-on | **~1 mA** | |
+| Status LEDs (when lit) | **~5 mA each** | usually off |
+
+**Totals** (typical operation):
+
+| Mode | Current |
+|---|---|
+| **Playing music, full TFT** (default) | ~120 mA |
+| **Playing music, TFT dimmed to 30 %** | ~80 mA |
+| **Playing music, TFT off** (line-out to headphones only) | ~65 mA |
+| **Idle but awake** (no music, screen on, button-scan running) | ~70 mA |
+| **Deep sleep** (firmware idle, no rendering, only RTC + GPIO wake) | ~10 µA ESP32 + 55 µA TP4056 + 21 µA divider = **~86 µA ≈ 0.1 mA** |
+
+#### 4.10.3 Battery life estimate (2800 mAh)
+
+Using the totals above, here is the expected runtime on a fully-charged cell. **Divide by 1.25 if you want a conservative estimate** that accounts for real-world capacity being ~80 % of the printed number, temperature, and aging.
+
+| Usage pattern | Average current | Battery life |
+|---|---|---|
+| **Always on, full TFT, playing** (worst case) | ~120 mA | **~23 hours** (≈ 1 day) |
+| **Always on, TFT dimmed 30 %** | ~80 mA | **~35 hours** (≈ 1.5 days) |
+| **Always on, TFT off** (line-out to amp) | ~65 mA | **~43 hours** (≈ 1.8 days) |
+| **Heavy use: 4 hr/day active + 20 hr deep sleep** | ~20 mA avg | **~140 hours ≈ 5.8 days** |
+| **Moderate use: 1 hr/day active + 23 hr deep sleep** | ~5 mA avg | **~560 hours ≈ 23 days** |
+| **Light use: 15 min/day active + 23.75 hr deep sleep** | ~1.3 mA avg | **~2150 hours ≈ 3 months** |
+| **Stored, idle, no button presses for weeks** | ~0.1 mA | **~30 000 hours ≈ 3.4 years** |
+| **Standby + occasional 5-minute check-in** | ~0.1 mA | **~28 000 hours ≈ 3.2 years** |
+
+**Summary**: on a single 2800 mAh charge, expect **2–4 weeks of regular (15-min/day) use**, **~3 weeks of moderate use**, or **3+ years of pure standby**. The 5-minute idle-to-deep-sleep timer in the firmware (`BTN_IDLE_SLEEP_MS = 5 * 60 * 1000`) is what makes the long standby numbers possible.
+
+#### 4.10.4 What affects these numbers
+
+- **TFT backlight brightness** is the largest variable. Dropping from 70 % (default) to 30 % nearly halves active current.
+- **Number of active voices**. AMY defaults to 4 voices; each extra voice is ~1 mA on the CPU.
+- **Cell temperature**. Cold cells deliver less than rated capacity; hot cells degrade faster. The numbers above assume ~20 °C ambient.
+- **Cell age**. A 2-year-old 18650 may only hold 80 % of its original capacity.
+- **WiFi / BLE** (not used in v1 firmware, but if added): a WiFi transmission burst pulls an extra ~200 mA. Battery life during streaming would drop by 60 %.
+- **Recording**. While recording, the INMP441 mic is active and AMY runs analysis. Adds ~5 mA vs. plain playback.
+- **Volume**. Higher volume on the PCM5102A's line-out does not significantly change current (it's a line-level output, not a speaker driver).
+
+#### 4.10.5 Charging from USB-C
+
+- **Charging time**: 0 → 100 % takes 3–5 hours depending on the TP4056's programmed charge current. The LED on the TP4056 module turns off (or changes colour) when charging is complete.
+- **Charging while playing**: the TP4056 will charge the cell and power the dev board simultaneously — this is fine, but the cell may get warm. To preserve cell life, charge when the device is not in use.
+- **No over-charge risk**: the TP4056 cuts off at 4.2 V. You can leave the device plugged in indefinitely.
+- **Over-discharge protection**: the protection circuit on a protected 18650 cuts off at ~2.5 V. The firmware will *not* be able to boot if the cell is below ~3.0 V (because the ESP32-S3 needs 3.0 V+ on its 3V3 rail, which the dev board's LDO derives from `5V`).
+
+#### 4.10.6 Replacing the cell
+
+When the cell no longer holds a useful charge (after 1–3 years), open the enclosure, swap in a fresh **2800 mAh protected 18650**, and reassemble. **Do not throw the old cell in the trash** — most hardware stores and electronics retailers (Best Buy, Home Depot, Lowes) accept Li-ion batteries for recycling.
 
 ---
 
@@ -356,9 +437,18 @@ This is the most expensive optional step and the one most likely to introduce no
 
 Wire the MAX98357A as in §4.9. Connect the speaker to `OUT+` and `OUT-`. **In v1 firmware, the MAX98357A is not driven** — this is a v2 feature. For now, just leave the amp unpowered.
 
-### 5.9 Step 9 — (Optional) Wire the battery + charger
+### 5.9 Step 9 — Wire the battery + charger (recommended)
 
-Wire the TP4056 as in §4.1. Make sure the dev board's `5V` and `GND` are connected to the TP4056's `OUT+` and `OUT-`. **Before plugging in a LiPo for the first time, double-check polarity with a multimeter.** A reversed LiPo will damage the TP4056.
+This guide's default includes the **2800 mAh Li-ion cell** and TP4056 charger. The full power wiring is in §4.1; the runtime estimates are in §4.10.
+
+1. Insert the **2800 mAh 18650 cell** into a single-cell holder (or solder to a JST-PH pigtail, observing polarity — red = +, black = −).
+2. Connect the cell's + terminal to the TP4056's `B+` pad; − to `B−`. Connect `OUT+` → dev board `5V`; `OUT−` → dev board `GND`.
+3. Connect the TP4056's `IN+` / `IN−` to a USB-C breakout (or to the dev board's USB-C 5 V line if you're OK with the module always being on).
+4. **Before plugging the cell in, double-check polarity with a multimeter.** A reversed cell will damage the TP4056 and possibly vent the cell.
+5. Power up. The TP4056's red LED should be on (charging) or green (charged). The dev board should boot normally.
+6. Verify deep sleep current (optional): put a multimeter in series between the cell's + terminal and the TP4056's `B+` pad. Leave the device idle for 6 minutes (so the firmware enters deep sleep) and read the current — expect **~0.1 mA** (100 µA). Anything above ~1 mA suggests a wiring fault.
+
+If you decide *not* to use the battery, skip this step and run on USB only — but expect to lose the deep-sleep standby runtime noted in §4.10.
 
 ### 5.10 Step 10 — Final assembly
 
