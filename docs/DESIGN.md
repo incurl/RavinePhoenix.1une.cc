@@ -41,7 +41,7 @@ The official manual lives at [teenage.engineering/guides/po-33/en](https://teena
 
 Our firmware is **a piece of open-source software (MIT-licensed) that emulates a PO-33 K.O! on a $5 ESP32-S3 microcontroller board** — specifically the **ESP32-S3-WROOM-1-N16R8** module (16 MB flash, 8 MB Octal PSRAM). Instead of buying Teenage Engineering's hardware, you buy this dev board, add a small handful of cheap parts, wire them together, flash our firmware over USB, and you have a PO-33-shaped device.
 
-The parts we add are listed in `main/config.h` and the hardware guide; the short version is: an audio DAC chip (PCM5102A) for output, an I²S MEMS microphone (INMP441) for recording, a 2.4″ color TFT (ILI9341) for the screen, and a 4×4 matrix of 16 tactile buttons for input. Total cost of the additional parts: roughly $10–$15.
+The parts we add are listed in `main/config.h` and the hardware guide at `hardware/HARDWARE.md`; the short version is: an audio DAC chip (PCM5102A) for output, an I²S MEMS microphone (INMP441) for recording, a 2.4″ color TFT (ILI9341) for the screen, and a 4×4 matrix of 16 tactile buttons for input. Total cost of the additional parts: roughly $10–$15.
 
 Our firmware does **not** make the board behave 1-for-1 like a PO-33. As of v1, only about a quarter of the PO-33's features are fully implemented; another third are partially implemented; the rest are not yet built. The §7 scorecard lists every feature with an honest ✅ / ⚠️ / ❌ status. Use this document to check whether a feature you care about works before you assume it does.
 

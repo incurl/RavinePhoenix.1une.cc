@@ -97,6 +97,18 @@ target_compile_definitions(amy PRIVATE
         ├── idf_component.yml
         ├── README.md            # how to fetch AMY sources
         └── src/                 # AMY C/H sources (gitignored)
+├── docs/
+│   └── DESIGN.md                # feature-to-implementation map (~16k words)
+├── hardware/
+│   ├── HARDWARE.md              # beginner build guide (~5.6k words)
+│   ├── README.md                # conventions for this folder
+│   ├── schematic/               # future: KiCad .kicad_sch
+│   ├── pcb/                     # future: KiCad .kicad_pcb + gerbers
+│   ├── enclosure/               # future: .step / .stl / .scad
+│   ├── datasheets/              # future: PDF excerpts of PCM5102A, INMP441, ILI9341
+│   └── assembly-photos/         # future: build photos
+└── website/                     # static site (Eleventy + Tailwind)
+    └── (built to _site/, deployed via GitHub Pages)
 ```
 
 ---
@@ -142,6 +154,12 @@ target_compile_definitions(amy PRIVATE
 | LED PLAY | GPIO14 |
 
 ---
+
+## 📚 Documentation
+
+- **[`docs/DESIGN.md`](docs/DESIGN.md)** — feature-to-implementation map (~16 000 words). What the firmware does, how every PO-33 feature maps to code, the honest ✅ / ⚠️ / ❌ scorecard, and how the ESP32-S3 can break the PO-33's limits.
+- **[`hardware/HARDWARE.md`](hardware/HARDWARE.md)** — beginner build guide (~5 600 words). Bill of materials, pin map, 10-step build order, troubleshooting, and the no-solder alternative.
+- **[`hardware/README.md`](hardware/README.md)** — conventions for the `hardware/` folder (where future schematic / PCB / enclosure files go).
 
 ## 🧪 Tests
 
