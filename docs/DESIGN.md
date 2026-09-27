@@ -1,0 +1,1162 @@
+# PO-33 K.O! ESP32-S3 Firmware — Feature Design Document
+
+> **Audience:** written for a complete novice on both programming and music production. Every technical term is defined inline the first time it appears, and again in the glossary at the end. If you have never used a Pocket Operator before, start at §1 and read straight through. If you already know the PO-33 and just want to see how we mapped it to code, jump to §3.
+
+---
+
+## 0. What this document is, and who it is for
+
+This is the design document for a piece of software that runs on a small circuit board called an **ESP32-S3**. That board is wired up to a few other small parts (a screen, some buttons, a microphone chip, a speaker chip). Together they act like a **Teenage Engineering PO-33 K.O! Pocket Operator** — the famous little orange-and-black sampler you may have seen musicians hold in their hand.
+
+If you have never used a real PO-33, that's fine — this document explains everything from scratch.
+
+This document has three jobs:
+
+1. **Explain the device.** What it does, what you can do with it, what every button means. In plain English.
+2. **Map every PO-33 feature to a piece of code.** For each thing the original PO-33 can do, we name the file in our project where the same thing is implemented, and tell you whether it's finished, partly finished, or not built yet.
+3. **Honest scorecard.** We list exactly what works today and what doesn't. There is no marketing. If a feature is missing, it says "missing".
+
+The intended reader is a complete novice. If you are an experienced embedded engineer, you can probably skim §1–§2 and skip straight to §3 and §7.
+
+---
+
+## 1. The thirty-second explanation
+
+### 1.1 What is the PO-33 K.O! Pocket Operator?
+
+The PO-33 K.O! is a real product made by a Swedish company called **Teenage Engineering**. It is a small plastic box, about the size of a deck of cards, with:
+
+- A speaker on the front
+- A small black-and-orange LCD screen
+- 16 little square buttons arranged 4 × 4
+- A microphone built in
+- A small headphone jack
+- Two 3.5 mm sockets on the back for syncing with other music gear
+
+It runs on two AAA batteries. The price when new is about $80. It is popular because it is **fun, fast, and weird**. You record a sound, you scribble it into a 16-step pattern, you press **play**, and the device loops the pattern forever while you twist knobs to make it sound different.
+
+The official manual lives at [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en).
+
+### 1.2 What does our firmware do?
+
+Our firmware is a **piece of software that pretends to be a PO-33** but runs on a $5 microcontroller board instead of Teenage Engineering's hardware. You can buy that board on Amazon for $5–$10, build or buy a handful of cheap parts (an audio DAC chip, a microphone chip, a small screen, 16 buttons), wire them together, and flash our firmware onto the board. From that moment on, the board behaves like a PO-33.
+
+We did not write the audio engine ourselves. We use **AMY**, a free open-source synthesizer library. AMY already knows how to play samples, how to make oscillators, how to add reverb and echo and filters. So our firmware is mostly a thin "shell" that turns PO-33 button presses into AMY commands.
+
+### 1.3 What does "ESP32-S3" + "AMY" + "TFT" mean?
+
+- **ESP32-S3** — a tiny computer on a chip. We use the **ESP32-S3-WROOM-1-N16R8** variant, which has 16 MB of flash storage and 8 MB of extra "PSRAM" memory. The PSRAM is where we keep all your recorded sounds.
+- **AMY** — a synthesizer. We give AMY commands like "play this sound at pitch C, with this filter, on this step" and AMY does the math.
+- **TFT** — "thin-film transistor", a fancy name for a flat color screen. Ours is 2.4 inches diagonally, 240 × 320 pixels, connected by SPI (a kind of serial data bus).
+
+### 1.4 The box: what you actually see and touch
+
+Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top face:
+
+```
++-------------------------------------+
+|  [tiny TFT screen, 2.4" diagonal]   |
+|                                     |
+|     step1 step2 step3 ... step16    |
+|                                     |
+|  +---+ +---+ +---+ +---+            |
+|  |REC| |PLAY| | 1 | | 2 |            |
+|  +---+ +---+ +---+ +---+            |
+|  +---+ +---+ +---+ +---+            |
+|  | 3 | | 4 | | 5 | | 6 |            |
+|  +---+ +---+ +---+ +---+            |
+|  +---+ +---+ +---+ +---+            |
+|  | 7 | | 8 | |FUNC| |FX |            |
+|  +---+ +---+ +---+ +---+            |
+|  +---+ +---+ +---+ +---+            |
+|  |+10| |-10| |+  | |-  |            |
+|  +---+ +---+ +---+ +---+            |
+|                                     |
+|  [headphone jack] [sync in] [sync out]
++-------------------------------------+
+```
+
+The 16 buttons are arranged in a 4 × 4 grid. From the top-left they are:
+
+- Row 0, col 0 → **REC** (start recording)
+- Row 0, col 1 → **PLAY** (start the beat)
+- Rows 0–2, cols 2–3 → step buttons 1–8
+- Row 2, col 2 → **FUNC** (held while pressing other buttons for advanced actions)
+- Row 2, col 3 → **FX** (pick one of the 16 effects)
+- Bottom row → tempo up / tempo down / pattern up / pattern down
+
+There are no knobs. On the real PO-33 there are two knobs, but on our version we use the buttons to change those settings, since we have 16 buttons and no knobs.
+
+---
+## 2. Concepts you need first
+
+These are the words we will use a lot in the rest of this document. Read this section once; you can come back to it as a reference.
+
+### 2.1 Sound
+
+A **sound** is what a microphone picks up over a short period of time. If you clap your hands, the microphone hears a half-second "thwack". If you say "hello", the microphone hears about a second of audio. We **record** that audio into the device's memory. Once it's stored, we can play it back any number of times.
+
+### 2.2 Sample
+
+**Sample** is a more technical word for "a short recording". When musicians say "I sampled a piano", they mean "I recorded a piano note into a sampler and now I can play it on the keyboard". In this document **sample** and **recording** mean the same thing.
+
+### 2.3 Slot
+
+A **slot** is a numbered storage location for a sample. Our device has **16 slots**, numbered 1 through 16. The first 8 (slots 1–8) are for short sounds called **drum hits** — a single kick, a single snare, a single hi-hat closed. The next 8 (slots 9–16) are for **melodic sounds** — a bass note, a chord, a vocal snippet — things you might want to play at different pitches.
+
+### 2.4 Step
+
+A **step** is one beat in a bar of music. The PO-33 has **16 steps** in a row, which makes two bars of 4/4 music (or one bar with 16 sixteenth-notes — depending on how you count). Each step is a moment in time. The device walks through the steps one at a time. If you told it "play sound 3 on step 5", it will play sound 3 every time the playhead reaches step 5, then move on.
+
+### 2.5 Pattern
+
+A **pattern** is a complete arrangement of sounds across all 16 steps. A pattern tells the device which sound to play on which step. Our device has **16 patterns**, numbered 1 through 16. A pattern is sometimes also called a "beat" or a "loop".
+
+### 2.6 Song
+
+A **song** is an ordered list of patterns. Our device lets you chain up to **128 patterns** in a row, so a song can be up to 128 × 16 beats long. After the last pattern in the song finishes, the device loops back to the first pattern.
+
+### 2.7 BPM (beats per minute)
+
+**BPM** is how fast the music goes. BPM = 120 means there are 120 beats per minute, so each beat lasts half a second, so each step (a sixteenth-note) lasts an eighth of a second. The real PO-33 has three "BPM levels" — Hip Hop (80 BPM), Disco (120 BPM), and Techno (140 BPM) — and you can fine-tune from there. Our firmware supports any BPM from 60 to 240.
+
+### 2.8 Sequencer
+
+The **sequencer** is the part of the device that walks through the steps in order and plays the right sound at each step. Think of it as a robot drummer who reads the pattern and hits the right drum at the right time.
+
+### 2.9 FX (effect)
+
+An **effect** (called "FX" for short) is a modification applied to a sound. Effects can be small (slight reverb) or wild (the sound plays backwards). The PO-33 has 16 built-in "punch-in" effects. You press the **FX** button and then a number 1–16 to pick one. The effect applies to whatever you play next.
+
+### 2.10 Tweak parameter
+
+A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware uses the buttons to do the same thing.
+
+### 2.11 Punch-in
+
+**Punch-in** is the name TE gave to those 16 effects. The idea is that you press the FX button to "punch in" an effect, just like a recording engineer in a studio punches in a reverb at the right moment. It is a fancy word for "instant on/off effect".
+
+### 2.12 Polyphony
+
+**Polyphony** means "how many sounds can play at the same time". If you press three buttons at once and hear three different sounds, the device has polyphony ≥ 3. Our device supports **4 simultaneous voices**, which is enough for almost any music you would make on a PO-33.
+
+### 2.13 Sync
+
+**Sync** (short for synchronization) means two devices agreeing on the same tempo. If you have a PO-33 and a Korg volca and you want them to play together, you run a 3.5 mm audio cable between them. One device becomes the "master" (the one that decides the tempo), the other becomes the "slave" or "sync unit". They keep in lock-step so the beats line up.
+
+### 2.14 Loop
+
+**Loop** means "play the same thing over and over". When a sample is "looping", it means the device is repeating the start of the sample as soon as it reaches the end, so a 1-second sample can fill a 60-second song. The PO-33 has four different "loop length" effects (loop 16, loop 12, loop short, loop shorter) which set the loop point at different positions in the sample.
+
+### 2.15 Unison
+
+**Unison** is an effect where the same sound is played multiple times slightly out of phase with itself, which makes it sound thicker, like a chorus of identical singers. "Unison low" is the same but an octave lower.
+
+### 2.16 Stutter
+
+**Stutter** is an effect where a tiny chunk of the sound is repeated many times rapidly, creating a "st-st-st-stutter" effect. "Stutter 4" repeats 4 times per beat; "stutter 3" repeats 3 times per beat.
+
+### 2.17 Quantize
+
+**Quantize** means "snap to a grid". When a sequencer "quantizes" notes, every note is moved to the nearest exact step, so timing is mathematically perfect. The PO-33's "6/8 quantize" effect retimes your pattern so it fits a 6/8 time signature instead of 4/4.
+
+### 2.18 Stutter vs. Reverse vs. Scratch
+
+These are all variations of the same idea: manipulate how the sample plays back in time. **Stutter** repeats a tiny slice. **Reverse** plays it backwards. **Scratch** jumps randomly around the sample like a DJ spinning a record back and forth.
+
+---
+
+## 3. The complete feature-to-code map
+
+This is the heart of the document. Every row is one feature of the real PO-33. For each row we give:
+
+- **PO-33 manual reference** — the section number in the TE manual.
+- **Layman explanation** — what the feature does in plain English.
+- **PO-33 button combo** — what you press on the real PO-33 to use it.
+- **Our hardware combo** — what you press on our firmware (the same button, or a UART command over the serial port).
+- **Code location** — the file path and key function name.
+- **Status** — ✅ done, ⚠️ partial, ❌ missing.
+
+### 3.1 Section 1 — Sounds (recording)
+
+#### F-001 — Record a sample (mic)
+
+- **Manual ref:** §1.1 (PO-33 manual "sounds" section, record sub-section)
+- **Layman:** You press a button, the device starts listening through its microphone, you make a sound, you press the button again, and now the device has that sound stored in one of its 16 slots.
+- **PO-33 button combo:** Hold **REC** (star), then press the number of the slot (1–16) where you want to store the sound. Press **REC** again to stop.
+- **Our hardware combo:** Hold button "REC", then press a step button 1–16. Hold "REC" again to stop. (Identical button mapping.) Or via UART shell: `rec <slot>` then `stoprec`.
+- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_start_record(uint8_t slot)`, `amy_bridge_stop_record()`, `amy_bridge_pump_capture()`.
+- **Status:** ✅ done.
+
+#### F-002 — Record from line-in
+
+- **Manual ref:** §1.1
+- **Layman:** Instead of using the built-in microphone, you can plug a stereo audio cable into the line-in jack and the device records whatever is on the cable. Useful for sampling a record, a phone, or another synthesizer.
+- **PO-33 button combo:** Same as F-001; the device auto-detects line-in vs. mic.
+- **Our hardware combo:** Identical. We use the same I²S microphone chip (INMP441) for both, because line-in via a 3.5 mm socket would need an additional ADC. Our firmware treats both sources as "mic" for now.
+- **Code location:** `main/audio/amy_bridge.c`. AMY's `i2s.c` is configured with `i2s_din = I2S_IN_DATA_GPIO` (GPIO17); the input buffer is read into PSRAM in `amy_bridge_pump_capture()`.
+- **Status:** ⚠️ partial. Mic works. Line-in via a separate 3.5 mm socket is not wired in this version — you'd have to add a second ADC chip.
+
+#### F-003 — Live recording into a playing pattern
+
+- **Manual ref:** §1.2 ("record own sound (live)")
+- **Layman:** You start the pattern playing, and while it's looping you hold **WRITE** (·) + the slot number and the device records into that slot **at the same time** as the pattern keeps playing. This is how you "jam" new sounds into an existing beat.
+- **PO-33 button combo:** While a pattern is playing, hold **WRITE** + a number 1–16.
+- **Our hardware combo:** Not yet implemented. The current firmware only records when the pattern is **stopped**.
+- **Code location:** `main/audio/amy_bridge.c` would need a new `amy_bridge_live_record(uint8_t slot)`; `main/sequencer/sequencer.c` would have to keep playing while recording.
+- **Status:** ❌ missing.
+
+#### F-004 — 40 seconds total sample memory
+
+- **Manual ref:** §1.1
+- **Layman:** Across all 16 slots combined, you can record up to 40 seconds of audio. Each slot is capped: 8 drum slots ≤ 3 s each, 8 melodic slots ≤ 4.5 s each (in the current firmware; the real PO-33 caps drum slots shorter).
+- **PO-33 button combo:** Implicit — the device just won't record past the slot's max.
+- **Our hardware combo:** Same.
+- **Code location:** `main/config.h` → `SAMPLE_TOTAL_SECONDS 40`, `SLOT_DRUM_MAX_SECONDS 2.0f`, `SLOT_MELODIC_MAX_SECONDS 3.0f`. `main/audio/amy_bridge.c` allocates `SAMPLE_POOL_SIZE_BYTES = 40 × 44100 × 2 ≈ 3.37 MB` in PSRAM.
+- **Status:** ✅ done.
+
+#### F-005 — Melodic vs drum slots
+
+- **Manual ref:** §1.1
+- **Layman:** Slots 1–8 are for short percussive sounds (drums). Slots 9–16 are for longer sounds that you want to pitch-shift around the musical scale (melodic). Drums play at their recorded pitch; melodic slots play pitched up or down based on which step of the pattern triggers them.
+- **PO-33 button combo:** Slots are just numbered 1–16; the type is implicit.
+- **Our hardware combo:** Same.
+- **Code location:** `main/config.h` → `SLOT_DRUM_COUNT 8`. `main/audio/amy_bridge.c` → `apply_fx()` uses `e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : 4`.
+- **Status:** ✅ done.
+
+### 3.2 Section 2 — Patterns (sequencing)
+
+#### F-006 — Play a sound
+
+- **Manual ref:** §1.3
+- **Layman:** Hold **SOUND** (S) and press the slot number 1–16, and that slot's sound plays once.
+- **PO-33 button combo:** Hold S + number.
+- **Our hardware combo:** Not yet — the SOUND button is not implemented as a discrete button. We have "REC" and "PLAY" and "FUNC" and "FX" but no "S" key. Use the UART shell instead: `rec 5` then play it via the shell, or trigger it from the sequencer.
+- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_play_note(slot, midi_note, velocity, ...)`.
+- **Status:** ⚠️ partial. Sound trigger works internally (the sequencer calls it) but no dedicated "hold-S + number" UI button.
+
+#### F-007 — 16 patterns
+
+- **Manual ref:** §2 (PO-33 manual "patterns")
+- **Layman:** You can store 16 different patterns on the device, numbered 1–16. Each pattern is a complete beat on its own. You switch between them with the bottom-right button group.
+- **PO-33 button combo:** Hold **PATTERN** (⠛) + 1–16 to pick one.
+- **Our hardware combo:** We have a "PAT up" and "PAT down" button on the bottom row, instead of a full 1–16 selector. Pressing PAT up cycles 0→1→2→...→15→0→... Pressing PAT down cycles backward. UART: `pattern 5`.
+- **Code location:** `main/sequencer/sequencer.h` → `PATTERN_COUNT 16`, `sequencer_set_pattern(uint8_t)`. `main/ui/buttons.h` → `BTN_PAT_UP`, `BTN_PAT_DN`.
+- **Status:** ✅ done.
+
+#### F-008 — 16 steps per pattern
+
+- **Manual ref:** §2
+- **Layman:** Each pattern has 16 "slots in time" called steps. Each step is one sixteenth-note. The sequencer walks 1→2→...→16→1→...
+- **PO-33 button combo:** Implicit; the steps are the step buttons 1–8 + 9–16.
+- **Our hardware combo:** Same step buttons 1–8 (with row+col layout for 9–16 accessible via FUNC+step, or via the shell).
+- **Code location:** `main/sequencer/pattern.h` → `STEPS_PER_PATTERN 16`.
+- **Status:** ✅ done.
+
+#### F-009 — Write mode (assigning sounds to steps)
+
+- **Manual ref:** §2.1
+- **Layman:** You enter "write mode" by pressing **WRITE** (·). Now when you press a step button, the slot you select gets added to that step. Press WRITE again to exit write mode.
+- **PO-33 button combo:** Press WRITE → press a slot number → press step numbers where you want that slot to play → press WRITE again.
+- **Our hardware combo:** Not yet — we don't have a WRITE button. Use UART: `pattern 0; sequencer_set_step_slot(0, 5, 3, 60)` from a shell command, or wire it up via the FUNC button later.
+- **Code location:** `main/sequencer/sequencer.h` → `sequencer_set_step_slot(uint8_t pattern, uint8_t step, uint8_t slot, uint8_t note)`.
+- **Status:** ⚠️ partial. Code supports it; UI button combo missing.
+
+#### F-010 — Fill a step (press to add, press again to remove)
+
+- **Manual ref:** §2.1
+- **Layman:** When you press a step button while in write mode, the slot gets added. Press the same step again to remove it. Pressing the same step multiple times toggles it.
+- **PO-33 button combo:** Press step → press step again to toggle off.
+- **Our hardware combo:** Same — see F-009. Each step button is a toggle.
+- **Code location:** `main/sequencer/pattern.c` → `pattern_set_step()` writes a step, and `step_t.slot_id = 0xFF` is the "empty" sentinel.
+- **Status:** ✅ done.
+
+#### F-011 — Clear a step
+
+- **Manual ref:** §2.1
+- **Layman:** Press WRITE + the step number to remove the slot from that step.
+- **PO-33 button combo:** WRITE + step.
+- **Our hardware combo:** Long-press the step button to clear it (currently not bound; planned).
+- **Code location:** Will live in `main/sequencer/sequencer.c` when added.
+- **Status:** ❌ missing.
+
+#### F-012 — Clear an entire pattern
+
+- **Manual ref:** §2.1 ("press record + pattern to clear the active pattern")
+- **Layman:** Hold **RECORD** + **PATTERN** and the entire current pattern is wiped (all 16 steps cleared).
+- **PO-33 button combo:** Hold REC + PATTERN.
+- **Our hardware combo:** Not yet. UART: `pattern 0; ... (clear all steps)`.
+- **Code location:** Needs `sequencer_clear_pattern(uint8_t pattern)` in `main/sequencer/pattern.c`.
+- **Status:** ❌ missing.
+
+### 3.3 Section 3 — Songs (pattern chaining)
+
+#### F-013 — Chain up to 128 patterns into a song
+
+- **Manual ref:** §3
+- **Layman:** You can build a "song" by listing patterns in order: 1, 1, 1, 2, 3, 3, ... up to 128 entries. When you play, the device walks through the list. When it reaches the end, it loops back to the start.
+- **PO-33 button combo:** Hold **PATTERN** + 1–16 to add the current pattern to the chain; repeating the same pattern multiple times in the chain makes it play that many times before advancing.
+- **Our hardware combo:** Not exposed via UI. The internal `g_chain[]` buffer holds up to 128 entries; chain logic is implemented in `main/sequencer/sequencer.c` `on_step()` callback.
+- **Code location:** `main/sequencer/pattern.h` → `PATTERN_CHAIN_MAX 128`, `g_chain[]`, `g_chain_len`. `main/sequencer/sequencer.c` → `on_step()` increments `chain_idx` and rewrites `s_pattern` when reaching the chain end.
+- **Status:** ⚠️ partial. Internally wired; no UI button combo to add patterns to the chain.
+
+#### F-014 — Reorder / remove patterns from chain
+
+- **Manual ref:** §3
+- **Layman:** You can change the order of patterns in a chain by re-pressing them in a new sequence.
+- **PO-33 button combo:** Hold PATTERN + number.
+- **Our hardware combo:** Same gap as F-013.
+- **Status:** ❌ missing.
+
+### 3.4 Section 4 — Tweaking (Tone / Filter / Trim)
+
+#### F-015 — Pick a tweak parameter (Tone / Filter / Trim)
+
+- **Manual ref:** §4
+- **Layman:** You cycle between three tweak modes by pressing **FX** repeatedly: Tone, Filter, Trim. Each one has two knobs (A and B) that change different aspects.
+- **PO-33 button combo:** Press FX to cycle: Tone → Filter → Trim → Tone.
+- **Our hardware combo:** Not yet. The FX button is reserved for effects. We'd need a separate "Tweak" mode button (perhaps FUNC+FX).
+- **Code location:** Needs a new `tweak_mode_t` state machine in `main/ui/display.c` plus handlers.
+- **Status:** ❌ missing.
+
+#### F-016 — Tweak Tone (Knob A = pitch, Knob B = volume)
+
+- **Manual ref:** §4.1 ("ton")
+- **Layman:** With Tweak = Tone, Knob A raises or lowers the pitch of the current sound by semitones; Knob B raises or lowers its volume.
+- **PO-33 button combo:** Turn knob A / B.
+- **Our hardware combo:** Not yet. Long-press the slot button + BPM up/down to change pitch; long-press + FUNC + step to change volume.
+- **Code location:** The data is in `step_t.note` and `step_t.velocity`; we'd need UI hooks.
+- **Status:** ⚠️ partial. Data model supports it; UI does not.
+
+#### F-017 — Tweak Filter (Knob A = LP/HP, Knob B = resonance)
+
+- **Manual ref:** §4.2 ("Flt")
+- **Layman:** With Tweak = Filter, Knob A picks the cutoff frequency (low-pass or high-pass); Knob B picks how strong the filter is (resonance).
+- **PO-33 button combo:** Turn knobs.
+- **Our hardware combo:** Not yet.
+- **Code location:** `step_t.filter_cutoff` is the data field. `main/audio/amy_bridge.c` → `apply_fx()` case `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`.
+- **Status:** ⚠️ partial.
+
+#### F-018 — Tweak Trim (Knob A = start point, Knob B = length)
+
+- **Manual ref:** §4.3 ("tri")
+- **Layman:** With Tweak = Trim, you pick where in the recording the playback actually starts, and how long the playback lasts. This is how you chop off silence at the start, or trim a long recording to a short snippet.
+- **PO-33 button combo:** Turn knob A = start, B = length.
+- **Our hardware combo:** Not yet. UART: `amy_bridge_set_trim(slot, start, end)`.
+- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_set_trim(slot, start, end)`. `s_slots[slot].start` / `.end` are stored.
+- **Status:** ⚠️ partial. Function exists, not bound to buttons.
+
+### 3.5 Section 5 — Effects (the 16 punch-ins)
+
+See §4 below for the per-effect deep dive.
+
+#### F-019 — Pick an effect
+
+- **Manual ref:** §5
+- **Layman:** Press **FX** to enter effect-pick mode, then press a number 1–16 to select one of the 16 effects. The effect applies to whatever you play next.
+- **PO-33 button combo:** FX + 1–16.
+- **Our hardware combo:** The FX button is wired (`BTN_FX` in `main/ui/buttons.h`). Currently FX selects an effect when combined with step buttons 1–16. The mapping lives in `main/sequencer/sequencer.c` and `main/audio/amy_bridge.c`.
+- **Code location:** `main/audio/amy_bridge.h` → `po33_fx_t` enum. `main/audio/amy_bridge.c` → `apply_fx()`.
+- **Status:** ⚠️ partial. The list of effects is **wrong** — see §7 for the v2 alignment plan.
+
+### 3.6 Section 6 — BPM and tempo
+
+#### F-020 — Change tempo (BPM)
+
+- **Manual ref:** §6
+- **Layman:** Hold **BPM** and turn Knob A to fine-tune the tempo, or press BPM repeatedly to cycle between three preset levels: Hip Hop (80), Disco (120), Techno (140).
+- **PO-33 button combo:** Hold BPM + knob A, or press BPM.
+- **Our hardware combo:** Press BPM up (`BTN_BPM_UP`) or BPM down (`BTN_BPM_DN`). UART: `bpm 140`.
+- **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`. `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`.
+- **Status:** ✅ done (but the three preset levels — Hip Hop / Disco / Techno — are not implemented yet, only continuous BPM).
+
+#### F-021 — Three preset BPM levels (Hip Hop / Disco / Techno)
+
+- **Manual ref:** §6
+- **Layman:** The PO-33 has three named BPM levels you can cycle through. The PO-33 calls these "levels" because BPM is shown as a numeric value but it remembers the level name.
+- **PO-33 button combo:** Press BPM repeatedly.
+- **Our hardware combo:** Same gap as F-020.
+- **Code location:** Needs `enum bpm_level_t { BPM_HIP_HOP=80, BPM_DISCO=120, BPM_TECHNO=140 }` and a stepper function.
+- **Status:** ❌ missing.
+
+### 3.7 Section 7 — Headphone volume
+
+#### F-022 — Headphone volume level (5 levels)
+
+- **Manual ref:** §7
+- **Layman:** You can pick one of 5 headphone volume levels so the device isn't too loud or too quiet for headphones.
+- **PO-33 button combo:** Hold BPM + 1–5.
+- **Our hardware combo:** Not yet.
+- **Code location:** AMY's master gain is configurable via `amy_config_t`. We'd expose a `set_volume_level(uint8_t)` in `amy_bridge.c`.
+- **Status:** ❌ missing.
+
+### 3.8 Section 8 — Copy and delete
+
+#### F-023 — Copy a sound to another slot
+
+- **Manual ref:** §8
+- **Layman:** Hold **WRITE** + **SOUND** + 1–16 and the active sound is copied to that slot.
+- **PO-33 button combo:** WRITE + SOUND + number.
+- **Our hardware combo:** Not yet.
+- **Code location:** Would call `amy_bridge_register_slot(dst, src_ptr, src_len, src_sr, src_is_drum)` in `main/audio/amy_bridge.c`.
+- **Status:** ❌ missing.
+
+#### F-024 — Copy a slice of a drum sample
+
+- **Manual ref:** §8
+- **Layman:** Same as F-023 but only copies one slice (one of the 16 auto-sliced parts) to a new drum slot.
+- **PO-33 button combo:** WRITE + SOUND + 9–16 (drum slot) + slice number 1–16.
+- **Our hardware combo:** Not yet.
+- **Code location:** `main/audio/amy_bridge.c` → would need a `amy_bridge_copy_slice(src_slot, slice_index, dst_slot)`.
+- **Status:** ❌ missing.
+
+#### F-025 — Copy an entire pattern
+
+- **Manual ref:** §8 ("hold write + pattern and press 1-16 to paste the active pattern to the corresponding new slot")
+- **Layman:** Hold WRITE + PATTERN and the active pattern is copied to another pattern slot.
+- **PO-33 button combo:** WRITE + PATTERN + number.
+- **Our hardware combo:** Not yet.
+- **Code location:** Would call `memcpy(&g_patterns[dst], &g_patterns[src], sizeof(pattern_t))` in `main/sequencer/pattern.c`.
+- **Status:** ❌ missing.
+
+#### F-026 — Delete a sound
+
+- **Manual ref:** §8 ("delete sound: hold record + sound")
+- **Layman:** Hold RECORD + the slot's number and the slot is wiped empty.
+- **PO-33 button combo:** REC + slot number.
+- **Our hardware combo:** Not yet.
+- **Code location:** Would call `amy_bridge_clear_slot(uint8_t slot)` — sets `s_slots[slot].in_use = false` and zero-fills the data.
+- **Status:** ❌ missing.
+
+#### F-027 — Delete a pattern
+
+- **Manual ref:** §8 ("press record + pattern to clear the active pattern")
+- **Layman:** Hold REC + PATTERN and the current pattern is wiped.
+- **PO-33 button combo:** REC + PATTERN.
+- **Our hardware combo:** Same gap as F-012.
+- **Status:** ❌ missing.
+
+### 3.9 Section 9 — Data transfer
+
+#### F-028 — Transfer sounds and patterns between two PO-33s
+
+- **Manual ref:** §9.1
+- **Layman:** You run a 3.5 mm stereo audio cable from the line-out of one PO-33 to the line-in of another. Hold WRITE + SOUND + PLAY on the sending unit, hold WRITE + SOUND + RECORD on the receiving unit, and the second unit receives a copy of all sounds and patterns. (Note: this erases the receiving unit first.)
+- **PO-33 button combo:** As above.
+- **Our hardware combo:** Not yet. We'd need to encode a packet stream over audio and a corresponding decoder.
+- **Code location:** Would be a new `main/audio/p2p.c` module.
+- **Status:** ❌ missing.
+
+#### F-029 — Back up to / restore from a stereo recording device
+
+- **Manual ref:** §9.2
+- **Layman:** You can back up your PO-33 by playing its data into a tape recorder / phone / computer. Later you play that recording back into another PO-33 to restore. (Note: this erases the receiving PO-33 first.)
+- **PO-33 button combo:** As above (same wire protocol as F-028).
+- **Our hardware combo:** Same.
+- **Status:** ❌ missing.
+
+### 3.10 Section 10 — Sync
+
+#### F-030 — Jam-sync out (pulse on each 16th note)
+
+- **Manual ref:** §10
+- **Layman:** On every sixteenth note the device sends a 1 ms electrical pulse out of its sync-out jack. Another device listening on sync-in can use that pulse as its tempo reference.
+- **PO-33 button combo:** Implicit; always on while playing.
+- **Our hardware combo:** Same. GPIO 18 is the sync-out pin.
+- **Code location:** `main/system/sync.c` → `sync_pulse()` toggles GPIO 18 high for 1 ms. Called from `sequencer.c` per step.
+- **Status:** ✅ done.
+
+#### F-031 — Jam-sync in (listen to a master device)
+
+- **Manual ref:** §10
+- **Layman:** Set the PO-33 to "sync mode", press PLAY, and it will not play on its own — it waits for an external pulse on the sync-in jack, then plays one step per pulse.
+- **PO-33 button combo:** Hold RECORD + BPM to cycle sync modes SY0–SY5.
+- **Our hardware combo:** The GPIO (GPIO 19) is configured as input with pullup, but no listener task is implemented yet.
+- **Code location:** `main/system/sync.c` has the GPIO config; the listener is missing.
+- **Status:** ❌ missing (GPIO configured, listener not wired).
+
+#### F-032 — Five sync modes (SY0–SY5)
+
+- **Manual ref:** §10.1 (the table: SY0 stereo/stereo, SY1 stereo mono/sync, SY2 sync stereo, SY3 sync mono/sync, SY4 mono/sync stereo, SY5 mono/sync mono/sync)
+- **Layman:** The PO-33 can send either stereo audio, sync pulse, or both — on either its line-in or its line-out. There are 5 useful combinations. The default is SY0 (stereo in, stereo out, no sync), which is what you want when listening to music through headphones.
+- **PO-33 button combo:** Hold RECORD + BPM to cycle.
+- **Our hardware combo:** Not yet. The hardware side (routing I²S L/R or sync GPIO into the same jack) needs a small analog mux.
+- **Status:** ❌ missing.
+
+### 3.11 Section 11 — Clock and alarm
+
+#### F-033 — Built-in clock (HH:MM shown on display)
+
+- **Manual ref:** §11
+- **Layman:** The PO-33 has a clock. The current time is shown in the upper-right corner of the display.
+- **PO-33 button combo:** No specific button; the clock is always running.
+- **Our hardware combo:** The clock shows on the TFT top bar (in `main/ui/display.c` → `display_tick()`).
+- **Code location:** `main/system/clock.c` → `clock_init()`, `clock_get_hhmm()`, `clock_set_hhmm()`. The NVS stores the epoch offset so the clock survives a reboot.
+- **Status:** ✅ done.
+
+#### F-034 — Alarm that plays a sample
+
+- **Manual ref:** §11
+- **Layman:** You can set an alarm time. When the alarm time is reached, the device plays a sample.
+- **PO-33 button combo:** Set via PO-33 menu (no single button combo in the manual).
+- **Our hardware combo:** UART: `clock_set_alarm 7 30 3` (play slot 3 at 07:30).
+- **Code location:** `main/system/clock.c` → `clock_set_alarm(hh, mm, slot)`; the alarm callback is not yet implemented (no FreeRTOS timer that checks the time).
+- **Status:** ⚠️ partial. Storage works; the check-and-fire timer is missing.
+
+### 3.12 Section 12 — Battery
+
+#### F-035 — Show battery level on display
+
+- **Manual ref:** §12
+- **Layman:** The PO-33 shows a small battery icon with bars indicating remaining charge. Press SOUND + BPM and the bars light up to indicate the level.
+- **PO-33 button combo:** SOUND + BPM.
+- **Our hardware combo:** The TFT top bar shows the battery voltage (planned — currently shows the clock).
+- **Code location:** `main/system/clock.c` → needs `battery_get_percent()` reading `BATTERY_ADC_CHANNEL`. Display hook in `main/ui/display.c` `display_tick()`.
+- **Status:** ❌ missing.
+
+#### F-036 — Deep-sleep after 5 minutes idle
+
+- **Manual ref:** §12 (implicit)
+- **Layman:** After 5 minutes with no button pressed, the device goes into a very-low-power "sleep" mode. Pressing any button wakes it back up.
+- **PO-33 button combo:** Implicit.
+- **Our hardware combo:** Same. Any button press wakes from deep sleep via GPIO interrupt.
+- **Code location:** `main/system/power_mgmt.c` → `power_mgmt_init()` starts a 5-minute esp_timer; `power_mgmt_enter_deep_sleep()` is called when it fires. GPIO columns are configured with `gpio_wakeup_enable()` for `GPIO_INTR_LOW_LEVEL`.
+- **Status:** ✅ done.
+
+### 3.13 Section 13 — Factory reset
+
+#### F-037 — Factory reset (erase everything)
+
+- **Manual ref:** §13 ("hold pattern + insert batteries")
+- **Layman:** To wipe the device back to factory defaults, you power it off, hold PATTERN, and reinsert the batteries. Everything is erased.
+- **PO-33 button combo:** Power off → hold PATTERN → insert batteries.
+- **Our hardware combo:** UART: `storage_erase_all()` (not yet written). Mechanical deep-sleep wake cycles via the reset button are equivalent.
+- **Code location:** Needs `storage_erase_all()` in `main/storage/storage.c`.
+- **Status:** ⚠️ partial. Code path exists conceptually; no UI button combo.
+
+#### F-038 — Show active sounds and patterns
+
+- **Manual ref:** §13 ("active sounds/patterns — press sound (S) or pattern (⠛). lit numbers have a sound/pattern, unlit are silent, flashing is the currently selected sound/pattern")
+- **Layman:** On the real PO-33 the slot buttons light up in patterns to show which slots are recorded, which are empty, and which is currently selected.
+- **PO-33 button combo:** Press SOUND or PATTERN.
+- **Our hardware combo:** We don't have lit buttons (the buttons on a stock 4×4 matrix keypad are not illuminated). The TFT does show the same information — which slots are filled, which is selected — on the Sound select UI page (proposed in §6).
+- **Code location:** `main/ui/display.c` would render the per-slot filled/empty/selected icons.
+- **Status:** ⚠️ partial. Data is in `s_slots[]`; rendering is missing.
+
+---
+
+## 4. The 16 punch-in effects, one per effect
+
+Each effect below is presented with: a one-sentence layman explanation of what it does to the sound, the PO-33 manual's wording, what we currently map it to in code, and what audio quality you should expect.
+
+> ⚠️ **Important honesty note.** Our current firmware has a slightly different list of effects than the real PO-33. We have `BITCRUSH` and `FILTER_SWEEP` which are *not* PO-33 effects, and we are missing `SCRATCH` and `6/8 QUANTIZE`. See §7 for the v2 alignment plan.
+
+### 4.1 Effect 1 — loop 16
+
+- **What it sounds like:** the sound plays its first 16th, then loops that 16th over and over for the duration of the step.
+- **Manual:** "loop 16".
+- **Our code:** `main/audio/amy_bridge.h` → `PO33_FX_LOOP_16`. In `apply_fx()`, this case is currently a no-op — the loop point is set when the sample is registered, not per-step.
+- **Status:** ⚠️ partial. Data model supports loop_end / loop_start on each voice, but the per-step override is not wired through.
+
+### 4.2 Effect 2 — loop 12
+
+- **What it sounds like:** the same as loop 16, but the loop length is 12 sixteenth-notes (i.e. an eighth-note triplet).
+- **Manual:** "loop 12".
+- **Our code:** `PO33_FX_LOOP_12`. Same gap as 4.1.
+- **Status:** ⚠️ partial.
+
+### 4.3 Effect 3 — loop short
+
+- **What it sounds like:** loop a shorter chunk (about a 16th-note).
+- **Manual:** "loop short".
+- **Our code:** `PO33_FX_LOOP_SHORT`.
+- **Status:** ⚠️ partial.
+
+### 4.4 Effect 4 — loop shorter
+
+- **What it sounds like:** loop an even shorter chunk.
+- **Manual:** "loop shorter".
+- **Our code:** `PO33_FX_LOOP_SHORTER`.
+- **Status:** ⚠️ partial.
+
+### 4.5 Effect 5 — unison
+
+- **What it sounds like:** the same sound played three or four times at the same pitch but slightly out of phase, sounding thicker — like multiple singers singing the same note.
+- **Manual:** "unison".
+- **Our code:** `PO33_FX_UNISON`. In `apply_fx()`, no parameter changes — AMY's per-voice polyphony already handles multi-voice playback.
+- **Status:** ⚠️ partial (the multiple voices are already there from `num_voices = 4`; explicit unison detune isn't applied).
+
+### 4.6 Effect 6 — unison low
+
+- **What it sounds like:** the unison effect, but the duplicated voices are an octave lower.
+- **Manual:** "unison low".
+- **Our code:** `PO33_FX_UNISON_LOW`. In `apply_fx()`, lowers `midi_note` by 12.
+- **Status:** ✅ done.
+
+### 4.7 Effect 7 — octave up
+
+- **What it sounds like:** the sound plays one octave higher than its recorded pitch.
+- **Manual:** "octave up".
+- **Our code:** `PO33_FX_OCTAVE_UP`. In `apply_fx()`, `midi_note += 12`.
+- **Status:** ✅ done.
+
+### 4.8 Effect 8 — octave down
+
+- **What it sounds like:** the sound plays one octave lower than its recorded pitch.
+- **Manual:** "octave down".
+- **Our code:** `PO33_FX_OCTAVE_DOWN`. In `apply_fx()`, `midi_note -= 12` (clamped at 0).
+- **Status:** ✅ done.
+
+### 4.9 Effect 9 — stutter 4
+
+- **What it sounds like:** a tiny chunk of the sound is repeated 4 times per beat, creating a "st-st-st-stutter".
+- **Manual:** "stutter 4".
+- **Our code:** `PO33_FX_STUTTER_4`. Currently a no-op (the granular engine isn't wired).
+- **Status:** ⚠️ partial. Data model supports it (`effect_state_t.ring`), but the per-sample stutter logic isn't fully wired through `apply_fx()`.
+
+### 4.10 Effect 10 — stutter 3
+
+- **What it sounds like:** same as stutter 4, but 3 repeats per beat (a triplet feel).
+- **Manual:** "stutter 3".
+- **Our code:** `PO33_FX_STUTTER_3`. Same gap.
+- **Status:** ⚠️ partial.
+
+### 4.11 Effect 11 — scratch
+
+- **What it sounds like:** the playhead jumps back and forth in the sample like a DJ spinning a record by hand.
+- **Manual:** "scratch".
+- **Our code:** `PO33_FX_SCRATCH`. **Missing from our enum — see §7.**
+- **Status:** ❌ missing.
+
+### 4.12 Effect 12 — scratch fast
+
+- **What it sounds like:** same as scratch, but the jumps are faster.
+- **Manual:** "scratch fast".
+- **Our code:** `PO33_FX_SCRATCH_FAST` exists but the implementation is a no-op (we treat it like stutter).
+- **Status:** ⚠️ partial.
+
+### 4.13 Effect 13 — 6/8 quantize
+
+- **What it sounds like:** the step timing is re-mapped from 4/4 (4 beats per bar) to 6/8 (6 beats per bar with compound subdivision). The pattern sounds different — like a waltz or a slow blues.
+- **Manual:** "6 / 8 quantize".
+- **Our code:** `PO33_FX_68_QUANTIZE`. **Missing from our enum — see §7.**
+- **Status:** ❌ missing.
+
+### 4.14 Effect 14 — retrigger pattern
+
+- **What it sounds like:** every step that has a sound re-fires that sound multiple times within the step duration.
+- **Manual:** "retrigger pattern".
+- **Our code:** `PO33_FX_RETRIGGER_PATTERN`. Currently a no-op.
+- **Status:** ❌ missing.
+
+### 4.15 Effect 15 — reverse
+
+- **What it sounds like:** the sound plays backwards.
+- **Manual:** "reverse".
+- **Our code:** `PO33_FX_REVERSE`. Currently a no-op.
+- **Status:** ❌ missing.
+
+### 4.16 Effect 16 — no effect
+
+- **What it sounds like:** exactly as recorded. The "off" position.
+- **Manual:** "no effect".
+- **Our code:** `PO33_FX_NONE`. Implemented as a pass-through.
+- **Status:** ✅ done.
+
+### 4.17 Effects we have that the real PO-33 does NOT have
+
+For full honesty, here are two effects in our `po33_fx_t` enum that are **not** part of the real PO-33:
+
+- **`PO33_FX_BITCRUSH`** — heavy digital distortion (4-bit downsample). It's a fun effect, but the PO-33 does not have it.
+- **`PO33_FX_FILTER_SWEEP`** — automated low-pass filter sweep. The PO-33 has a manual filter knob (the Filter tweak), not a sweep effect.
+
+These are kept in v1 because they were useful while developing. The v2 plan (§7) drops them and adds the real missing PO-33 effects (`SCRATCH` and `6/8 QUANTIZE`).
+
+---
+
+## 5. Workflows: "How do I…?"
+
+For each common task, here is the answer twice — once for the real PO-33, once for our firmware. If the two answers look the same, it means our firmware is fully there. If our answer says "UART shell", it means the button combo isn't wired and you'll have to use the serial port for now.
+
+### 5.1 How do I record a sample?
+
+**On a real PO-33:**
+1. Hold the **REC** (star) button.
+2. Press the slot number 1–16 where you want the recording to live.
+3. Make the sound (clap, sing, play your synth into the mic).
+4. Press **REC** again to stop.
+
+**On our firmware:**
+1. Hold the **REC** button.
+2. Press a step button 1–16 to pick a slot.
+3. Make the sound.
+4. Press **REC** again to stop.
+
+Or over the UART shell (115200 baud):
+```
+po33> rec 5
+po33> stoprec
+```
+
+### 5.2 How do I make a beat?
+
+**On a real PO-33:**
+1. Record one or more samples first (see 5.1).
+2. Press **WRITE** (·) to enter write mode.
+3. Press a slot number (e.g. 1) — that slot is now "armed".
+4. Press step numbers where you want slot 1 to play.
+5. Press another slot number (e.g. 2), then press more step numbers.
+6. Press **WRITE** again to exit.
+7. Press **PLAY**.
+
+**On our firmware:**
+- No UI button combo yet. Use the UART shell:
+```
+po33> pattern 0
+po33> bpm 120
+po33> play
+```
+And to add a slot to a step programmatically:
+```
+po33> ...  # we don't have a shell command for this yet — see §7
+```
+
+### 5.3 How do I change the tempo?
+
+**On a real PO-33:** Hold **BPM** and turn knob A to fine-tune, or press BPM to cycle through 80 / 120 / 140.
+
+**On our firmware:** Press **BPM up** or **BPM down** (the bottom-row buttons). Or over the UART shell: `bpm 140`.
+
+### 5.4 How do I switch to another pattern?
+
+**On a real PO-33:** Hold **PATTERN** (⠛) + number 1–16.
+
+**On our firmware:** Press **PAT up** or **PAT down** to cycle. Or: `pattern 5` over the UART shell.
+
+### 5.5 How do I apply an effect?
+
+**On a real PO-33:** Press **FX** + number 1–16. The effect applies to the next sound you play.
+
+**On our firmware:** Same combo (FX + step 1–16). The selected effect is shown on the TFT (proposed in §6).
+
+### 5.6 How do I save my work?
+
+**On a real PO-33:** Patterns are saved automatically the moment you finish writing them. Sounds are saved automatically the moment you stop recording. Power-off and back on — everything is still there. (Backup to tape / another PO-33 is via the data transfer protocol described in 5.9.)
+
+**On our firmware:** Patterns auto-save on power-off is not yet implemented. Use the UART shell: `save` writes all 16 patterns and all 16 sample slots to LittleFS on flash. Use `load` to restore on the next boot.
+
+### 5.7 How do I trim a recording?
+
+**On a real PO-33:** Enter Tweak = Trim (press FX until the screen says Trim). Turn Knob A to move the start point; turn Knob B to change the length.
+
+**On our firmware:** Not yet via UI. UART shell would call `amy_bridge_set_trim(slot, start, end)`.
+
+### 5.8 How do I sync with another device?
+
+**On a real PO-33:** Connect a 3.5 mm cable from line-out → line-in. On the master, hold **RECORD + BPM** to pick a sync mode (SY0–SY5). Press **PLAY** on the master, then **PLAY** on the slave. Both devices will tick at the same tempo.
+
+**On our firmware:** Sync OUT works (the device pulses GPIO 18 every step). Sync IN is partially wired but not fully implemented; see F-031.
+
+### 5.9 How do I back up everything?
+
+**On a real PO-33:** Connect line-out to a tape recorder / phone / computer. Hold **WRITE + SOUND + PLAY** on the PO-33 to dump its data as audio. The receiver records the audio.
+
+**On our firmware:** Not yet implemented (see F-028, F-029).
+
+### 5.10 How do I use the alarm?
+
+**On a real PO-33:** Set the current time, then set the alarm time and pick which sound to play. At the alarm time, the sound plays once.
+
+**On our firmware:** The clock works (F-033). Setting an alarm via shell: `clock_set_alarm 7 30 3` (play slot 3 at 07:30). The alarm-firing timer is not yet implemented (F-034).
+
+---
+
+## 6. Better UI: a richer TFT
+
+The 2.4″ screen on our device is 240 × 320 pixels — a generous canvas. Our current `display_tick()` shows a step grid plus a clock and pattern number, and that's about 30 % of the pixels used. This section proposes eight dedicated UI screens that would use the rest.
+
+Each screen is described with: when it shows, what is in the top bar, what is in the middle, what is at the bottom, and a concrete ASCII mockup. These are proposals — they are **not yet implemented** in the firmware; they are listed here as the v2 UI roadmap.
+
+### 6.1 Screen 1 — Idle
+
+This is the default screen. Shows while the device is on but no special mode is active.
+
+```
++-----------------------------------+
+| PAT 3   120 BPM   14:32   [|||||] |  ← top bar: pattern, BPM, clock, battery
+|                                   |
+|                                   |
+|   ▁ ▃ ▅ ▇  playhead is at step 4 |
+|   . . . . . . . . . . . . . . . . |
+|   1 2 3 4 5 6 7 8 9 ...        16 |
+|                                   |
+|   FX: octave up                   |  ← active FX badge
++-----------------------------------+
+```
+
+Implementation: top bar is one `fill_rect(0,0,240,18)` in blue; playhead is one `fill_rect` per step; FX badge is `draw_text` in the lower 16 px. Total ~30 lines of code in `main/ui/display.c`.
+
+### 6.2 Screen 2 — Sound select
+
+Triggered by FUNC button. Shows all 16 slots as small icons, filled if recorded, hollow if empty, current slot highlighted.
+
+```
++-----------------------------------+
+| SOUND  [●][●][●][●][●][●][●][●]  |  ← slots 1-8: drum
+|        [○][○][●][●][●][●][●][●]  |  ← slots 9-16: melodic
+|                                   |
+|        Slot 3: 1.2 s, 22050 Hz    |  ← info on the highlighted slot
+|        Trim: ▕████████░░░░░░░░    |  ← trim bar
+|        FX: scratch                |
+|                                   |
+|  step +/- to choose, func to exit |
++-----------------------------------+
+```
+
+Implementation: 16 small `fill_rect`s for the slot icons; one `draw_text` line for the slot info; one thin horizontal bar for trim. ~50 lines.
+
+### 6.3 Screen 3 — Recording
+
+Triggered by REC button. Shows the recording level meter, elapsed time, slot target.
+
+```
++-----------------------------------+
+| REC ● slot 3                      |
+|                                   |
+|  ┌──────────────────────────┐     |
+|  │ ░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░ │     |  ← live VU meter
+|  └──────────────────────────┘     |
+|                                   |
+|  elapsed: 1.4 s  /  remaining 1.6 |  ← time progress
+|                                   |
+|  press REC again to stop          |
++-----------------------------------+
+```
+
+Implementation: red `fill_rect` background; green VU meter drawn frame-by-frame using `amy_get_input_buffer()`; numeric counter. ~40 lines.
+
+### 6.4 Screen 4 — Pattern edit (write mode)
+
+Triggered by a dedicated WRITE button or by long-press on PLAY.
+
+```
++-----------------------------------+
+| WRITE pattern 3                   |
+|                                   |
+|  slot: 5 (kick)                   |  ← currently armed slot
+|                                   |
+|  [1][2][3][4][5][6][7][8]         |
+|  [o][o][o][o][●][o][o][o]         |  ← 16 steps, ● = filled with slot 5
+|  [9][10][11][12][13][14][15][16]  |
+|  [o][o][●][o][●][o][o][●]         |
+|                                   |
+|  press step to toggle, slot+/-    |
++-----------------------------------+
+```
+
+Implementation: 16 small `fill_rect`s for the steps (filled or hollow); a label row showing the armed slot; navigation hint. ~60 lines.
+
+### 6.5 Screen 5 — Effect picker
+
+Triggered by FX button. Shows the 16 effects in a 4 × 4 grid, the current one highlighted, and a one-line description of what it does.
+
+```
++-----------------------------------+
+| FX                                |
+|                                   |
+|  [01][02][03][04]                 |
+|  loop  loop  loop  loop           |
+|  16    12    short shorter        |
+|                                   |
+|  [05][06][07][08]                 |
+|  uni  uni- oct+ oct-              |
+|                                   |
+|  [09][10][11][12]                 |
+|  stut4 stut3 scra  scra+          |
+|                                   |
+|  [13][14][15][16]                 |
+|  6/8  retr reverse no fx          |
+|                                   |
++-----------------------------------+
+```
+
+Implementation: 16 tiles, each a small `fill_rect` with the index number and short label. ~80 lines.
+
+### 6.6 Screen 6 — Tweak mode
+
+Triggered by FUNC + FX. Shows the currently selected tweak parameter (Tone / Filter / Trim), the two knob values, and a mini visualization of what those knobs do.
+
+```
++-----------------------------------+
+| TWEAK: TONE                       |
+|                                   |
+|   knob A: pitch                   |
+|   ▁▁▂▂▃▃▄▄▅▅▆▆▇▇██  +5 semitones |
+|                                   |
+|   knob B: volume                  |
+|   ▁▁▁▁▁▂▂▂▂▃▃▃▃▄▄▄▄▄▄  -10 dB    |
+|                                   |
+|   press FX to switch to FILTER    |
++-----------------------------------+
+```
+
+Implementation: parameter name on top; two value-bar visualizations; current parameter indicator. ~50 lines.
+
+### 6.7 Screen 7 — Sync
+
+Triggered by FUNC + BPM. Shows the current sync mode (SY0–SY5) and whether this device is master or slave.
+
+```
++-----------------------------------+
+| SYNC  SY1   master                |
+|                                   |
+|  out: stereo + sync               |
+|  in : mono                        |
+|                                   |
+|  play ▶ to start                  |
+|                                   |
++-----------------------------------+
+```
+
+Implementation: ~20 lines.
+
+### 6.8 Screen 8 — Alarm
+
+Triggered by FUNC + clock-area touch. Shows the current time, the alarm time, the alarm slot, on/off.
+
+```
++-----------------------------------+
+| ALARM  14:32  ON                  |
+|                                   |
+|  now:    14:32                    |
+|  alarm:  07:30   slot 3           |
+|                                   |
+|  + - to change hour, hold for mm  |
++-----------------------------------+
+```
+
+Implementation: ~30 lines.
+
+### 6.9 Total TFT-UI cost
+
+Eight screens, averaging ~50 lines of C each = ~400 lines of new code in `main/ui/display.c` plus a screen-state enum in the buttons task to decide which screen to show. Estimated work: 1 day for an experienced embedded engineer.
+
+The payoff: a user looking at the device can tell at a glance which sound is loaded, what step they're on, what effect is active, whether the alarm is set, and what sync mode they're in. The current screen is so minimal that it requires opening the UART shell to know any of this.
+
+---
+
+## 7. What's done, partial, missing — the honest scorecard
+
+### 7.1 Feature scorecard by section
+
+| Section | Total features | ✅ Done | ⚠️ Partial | ❌ Missing |
+|---|---|---|---|---|
+| 1. Sounds (record / mic / line-in) | 5 | 3 | 1 | 1 |
+| 2. Patterns (write mode) | 7 | 3 | 2 | 2 |
+| 3. Songs (chain) | 2 | 0 | 1 | 1 |
+| 4. Tweaking (tone / filter / trim) | 4 | 0 | 3 | 1 |
+| 5. Effects (16 punch-ins) | 16 | 3 | 6 | 7 |
+| 6. BPM / tempo | 2 | 1 | 0 | 1 |
+| 7. Volume | 1 | 0 | 0 | 1 |
+| 8. Copy + delete | 5 | 0 | 0 | 5 |
+| 9. Data transfer | 2 | 0 | 0 | 2 |
+| 10. Sync | 3 | 1 | 0 | 2 |
+| 11. Clock + alarm | 2 | 1 | 1 | 0 |
+| 12. Battery | 2 | 1 | 0 | 1 |
+| 13. Factory reset + UI | 2 | 0 | 1 | 1 |
+| **Total** | **~50** | **13 (26%)** | **15 (30%)** | **22 (44%)** |
+
+### 7.2 The effect-list mismatch (v2 plan)
+
+Our current `po33_fx_t` enum in `main/audio/amy_bridge.h` is:
+
+```c
+typedef enum {
+    PO33_FX_NONE = 0,
+    PO33_FX_LOOP_16, PO33_FX_LOOP_12, PO33_FX_LOOP_SHORT, PO33_FX_LOOP_SHORTER,
+    PO33_FX_UNISON, PO33_FX_UNISON_LOW,
+    PO33_FX_OCTAVE_UP, PO33_FX_OCTAVE_DOWN,
+    PO33_FX_STUTTER_4, PO33_FX_STUTTER_3,
+    PO33_FX_SCRATCH_FAST,
+    PO33_FX_REVERSE,
+    PO33_FX_RETRIGGER_PATTERN,
+    PO33_FX_68_QUANTIZE,
+    PO33_FX_FILTER_SWEEP,    /* not a PO-33 effect */
+    PO33_FX_BITCRUSH,        /* not a PO-33 effect */
+    PO33_FX_COUNT
+} po33_fx_t;
+```
+
+The real PO-33 list (per the manual and the `lode/PO-33` transcription) is exactly 16 effects:
+
+```
+1.  loop 16
+2.  loop 12
+3.  loop short
+4.  loop shorter
+5.  unison
+6.  unison low
+7.  octave up
+8.  octave down
+9.  stutter 4
+10. stutter 3
+11. scratch
+12. scratch fast
+13. 6/8 quantize
+14. retrigger pattern
+15. reverse
+16. no effect (off)
+```
+
+We are **missing** `scratch` (which we conflated with `scratch_fast`) and `6/8 quantize` (which we have but as a no-op). We are **carrying** two extras (`filter_sweep` and `bitcrush`) that aren't real PO-33 effects.
+
+The proposed v2 alignment:
+
+```c
+typedef enum {
+    PO33_FX_NONE              = 0,
+    PO33_FX_LOOP_16           = 1,
+    PO33_FX_LOOP_12           = 2,
+    PO33_FX_LOOP_SHORT        = 3,
+    PO33_FX_LOOP_SHORTER      = 4,
+    PO33_FX_UNISON            = 5,
+    PO33_FX_UNISON_LOW        = 6,
+    PO33_FX_OCTAVE_UP         = 7,
+    PO33_FX_OCTAVE_DOWN       = 8,
+    PO33_FX_STUTTER_4         = 9,
+    PO33_FX_STUTTER_3         = 10,
+    PO33_FX_SCRATCH           = 11,
+    PO33_FX_SCRATCH_FAST      = 12,
+    PO33_FX_68_QUANTIZE       = 13,
+    PO33_FX_RETRIGGER_PATTERN = 14,
+    PO33_FX_REVERSE           = 15,
+} po33_fx_t;
+```
+
+This v2 enum is presented here as a **proposal**, not as a change to be merged. Changing the enum values would break any patterns already saved in flash (they reference effect IDs by number). The migration story would be: save the patterns in a v2-compatible format, OR add a mapping table that translates old IDs to new IDs at load time. Either is a half-day of work.
+
+### 7.3 Top-three missing features that would unlock the most value
+
+If you only have time to ship three more features, do these:
+
+1. **Live recording into a playing pattern** (F-003). Without this, you cannot "jam" a new sound into an existing beat — a core PO-33 workflow.
+2. **The 16 punch-in effects actually working** (F-019 through F-031 in §3.5). Currently most are no-ops. AMY already supports most of the DSP; we just need to wire `apply_fx()` correctly.
+3. **Effect selection via FX button + step button** (UI binding for F-019). Currently the FX button does nothing visible on the TFT.
+
+Each of these is roughly half a day of work for an experienced developer.
+
+---
+
+## 8. Cheat sheet — buttons at a glance
+
+A printable one-page reference. **P** = press, **H+P** = hold while pressing, **L+P** = long-press.
+
+| Action | Real PO-33 | Our firmware |
+|---|---|---|
+| Record into slot 5 | H+REC, then 5 | same |
+| Stop recording | REC | same, or `stoprec` |
+| Play pattern | PLAY | same |
+| Stop pattern | PLAY | same |
+| Change pattern | H+PATTERN + number | PAT up / PAT down (cycles), or `pattern N` |
+| Change BPM | H+BPM + knob A | BPM up / BPM down, or `bpm N` |
+| Apply effect | H+FX + number | H+FX + number |
+| Save pattern | auto on power-off | `save` over UART |
+| Load on boot | auto | `load` over UART |
+| Erase sound | H+REC + slot number | not yet |
+| Erase pattern | H+REC + PATTERN | not yet |
+| Copy sound | H+WRITE + SOUND + number | not yet |
+| Copy pattern | H+WRITE + PATTERN + number | not yet |
+| Tweak tone/filter/trim | FX cycles; knobs A/B adjust | not yet |
+| Sync out | always on | always on |
+| Sync in | H+REC + BPM cycles mode | partial |
+| Show battery | SOUND + BPM | not yet (TFT will show) |
+
+---
+
+## 9. FAQ
+
+### Q: Can I use this firmware without buying the audio chip and the screen?
+
+**A:** No. The firmware assumes the I²S DAC and mic are present, and uses the SPI screen for status. Without those, boot will fail at the I²S init step (the device will reboot-loop). You could compile a "headless" build that skips the audio and screen, but that is not part of this firmware.
+
+### Q: Will my saved samples survive a reboot?
+
+**A:** Yes, if you ran `save` over the UART shell before the reboot. Patterns are also saved. The samples live in LittleFS on the 16 MB flash, not in PSRAM — PSRAM is wiped on every boot. Without `save`, your recordings are gone after a power cycle.
+
+### Q: Does it work with a real PO-33?
+
+**A:** Partial. The 3.5 mm sync protocol is not yet implemented, so two of our boards can sync to each other, but ours cannot sync to a real PO-33. We share the same audio sample rates (44.1 kHz) so once we implement data transfer (F-028), the two devices should be able to exchange sounds and patterns.
+
+### Q: Can I plug headphones in?
+
+**A:** Only if you wire the headphone amp chip (MAX98357A) to the I²S lines. The PCM5102A DAC we use for line-out does not drive headphones directly. The "headphone volume" levels (5 levels) on the real PO-33 would then apply to the MAX98357A's volume register.
+
+### Q: How loud is the speaker?
+
+**A:** Whatever the MAX98357A is rated for — typically 3 W into a 4 Ω speaker. The firmware does not set the volume, it just outputs full-scale audio; the amp's volume is hardware-controlled by an external potentiometer or a GPIO pin we'd have to add to the firmware.
+
+### Q: Can I make a song with more than 128 patterns?
+
+**A:** No. The real PO-33 also caps at 128. If you want a longer song you have to plan for the loop-back.
+
+### Q: Does the alarm work?
+
+**A:** You can set the alarm time and which slot to play, but the firmware does not yet have a timer that checks "is it alarm time?". Setting the alarm just stores the values in NVS. The actual fire-and-play is a planned v2 feature (F-034).
+
+### Q: Why does the device sometimes lock up when I press a button?
+
+**A:** It shouldn't. If it does, please file a bug report with the exact button combo. There are known edge cases in the button de-bouncer for very rapid presses; the firmware ignores presses shorter than 30 ms to filter switch bounce. If you find a press that consistently crashes the device, that's a bug.
+
+### Q: Can I use this firmware with a battery?
+
+**A:** Yes. The board has a LiPo charging circuit if you wire one up. In deep sleep the firmware draws ~10 µA, so a 1500 mAh LiPo would last many months. Active power is 60–120 mA depending on polyphony. The battery voltage display is a planned v2 feature (F-035).
+
+### Q: How is this different from running AMY on a Mac?
+
+**A:** AMY on a Mac uses your laptop's audio interface and your laptop's keyboard / mouse as input. Our firmware uses a $5 chip, a $3 DAC, a $5 screen, and 16 buttons. The difference is **portability** and **physical tactility** — a PO-33 is something you hold in your hand, not something you sit in front of.
+
+---
+
+## 10. Glossary
+
+- **AMY** — A free open-source fixed-point music synthesizer library. Used for all sound generation in this project. ([github.com/shorepine/amy](https://github.com/shorepine/amy))
+- **BPM** — Beats per minute. How fast the music goes.
+- **DAC** — Digital-to-analog converter. A chip that turns digital numbers into electrical signals a speaker can play.
+- **DMA** — Direct Memory Access. A chip feature where data is moved between memory and a peripheral (like the audio chip) without the CPU doing the work. This frees the CPU to do other things while audio is playing.
+- **Driver** — A piece of code that knows how to talk to a specific chip.
+- **DSP** — Digital Signal Processing. Any operation that transforms numbers representing audio. A filter is DSP; a reverb is DSP; pitch-shifting is DSP.
+- **ESP32-S3** — A microcontroller chip made by Espressif. Has WiFi, Bluetooth, and lots of GPIO pins.
+- **Firmware** — Software that is "firmly" embedded in a device. Same idea as "software", but used for things that run on chips rather than laptops.
+- **FreeRTOS** — A small operating system that runs on microcontrollers. Lets multiple "tasks" run at the same time on a single CPU.
+- **GPIO** — General Purpose Input/Output. A pin on the microcontroller that can be either an input (read a button) or an output (drive an LED).
+- **I²C** — A two-wire protocol for talking to small chips like sensors and displays.
+- **I²S** — A protocol for sending digital audio between chips. Similar to I²C but optimized for audio.
+- **ISR** — Interrupt Service Routine. A function that runs immediately when a hardware event happens (like a button press).
+- **JTAG** — A debugging protocol for microcontrollers. Not used in this firmware.
+- **LittleFS** — A small filesystem designed for flash memory. We use it to store patterns and saved samples.
+- **MIDI** — Musical Instrument Digital Interface. An old protocol (1983) for sending music between devices. We don't use MIDI in this project directly, but AMY understands MIDI note numbers.
+- **NVS** — Non-Volatile Storage. A small key-value store in the ESP32's flash that survives reboots. We use it for clock + alarm settings.
+- **Octal PSRAM** — A kind of extra memory chip connected to the ESP32-S3 with 8 data lines. Fast, cheap, and 8 MB on our board.
+- **PCM** — Pulse-Code Modulation. The raw format of digital audio: a stream of numbers representing the air pressure at the microphone at each instant.
+- **Pitch** — How high or low a sound is. Doubling the pitch makes the sound one octave higher.
+- **Polyphony** — How many sounds can play at the same time.
+- **PSRAM** — Pseudo-Static RAM. Cheap, large, external memory that the ESP32-S3 can address as if it were normal RAM.
+- **PWM** — Pulse-Width Modulation. A way to fake an analog signal by toggling a digital pin on and off very fast. We use it for the TFT backlight brightness.
+- **Quantize** — Snap timing to a grid.
+- **Sample rate** — How many audio samples per second. We use 44100 samples/second, same as a CD.
+- **Sequencer** — The "robot drummer" that walks through the steps and plays sounds.
+- **Slot** — A numbered storage location for a sample.
+- **SPI** — Serial Peripheral Interface. A four-wire protocol for talking to chips, faster than I²C. We use it for the TFT.
+- **Step** — One moment in a beat. The PO-33 has 16 steps per pattern.
+- **Stutter** — A musical effect where a tiny slice of sound is repeated rapidly.
+- **Sync** — Two devices agreeing on tempo.
+- **TFT** — Thin-Film Transistor. A flat color screen.
+- **Tweak** — A small adjustment you can make to a sound (pitch, filter, or trim).
+- **UART** — Universal Asynchronous Receiver/Transmitter. The protocol used for the USB-serial port that talks to your computer.
+- **Voice** — One independent instance of a playing sound. With 4-voice polyphony, you can hear 4 sounds at once.
+- **WAV** — A common audio file format. Not directly used in this firmware.
+- **WiFi** — Wireless networking. Not used in this firmware (would need a WiFi-enabled ESP32 variant; the WROOM-1-N16R8 has it disabled by default).
+
+---
+
+*End of document. ~10 000+ words. Source of truth for the PO-33 manual section numbers is [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en); for our firmware, see the file paths and function names cited in §3.*
