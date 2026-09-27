@@ -39,9 +39,15 @@ The official manual lives at [teenage.engineering/guides/po-33/en](https://teena
 
 ### 1.2 What does our firmware do?
 
-Our firmware is a **piece of software that pretends to be a PO-33** but runs on a $5 microcontroller board instead of Teenage Engineering's hardware. You can buy that board on Amazon for $5–$10, build or buy a handful of cheap parts (an audio DAC chip, a microphone chip, a small screen, 16 buttons), wire them together, and flash our firmware onto the board. From that moment on, the board behaves like a PO-33.
+Our firmware is **a piece of open-source software (MIT-licensed) that emulates a PO-33 K.O! on a $5 ESP32-S3 microcontroller board** — specifically the **ESP32-S3-WROOM-1-N16R8** module (16 MB flash, 8 MB Octal PSRAM). Instead of buying Teenage Engineering's hardware, you buy this dev board, add a small handful of cheap parts, wire them together, flash our firmware over USB, and you have a PO-33-shaped device.
 
-We did not write the audio engine ourselves. We use **AMY**, a free open-source synthesizer library. AMY already knows how to play samples, how to make oscillators, how to add reverb and echo and filters. So our firmware is mostly a thin "shell" that turns PO-33 button presses into AMY commands.
+The parts we add are listed in `main/config.h` and the hardware guide; the short version is: an audio DAC chip (PCM5102A) for output, an I²S MEMS microphone (INMP441) for recording, a 2.4″ color TFT (ILI9341) for the screen, and a 4×4 matrix of 16 tactile buttons for input. Total cost of the additional parts: roughly $10–$15.
+
+Our firmware does **not** make the board behave 1-for-1 like a PO-33. As of v1, only about a quarter of the PO-33's features are fully implemented; another third are partially implemented; the rest are not yet built. The §7 scorecard lists every feature with an honest ✅ / ⚠️ / ❌ status. Use this document to check whether a feature you care about works before you assume it does.
+
+We did not write the audio engine ourselves. We use **[AMY](https://github.com/shorepine/amy)** — a free, MIT-licensed, fixed-point music synthesizer library written by Brian Whitman and the Dogbotic team. AMY already knows how to play back PCM samples, generate oscillators (sine, saw, square), and add chorus, echo, reverb and filters. Our firmware is mostly a thin "shell" that turns PO-33 button presses into AMY commands. AMY runs its own rendering task on the ESP32-S3's second core, so audio doesn't compete with our button-scan or display tasks.
+
+The full source lives in this repository; the project website with one-click browser flashing lives at [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc) (see §1.5 and the website pages).
 
 ### 1.3 What does "ESP32-S3" + "AMY" + "TFT" mean?
 
@@ -87,7 +93,18 @@ The 16 buttons are arranged in a 4 × 4 grid. From the top-left they are:
 
 There are no knobs. On the real PO-33 there are two knobs, but on our version we use the buttons to change those settings, since we have 16 buttons and no knobs.
 
+### 1.5 Where to go from here
+
+Once you have read §1, you have a mental model of the device. There are three things you might want to do next, and the rest of this document supports all three:
+
+- **Build the device.** Go to the [project website](https://ravinephoenix.1une.cc), where you can flash our firmware onto your board with one click in Chrome / Edge / Firefox over USB. The *Hardware* page there gives a full bill of materials and pin map.
+- **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
+- **Read the source.** The repo at the [project URL](https://ravinephoenix.1une.cc) (or wherever you got this document) is roughly 3,500 lines of C across `main/audio`, `main/sequencer`, `main/ui`, `main/storage`, `main/system`, and `main/tests`. The audio engine is entirely in the vendored AMY library.
+
+If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §12 (the book).
+
 ---
+
 ## 2. Concepts you need first
 
 These are the words we will use a lot in the rest of this document. Read this section once; you can come back to it as a reference.
