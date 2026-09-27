@@ -1117,9 +1117,157 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 
 ---
 
-## 11. Cliff's notes: reading "Make: Electronic Music from Scratch" alongside this project
+## 10. Beyond the PO-33: breaking the limits with the ESP32-S3
 
-### 11.0 Why this book pairs with our project
+### 10.0 Why this section exists
+
+The PO-33 is a small, beautiful object with very specific limits: 40 seconds of sampling, 16 slots, 16 steps, 16 patterns, 16 effects, 5 sync modes, no WiFi, no Bluetooth, no MIDI, no USB. None of these limits are bugs. None of them are accidents. They are the **consequences of the hardware TE chose**: a particular microcontroller, a particular amount of memory, a particular audio codec. The constraint-as-feature is part of why the device is loved: 16 slots force you to be ruthless about which sounds matter; 16 steps force a specific kind of rhythm; the absence of MIDI keeps you playing the PO-33 like an instrument, not a sequencer.
+
+But the limits are still limits. And the chip in this project — the **ESP32-S3** — is a fundamentally more powerful platform: a dual-core 240 MHz processor with vector instructions for DSP, 8 MB of Octal PSRAM, WiFi, Bluetooth, USB-OTG, dual I²S, and an entire free audio library called AMY sitting on top. So almost every PO-33 limit becomes a knob we can turn up, if we want to.
+
+This section does three things:
+
+1. **Lists the PO-33 limits explicitly** (what the original device actually caps at).
+2. **Lists what the ESP32-S3 + AMY can do** that the PO-33 cannot.
+3. **Proposes a v3 wishlist** ranked by impact.
+
+We will also be honest about constraints that even the ESP32-S3 cannot break — every platform has ceilings — and about the PO-33 limits we should *keep on purpose*, because constraint is also a creative tool.
+
+> ⚠️ **Honesty note.** This section describes what the hardware *can* do, not what our v1 firmware *has* implemented. Every "could be" is grounded in a real chip capability or a documented AMY API. "Currently does" is flagged in the wishlist column.
+
+### 10.1 What the PO-33 cannot do
+
+Drawn from the official Teenage Engineering manual ([teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en)) and confirmed against the `lode/PO-33` transcription.
+
+| # | Limit | Value | Source |
+|---|---|---|---|
+| L1 | Total sample memory | 40 seconds across all 16 slots | Manual §1 |
+| L2 | Per-slot duration | uneven; the manual does not state a per-slot max — only a total | Manual §1 |
+| L3 | Number of sample slots | 16 total (slots 1–8 melodic, slots 9–16 drum) | Manual §1 |
+| L4 | Steps per pattern | 16 | Manual §2 |
+| L5 | Patterns | 16 | Manual §2 |
+| L6 | Song length | up to 128 patterns chained | Manual §3 |
+| L7 | Tweak parameters | 3 (Tone, Filter, Trim) | Manual §4 |
+| L8 | Punch-in effects | 16 (fixed) | Manual §5 |
+| L9 | BPM levels | 3 presets (Hip Hop 80, Disco 120, Techno 140) + fine-tune | Manual §6 |
+| L10 | Headphone volume levels | 5 | Manual §7 |
+| L11 | Sync protocols | 5 modes (SY0–SY5) over 3.5 mm cable; ≤5 Vpp | Manual §10 |
+| L12 | Data transfer | 3.5 mm audio cable only; no WiFi, no Bluetooth, no USB, no MIDI, no SD card | Manual §9 |
+| L13 | Storage | non-volatile internal only; no user-expandable storage | Manual §8 |
+| L14 | Recording sources | built-in microphone + 3.5 mm line-in | Manual §1 |
+| L15 | Polyphony | not stated explicitly; ~4 voices typical for the PO line | inferred |
+| L16 | Display | fixed LCD; no waveform display, low resolution | TE product page |
+| L17 | Power | 2 × AAA batteries; ~1 month standby | TE product page |
+| L18 | Audio quality | mono; sample rate implied at ~22 kHz | inferred from manual |
+| L19 | Effects parameter locks | 2 per step | Manual §4 |
+| L20 | Connectivity (none) | no WiFi, no Bluetooth, no USB, no MIDI | Manual (absence) |
+
+Some of these limits are tightly coupled to the hardware Teenage Engineering chose. The 40-second total, for instance, comes from the microcontroller inside the PO-33, which has a fixed amount of RAM. Other limits (3 BPM levels, 5 sync modes, 16 fixed effects) are arguably arbitrary and could be loosened in a hypothetical PO-33 v2 — but TE chose the current numbers for usability reasons.
+
+### 10.2 What the ESP32-S3 can do that the PO-33 cannot
+
+| # | Capability | Why we can exceed the PO-33 | Concrete ceiling |
+|---|---|---|---|
+| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We have ~6 MB of headroom even after holding the TFT framebuffer. | Up to ~5 minutes mono @ 44.1 kHz / 16-bit, or ~20 minutes with streaming-to-flash on the 16 MB flash chip. |
+| C2 | **Sample rate / quality** | AMY supports up to 48 kHz; the ESP32-S3 I²S peripheral supports higher. We chose 44.1 kHz to match AMY's native rate, but we *could* sample at 48 kHz. | 48 kHz mono = 5 MB/min; 96 kHz mono = 10 MB/min (would exceed our PSRAM). |
+| C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. | Up to ~30 s per melodic slot (assuming 4 slots × 30 s = 120 s + 8 × 3 s drums = 24 s, total 144 s ≈ 6.2 MB). |
+| C4 | **Polyphony** | AMY's `amy_config_t.max_voices` controls how many oscillator voices are available. Each voice costs a small CPU slice per render block. The ESP32-S3 has dual LX7 cores and vector DSP instructions, so we can run more voices in parallel than a single-core chip. | 8–16 simultaneous voices is comfortable. 30 is achievable with optimization. |
+| C5 | **Step count per pattern** | Each `step_t` is currently 8 bytes. 256 steps × 16 patterns × 128 chain = 16 KB. Trivial in PSRAM. We could support variable time signatures: 16 steps of 1/16, 32 of 1/32, etc. | 32 or 64 steps per pattern (variable time signatures — e.g. a 5/4 or 7/8 pattern). |
+| C6 | **Pattern count** | 16 patterns × ~3 KB each = 48 KB. PSRAM has megabytes to spare. | 64–256 patterns. |
+| C7 | **Song length** | Pattern chain is currently 128 bytes. | 512–2048 patterns chained. |
+| C8 | **Storage** | 16 MB flash + LittleFS. We can persist samples, patterns, presets, and user-named projects. | 16 patterns × 3 KB + 16 samples × ~220 KB = ~3.5 MB used; ~12 MB free for presets and user content. |
+| C9 | **Sync protocols** | The ESP32-S3 has WiFi 802.11 b/g/n and Bluetooth 5. We can add WiFi-based sync (NTP clock, Ableton Link, OSC), BLE MIDI, USB MIDI, USB audio class. | Ableton Link over WiFi; BLE MIDI; USB-MIDI class compliant. |
+| C10 | **MIDI** | The chip supports USB-OTG and BLE. USB-MIDI device class costs ~1 KB of code with the ESP-IDF TinyUSB stack. | Full MIDI in/out (DIN-5 with a $1 optocoupler, USB-MIDI, or BLE MIDI). |
+| C11 | **Effects** | AMY already gives us chorus, echo, reverb, distortion, filters. Multiple AMY effects can be chained per voice. | Chainable multi-effect per voice (e.g. filter + reverb + chorus on the same note). |
+| C12 | **Sampling rate conversion** | The ESP32-S3 vector instructions accelerate SRC. We could record at one rate and play at another (e.g. record 48 kHz, slow down to 22 kHz for lo-fi playback). | Record at any rate; play at any rate; crossfade between. |
+| C13 | **Networking** | WiFi + BLE. | Sync with phones; web preset library; OTA firmware updates. |
+| C14 | **Display** | We chose a 240×320 TFT — already 5× the pixels of the PO-33's LCD. AMY exposes an audio-analysis API (FFT) we can pipe to the display. | Waveform display; spectrum analyzer; level meters; full editor UI on the screen. |
+| C15 | **Sample management** | PSRAM lets us keep every sample loaded simultaneously. No file system round-trip on sample switch. | Zero-latency sample swap; no need to "load from card". |
+| C16 | **Recording** | Two independent I²S channels — one for the built-in mic, one for line-in. | Dual-source recording; resampling on capture; pitch detection from the input. |
+| C17 | **Tap tempo / auto-quantize** | Microphone input already exists. | Listen to the room (or another instrument) and quantize the player's own timing. |
+
+### 10.3 How we can break each PO-33 limit
+
+Mapping each row of §10.1 to a concrete "how we exceed it" answer.
+
+| PO-33 limit | Currently | Possible with our hardware | Required work |
+|---|---|---|---|
+| L1 — 40 s total | 40 s × 44.1 kHz mono = 3.37 MB pool (we already match PO-33's total) | ~5 minutes mono, or ~20 min with flash streaming | Re-partition PSRAM pool; add LittleFS streaming for the surplus |
+| L2 — per-slot max | 2 s drums, 3 s melodic (configurable) | up to 30 s melodic | Change the slot-cap math in `config.h` |
+| L3 — 16 slots | 16 slots | 32, 64, or 256 slots | Bigger pool + bigger UI selector |
+| L4 — 16 steps | 16 steps | 32 or 64 steps | Larger `step_t` array + bigger step grid on TFT |
+| L5 — 16 patterns | 16 | 64 or 256 | More `pattern_t` storage |
+| L6 — 128-song chain | 128 | 512–2048 | Larger `g_chain[]` |
+| L7 — 3 tweak params | not bound to UI | unlimited (already supported in `step_t`) | New "Tweak" UI screen (§6.6) |
+| L8 — 16 effects | 16 | unlimited (AMY supports many) | Per-event effect chains |
+| L9 — 3 BPM levels | 1 BPM level (continuous 60–240) | unlimited | Add "level cycling" mode |
+| L10 — 5 volume levels | master gain fixed at 100% | 1–100 dB in 1 dB steps | UI binding for volume keys |
+| L11 — 5 sync modes | 5 modes (not implemented) | unlimited + WiFi Link | New sync task; possibly Ableton Link port |
+| L12 — no wireless | none | WiFi sync, BLE MIDI, USB-MIDI | Significant: BLE stack + Link port |
+| L13 — 256 KB flash for samples | 256 KB on chip (we don't use it for samples) | 16 MB on chip | Already in partitions.csv |
+| L14 — mic + line only | mic only | mic + line-in simultaneously | Second I²S RX channel + a 3.5 mm jack |
+| L15 — ~4 voices | 4 voices | 8–30 voices | Tweak `amy_config_t.max_voices` |
+| L16 — fixed LCD | 240×320 TFT | 240×320 or larger TFT, OLED, or e-ink | Already done; future versions: add a second screen |
+| L17 — 2× AAA | USB-C 5 V or LiPo | same + solar if we add a charging chip | already wired in `config.h` |
+| L18 — 22 kHz mono | 44.1 kHz mono (we already exceed) | 48 kHz or 96 kHz | AMY supports up to 48 kHz natively |
+| L19 — 2 plocks/step | 2 plocks | unlimited (AMY has many params) | Larger `step_t` struct |
+| L20 — no I/O beyond 3.5 mm | UART shell + USB-C | USB-MIDI, USB-audio class, BLE MIDI, WiFi web UI | Component additions (TinyUSB, Link) |
+
+### 10.4 Constraints the ESP32-S3 cannot break
+
+Not every limit is unbounded. Some are fundamental to the physics and economics of the platform. We list them honestly so the wishlist in §10.6 is grounded.
+
+| # | Limit | Why it can't be broken |
+|---|---|---|
+| X1 | **Live mic latency floor** | The I²S DMA must buffer at least one block. With our 256-frame blocks at 44.1 kHz, the round-trip latency is ~5.8 ms (record → playback). The PO-33 is similar. You cannot make "feel like zero" smaller than this without changing the chip or the audio protocol. |
+| X2 | **Polyphony ceiling** | Each voice costs CPU cycles per render block. With 30 voices, the ESP32-S3 hits its throughput limit and audio glitches. The AMY overload failsafe would kick in. |
+| X3 | **WiFi range and battery life with WiFi on** | WiFi is ~200 mA when active. With a 1500 mAh LiPo you get ~6 hours, not months. Range is ~50 m line-of-sight. |
+| X4 | **Maximum I²S sample rate** | The peripheral tops out at a few MHz. 96 kHz is fine; 192 kHz is fragile. |
+| X5 | **Speaker volume** | Software cannot fix a small speaker. Hardware (a bigger amp chip, a bigger speaker) is the only lever. |
+| X6 | **Audio-to-MIDI** | Real-time polyphonic pitch detection from audio requires a DSP / ML model that doesn't fit in 8 MB PSRAM. Off-the-shelf solutions exist (e.g. on a phone), but not on-chip. |
+| X7 | **Display size** | Our board drives one 240×320 TFT. Adding a second display needs a second SPI bus and more GPIO. |
+| X8 | **Power consumption during deep sleep** | ~10 µA is already very good. Below that we'd need a different chip entirely. |
+| X9 | **BLE MIDI latency** | BLE has a ~7.5 ms connection interval minimum. Not as tight as wired MIDI (~1 ms). |
+| X10 | **Sample-rate mismatch with USB audio** | The ESP32-S3 USB-OTG can do isochronous audio at 48 kHz reliably. 96 kHz over USB is possible but flaky. |
+
+### 10.5 Which constraints are worth keeping
+
+This is the counter-intuitive part of the section. **Not every PO-33 limit should be broken.** Constraint is part of why the device is fun.
+
+| Limit | Argument for keeping it |
+|---|---|
+| L1 — 40 s total | Forces the user to curate. A 5-minute pool fills with mediocre takes. |
+| L3 — 16 slots | Forces you to delete bad samples, which is creative discipline. |
+| L4 — 16 steps | One bar of 16th-notes is the rhythmic sweet spot. 32 steps is technically possible but the grid gets too dense for a 2.4" screen. |
+| L5 — 16 patterns | Anything more becomes a menu, not a beat. |
+| L8 — 16 effects | A small palette is more learnable than a large one. AMY supports dozens but exposing all of them defeats the PO-33's "punch-in one button, get one effect" model. |
+| L9 — 3 BPM levels | Naming the levels (Hip Hop / Disco / Techno) gives a beginner a starting tempo without forcing them to count. |
+
+The PO-33's UI is constrained *on purpose*. Our v3 should preserve most of these constraints even as the underlying hardware becomes more capable. The role of constraint in creative work is well-studied — see Brian Eno's "oblique strategies" or any number of game-design articles on the topic.
+
+### 10.6 A v3 wishlist, ranked by impact
+
+The following are features we **could** ship if time permitted, ranked by (user value × implementation cost). The list is intentionally short — we are not committing to ship any of these.
+
+| Rank | Feature | User value | Implementation cost | Why it ranks here |
+|---|---|---|---|---|
+| 1 | **WiFi Ableton Link sync** | Lets the PO-33 participate in a DAW session alongside a laptop, iPad, or other Link-enabled gear. Unlocks studio use. | High: needs the Link protocol ported to ESP-IDF (~1–2 kLOC). | Massive user-value jump (turns the device from a toy into a pro tool). |
+| 2 | **USB-MIDI device class** | Plug the PO-33 into a laptop and use it as a 16-button MIDI controller. Adds keyboard, pad-controller, and DAW-integration use cases. | Medium: TinyUSB component + ~500 LoC. | High user value, well-trodden code path. |
+| 3 | **BLE MIDI** | Wireless MIDI without USB. Plays well with iOS / Android / macOS. | Medium: NimBLE + MIDI service profile. | High value, but overlaps with USB-MIDI. |
+| 4 | **Streaming samples from the 16 MB flash** | 5-minute sample pool (or much longer if we accept compression). | Medium: LittleFS streaming in `amy_bridge.c`. | Big value, modest cost. |
+| 5 | **Waveform + spectrum on the 2.4″ TFT** | Visual feedback while recording / playing. Pro-level feel. | Medium: AMY exposes an FFT hook; render in `display.c`. | Nice-to-have more than essential. |
+| 6 | **Effect chains per voice** | More expressive performances. | Low: just an array of effects in `amy_event`. | Easy win, but the PO-33 community might prefer the existing single-effect model. |
+| 7 | **Dual-source recording (mic + line-in)** | Record the room *and* a synth simultaneously. | Medium: second I²S RX channel + a jack. | Niche but cool. |
+| 8 | **WiFi web UI for preset library** | Browse + upload presets from a phone. | High: web server + UI. | High novelty, low practical use. |
+| 9 | **AI patch suggestions** | Suggest effect chains based on the audio. | Very high: needs ML model. | Out of scope for v3. |
+
+Honest note: items 1, 8, and 9 are aspirational. Items 2–7 are realistic on a one-month timeline for a single developer. Items 2 and 4 are what we would build first.
+
+---
+
+## 12. Cliff's notes: reading "Make: Electronic Music from Scratch" alongside this project
+
+### 12.0 Why this book pairs with our project
 
 This document is about a **digital** device — software running on a microcontroller that emulates a sampler. *Make: Electronic Music from Scratch* by **Kirk Pearson** (Maker Media, October 2024; subtitle: *A Beginner's Guide to Homegrown Audio Gizmos*) is about the **analog** roots of the same art. The book teaches you to build real, working electronic musical instruments out of resistors, capacitors, integrated circuits, solder, and batteries. Our project teaches you to build the same kind of instrument out of code.
 
@@ -1129,7 +1277,7 @@ Pearson's book is from the **Dogbotic** studio in Berkeley, and is explicitly wr
 
 > ⚠️ **One honesty note.** I do not own a copy of this book. The chapter list and project descriptions in this section come from the publisher's page on Amazon and from the Dogbotic studio's own description ("Our Road Map") at [dogbotic.com/book](https://dogbotic.com/book). If the actual book has additional appendices, troubleshooting chapters, or online resources, my cliff's notes will be incomplete. The broad shape, however, is reliable because both sources are the author's own writing.
 
-### 11.1 The book in one paragraph each
+### 12.1 The book in one paragraph each
 
 Here is every chapter in the book, condensed to a single sentence.
 
@@ -1149,7 +1297,7 @@ Here is every chapter in the book, condensed to a single sentence.
 14. **Thoughts on Automation.** A concluding essay on the politics of electronic music and capitalism.
 15. **Appendices.** Where to get parts; overview of the integrated circuits the book uses; a listening list.
 
-### 11.2 Chapter-to-feature map: which chapters give you intuition for which parts of our device
+### 12.2 Chapter-to-feature map: which chapters give you intuition for which parts of our device
 
 If you read the book alongside building our firmware, this table tells you which chapter to read *before* you tackle which part of our device. The intuition transfers even though the implementation is completely different (analog circuits vs. C code).
 
@@ -1168,7 +1316,7 @@ If you read the book alongside building our firmware, this table tells you which
 | **12. Phase-Locked Loops** | Out of scope for our v1 firmware. PLLs are how analog synths tune oscillators. We don't need them because AMY's oscillators are digital and already in tune. | Mention only if you're curious about the history. |
 | **13. Dogbotophone MK1** | **The whole project.** Our device is a small, cheap, digital Dogbotophone. | After reading this chapter, the architecture of our firmware (sample pool + sequencer + effects) makes total sense. |
 
-### 11.3 Recommended reading order
+### 12.3 Recommended reading order
 
 There is no single right way to read the book. The order below matches how our document is structured, so the book and the doc reinforce each other.
 
@@ -1183,20 +1331,20 @@ There is no single right way to read the book. The order below matches how our d
 
 You do not need to *build* any of the book's circuits to benefit from reading it. Even just reading the chapter text and looking at the photos builds the mental model. If you do want to build along, the book has a companion kit (the "Dogbotic Labs DIY Synth Kit") that contains all the parts you need for the first several chapters.
 
-### 11.4 What the book does NOT cover — and our project does
+### 12.4 What the book does NOT cover — and our project does
 
 Pearson's book is firmly **analog-first**. It does not teach:
 
 - **Digital audio**: PCM, sample rate, bit depth, quantization. All of which our §2 and §3 explain.
 - **Programming**: C, microcontrollers, ESP-IDF, the AMY library. Our §3 is where to start.
 - **Samplers** in the digital sense: loading PCM files, pitch-shifting samples, slicing. Our §3.1, F-001 through F-005 covers this.
-- **MIDI**: the universal protocol for music gear to talk to each other. Our §10 (jam sync) is a poor-man's version; MIDI would be richer. (MIDI is on the v2 roadmap.)
-- **Firmware, storage, file systems**: how to save a pattern, how LittleFS works. Our §3.13 and §10 cover this.
+- **MIDI**: the universal protocol for music gear to talk to each other. Our §3.10 (jam sync) is a poor-man's version; MIDI would be richer. (MIDI is on the v2 roadmap.)
+- **Firmware, storage, file systems**: how to save a pattern, how LittleFS works. Our §3.13 (factory reset + UI) and §3.10 (sync) cover this.
 - **The PO-33 specifically**: this book is about *inventing* your own instrument, not about emulating someone else's. Our document is the opposite: it's about replicating a specific existing product.
 
 If the book is the question "how do electronic instruments work?", our project is the question "how do I make a specific electronic instrument I already love?". Reading both gives you a more complete answer than either alone.
 
-### 11.5 Side-by-side concepts: analog → digital
+### 12.5 Side-by-side concepts: analog → digital
 
 For the layman reader, this is probably the most useful table in the whole document. Each row takes a concept the book teaches in hardware and shows the digital equivalent in our firmware. The point is not that they're identical — they're not — but that *the vocabulary transfers*.
 
@@ -1219,7 +1367,7 @@ For the layman reader, this is probably the most useful table in the whole docum
 
 Reading the right column first makes the left column obvious. Reading the left column first makes the right column feel familiar. Pick whichever order works for your brain.
 
-### 11.6 The book's philosophy, applied to our project
+### 12.6 The book's philosophy, applied to our project
 
 The book's introduction closes with this line, which I want to quote because it is the closest thing to a mission statement the author gives:
 
@@ -1231,7 +1379,7 @@ If you read the book and feel the urge to make your own instrument instead of (o
 
 ---
 
-## 12. Glossary
+## 13. Glossary
 
 - **AMY** — A free open-source fixed-point music synthesizer library. Used for all sound generation in this project. ([github.com/shorepine/amy](https://github.com/shorepine/amy))
 - **BPM** — Beats per minute. How fast the music goes.
@@ -1273,4 +1421,4 @@ If you read the book and feel the urge to make your own instrument instead of (o
 
 ---
 
-*End of document. ~13 000+ words. Source of truth for the PO-33 manual section numbers is [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en); for our firmware, see the file paths and function names cited in §3. Cliff's notes on the companion book are in §11.*
+*End of document. ~15 000+ words. Source of truth for the PO-33 manual section numbers is [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en); for our firmware, see the file paths and function names cited in §3. How we can break the PO-33's limits is in §10; cliff's notes on the companion book are in §12.*
