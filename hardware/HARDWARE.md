@@ -67,7 +67,8 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 | 2 | Audio DAC breakout | **PCM5102A** module (the common GY-PCM5102A or equivalent) | **Yes** | 1 | $2–$4 | Amazon, AliExpress, eBay |
 | 3 | I²S MEMS microphone breakout | **INMP441** module (the common "CJMCU-441" or Adafruit #4466) | **Yes** | 1 | $2–$5 | Amazon, Adafruit, AliExpress, SparkFun |
 | 4 | 2.4″ TFT display, ILI9341 driver, SPI | **ILI9341** 240×320 module (the common "2.4 inch SPI TFT" with an SPI interface, NOT the parallel one) | **Yes** | 1 | $4–$8 | Amazon, AliExpress, Adafruit (#1770), Waveshare |
-| 5 | 4×4 matrix of 16 tactile buttons | Either a pre-built 4×4 membrane keypad (Amazon "4x4 matrix keypad") OR 16 individual 6 mm tactile switches + a small PCB or perfboard | **Yes** | 1 (or 16) | $2–$4 | Amazon, SparkFun, Adafruit, Digikey |
+| 5 | 4×4 matrix of 16 tactile buttons (for the **step buttons** 1–16) | Either a pre-built 4×4 membrane keypad (Amazon "4x4 matrix keypad") OR 16 individual 6 mm tactile switches + a small PCB or perfboard | **Yes** | 1 (or 16) | $2–$4 | Amazon, SparkFun, Adafruit, Digikey |
+| 5b | **8 individual 6 mm tactile switches** (for the **modifier buttons**: REC, PLAY, FUNC, FX, BPM↑, BPM↓, PAT↑, PAT↓) | Any 6×6 mm tactile switch; one per button | **Yes** | 8 | < $1 | Amazon, SparkFun, Adafruit, Digikey |
 | 6 | Speaker | 4 Ω or 8 Ω small loudspeaker, 0.5 W–3 W | Optional | 1 | $2–$5 | Amazon, any electronics store; you can also cannibalize from an old set of powered speakers |
 | 7 | I²S class-D amplifier (drives the speaker) | **MAX98357A** breakout (Adafruit #3006 or SparkFun) | Optional (only if you add a speaker) | 1 | $6–$10 | Adafruit, SparkFun, Amazon |
 | 8 | LiPo battery, **single cell, 3.7 V nominal (4.2 V max), 2800 mAh** | A 18650-size protected Li-ion cell (e.g. **Panasonic NCR18650B**, **Samsung INR18650-30Q**, or an Adafruit #328-equivalent LiPo pouch). Must include a built-in protection circuit (PCM/BMS) against over-discharge, over-charge, and short circuit. | Recommended (chosen for this guide) | 1 | $5–$12 | Amazon, Adafruit, SparkFun, eBay, 18650BatteryStore, Illumn |
@@ -80,7 +81,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 
 | Configuration | Cost (USD) |
 |---|---|
-| **Minimal** (parts 1–5 + 11): no speaker, no battery, no amp | **$15–$25** |
+| **Minimal** (parts 1–5, 5b + 11): no speaker, no battery, no amp | **$16–$26** |
 | **With speaker** (add parts 6, 7): | **$25–$40** |
 | **With battery** (add parts 8, 9): the **2800 mAh LiPo + TP4056 charger** | **$30–$45** |
 | **Everything** (parts 1–12): | **$35–$60** |
@@ -153,9 +154,9 @@ Most PCM5102A boards also have an `OUT L+`, `OUT L-`, `OUT R+`, `OUT R-` for ana
 
 **Order matters when powering up:** the ESP32-S3 may briefly send random SPI traffic during boot. The TFT's reset pin (GPIO 48) keeps it in reset until the ESP32-S3 is ready. This is wired in the firmware, so just follow the table.
 
-### 4.5 The button matrix (4 rows × 4 cols)
+### 4.5 The step-button matrix (4 rows × 4 cols) — 16 step buttons
 
-This is the single trickiest wiring step. The 16 buttons sit at the intersections of 4 row wires and 4 column wires.
+The 4×4 matrix holds the 16 polymorphic **step buttons** (numbered 1–16). On the real PO-33 these same physical buttons also mean "sample slot 1–16" when SOUND is held, "pattern 1–16" when PATTERN is held, "effect 1–15 (+16 = swing)" when FX is held, and so on. Our firmware uses the same matrix; whether a number means "step" or "slot" or "effect" depends on which modifier button is held.
 
 ```
          COL 0   COL 1   COL 2   COL 3
@@ -165,20 +166,20 @@ This is the single trickiest wiring step. The 16 buttons sit at the intersection
         ┌──────┬──────┬──────┬──────┐
 ROW 0   │      │      │      │      │
 GPIO35  │ btn  │ btn  │ btn  │ btn  │
-(drive   │  0   │  1   │  2   │  3   │
-low)     │      │      │      │      │
+(drive   │  1   │  2   │  3   │  4   │
+low)     │  =ST │  =ST │  =ST │  =ST │
         ├──────┼──────┼──────┼──────┤
 ROW 1   │      │      │      │      │
 GPIO36  │ btn  │ btn  │ btn  │ btn  │
-        │  4   │  5   │  6   │  7   │
+        │  5   │  6   │  7   │  8   │
         ├──────┼──────┼──────┼──────┤
 ROW 2   │      │      │      │      │
 GPIO37  │ btn  │ btn  │ btn  │ btn  │
-        │  8   │  9   │  10  │  11  │
+        │  9   │  10  │  11  │  12  │
         ├──────┼──────┼──────┼──────┤
 ROW 3   │      │      │      │      │
 GPIO38  │ btn  │ btn  │ btn  │ btn  │
-        │  12  │  13  │  14  │  15  │
+        │  13  │  14  │  15  │  16  │
         └──────┴──────┴──────┴──────┘
 ```
 
@@ -191,6 +192,34 @@ How the matrix works:
 You can wire this with a pre-built membrane keypad (the 4×4 ones on Amazon come with 8 wires labelled `R1 R2 R3 R4 C1 C2 C3 C4`). Connect `R1` → GPIO35, `R2` → GPIO36, `R3` → GPIO37, `R4` → GPIO38, `C1` → GPIO33, `C2` → GPIO34, `C3` → GPIO39, `C4` → GPIO40.
 
 If you're wiring individual tactile switches, place each switch so its two pins sit on a unique row × column wire pair, with one side going to the row trace and the other to the column trace. Most people use a small perfboard for this.
+
+### 4.5b The 8 dedicated modifier buttons (one GPIO each)
+
+In addition to the 4×4 matrix, the device has **eight dedicated (modifier) buttons**, each wired to a single GPIO. They mirror the dedicated buttons on the real PO-33. Each is a momentary tactile switch between the GPIO and GND (no matrix, no external resistor — the firmware enables the internal pull-up).
+
+| Button | GPIO | What it does (PO-33 mode) | What it does (our firmware) |
+|---|---|---|---|
+| `REC`    | **GPIO 41** | record (hold + number to record into slot) | start/stop recording |
+| `PLAY`   | **GPIO 42** | play/stop pattern | start/stop sequencer |
+| `FUNC`   | **GPIO 11** | (no exact equivalent on PO-33) | multi-function: held + step = "select slot/effect/pattern" |
+| `FX`     | **GPIO 12** | cycle tweak parameter (Tone / Filter / Trim); hold + number 1–16 = apply effect | toggle FX-select mode |
+| `BPM ↑`  | **GPIO 13** | (PO-33 has a single BPM handle that can be turned) | increase tempo |
+| `BPM ↓`  | **GPIO 43** | | decrease tempo |
+| `PAT ↑`  | **GPIO 44** | (PO-33 has a single PATTERN button + hold + number 1–16) | next pattern |
+| `PAT ↓`  | **GPIO 45** | | previous pattern |
+
+Why these GPIOs? All eight are general-purpose, none are strapping pins (GPIO 0–3 are strapping on the ESP32-S3 and we avoid them), and none conflict with I²S (8/9/10/15/16/17), the TFT (4/5/6/7/47/48), or the button matrix (33/34/35/36/37/38/39/40).
+
+Each switch needs two wires:
+
+```
+       GPIO pin ──── one leg of the tactile switch
+                      other leg ──── GND
+```
+
+The internal pull-up is enabled in firmware, so no external resistor is needed.
+
+If you would rather wire all 24 buttons (16 matrix + 8 dedicated) onto a single perfboard with one shared GND bus, you will end up with ~9 wires from the dev board to the perfboard: 4 row + 4 column + 8 dedicated GPIO signals (the 8 GNDs share one common wire).
 
 ### 4.6 Status LEDs (optional)
 
@@ -395,22 +424,44 @@ This is the most wire-intensive step: 9 wires.
 
 After wiring, flash the firmware. On boot, the TFT should display a blue rectangle and the text "PO 33 K O" in white, then "ESP32 S3 FW" in green. If the screen is all white, the backlight is on but the SPI isn't initializing — check `CS`, `RST`, `DC`, `MOSI`, `SCK` wiring. If the screen is all black, the backlight isn't on — check the `LED`/`BL` pin.
 
-### 5.6 Step 6 — Wire the button matrix
+### 5.6 Step 6 — Wire the button matrix (16 step buttons)
 
 Eight wires from the dev board to the keypad (or 4×4 grid of switches).
 
-| Dev board pin | Keypad / switch label |
-|---|---|
-| `GPIO 35` | Row 1 |
-| `GPIO 36` | Row 2 |
-| `GPIO 37` | Row 3 |
-| `GPIO 38` | Row 4 |
-| `GPIO 33` | Col 1 |
-| `GPIO 34` | Col 2 |
-| `GPIO 39` | Col 3 |
-| `GPIO 40` | Col 4 |
+| Dev board pin | Keypad / switch label | Step button |
+|---|---|---|
+| `GPIO 35` | Row 1 | steps 1, 2, 3, 4 |
+| `GPIO 36` | Row 2 | steps 5, 6, 7, 8 |
+| `GPIO 37` | Row 3 | steps 9, 10, 11, 12 |
+| `GPIO 38` | Row 4 | steps 13, 14, 15, 16 |
+| `GPIO 33` | Col 1 | (left column) |
+| `GPIO 34` | Col 2 | |
+| `GPIO 39` | Col 3 | |
+| `GPIO 40` | Col 4 | (right column) |
 
-After wiring, flash the firmware. From the UART shell:
+### 5.6b Step 6b — Wire the 8 dedicated modifier buttons
+
+Each is a single momentary tactile switch between one GPIO and GND. The firmware enables the internal pull-up — **no external resistor needed**. You can wire each as a separate lead, or run all 8 GNDs together on a single bus.
+
+| Button | GPIO |
+|---|---|
+| REC    | GPIO 41 |
+| PLAY   | GPIO 42 |
+| FUNC   | GPIO 11 |
+| FX     | GPIO 12 |
+| BPM ↑  | GPIO 13 |
+| BPM ↓  | GPIO 43 |
+| PAT ↑  | GPIO 44 |
+| PAT ↓  | GPIO 45 |
+
+A clean way to wire all 24 buttons:
+
+1. Mount the 16 step buttons on a single perfboard in a 4×4 grid.
+2. Mount the 8 modifier buttons along the top of the same perfboard (or wherever they fit ergonomically).
+3. Add a single GND bus along one edge of the perfboard.
+4. Row wires, column wires, and 8 modifier GPIO signals come off the perfboard to the dev board. GNDs all share one wire.
+
+After wiring everything, flash the firmware. From the UART shell:
 
 ```
 po33> free
@@ -418,7 +469,9 @@ po33> free
 
 You should see the heap stats. If the boot hangs, you probably have a short circuit between two GPIO pins or between a GPIO and ground. Use a multimeter in continuity mode to check.
 
-To test the matrix, run the shell and press buttons. The firmware doesn't echo button presses yet (that's a v2 feature), but the matrix is exercised during boot — if `buttons_init()` succeeds in the log, the matrix is wired correctly.
+The boot log should show: `Buttons ready: 4x4 matrix + 8 GPIOs = 24 total`. If you see fewer, one of the GPIO wires is disconnected.
+
+To test individual buttons, run the shell and press each one. The firmware doesn't echo button presses yet (that's a v2 feature), but `buttons_init()` succeeding is the smoke test.
 
 ### 5.7 Step 7 — (Optional) Wire the status LEDs
 

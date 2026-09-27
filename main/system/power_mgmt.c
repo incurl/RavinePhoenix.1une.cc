@@ -35,10 +35,21 @@ esp_err_t power_mgmt_init(void)
     ESP_ERROR_CHECK(esp_timer_create(&cfg, &s_idle_timer));
     esp_timer_start_once(s_idle_timer, BTN_IDLE_SLEEP_MS * 1000ULL);
 
-    /* Configure wake sources: any column falling edge. */
+    /* Configure wake sources.
+     *
+     *   - Any matrix column low  -> wake (a step button press)
+     *   - Any modifier button low -> wake (REC, PLAY, FUNC, FX, BPM±, PAT±)
+     */
     const gpio_num_t cols[BTN_COL_COUNT] = BTN_COL_PINS;
     for (int i = 0; i < BTN_COL_COUNT; i++) {
         gpio_wakeup_enable(cols[i], GPIO_INTR_LOW_LEVEL);
+    }
+    const gpio_num_t modifier_gpios[] = {
+        BTN_REC_GPIO, BTN_PLAY_GPIO, BTN_FUNC_GPIO, BTN_FX_GPIO,
+        BTN_BPM_UP_GPIO, BTN_BPM_DN_GPIO, BTN_PAT_UP_GPIO, BTN_PAT_DN_GPIO,
+    };
+    for (size_t i = 0; i < sizeof(modifier_gpios) / sizeof(modifier_gpios[0]); i++) {
+        gpio_wakeup_enable(modifier_gpios[i], GPIO_INTR_LOW_LEVEL);
     }
     esp_sleep_enable_gpio_wakeup();
     return ESP_OK;

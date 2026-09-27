@@ -60,38 +60,43 @@ The full source lives in this repository; the project website with one-click bro
 Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top face:
 
 ```
-+-------------------------------------+
-|  [tiny TFT screen, 2.4" diagonal]   |
-|                                     |
-|     step1 step2 step3 ... step16    |
-|                                     |
-|  +---+ +---+ +---+ +---+            |
-|  |REC| |PLAY| | 1 | | 2 |            |
-|  +---+ +---+ +---+ +---+            |
-|  +---+ +---+ +---+ +---+            |
-|  | 3 | | 4 | | 5 | | 6 |            |
-|  +---+ +---+ +---+ +---+            |
-|  +---+ +---+ +---+ +---+            |
-|  | 7 | | 8 | |FUNC| |FX |            |
-|  +---+ +---+ +---+ +---+            |
-|  +---+ +---+ +---+ +---+            |
-|  |+10| |-10| |+  | |-  |            |
-|  +---+ +---+ +---+ +---+            |
-|                                     |
-|  [headphone jack] [sync in] [sync out]
-+-------------------------------------+
++----------------------------------------------------+
+|         [tiny TFT screen, 2.4" diagonal]           |
+|                                                    |
+|       step 1  step 2  step 3  step 4                |
+|       step 5  step 6  step 7  step 8                |
+|       step 9  step 10 step 11 step 12               |
+|       step 13 step 14 step 15 step 16               |
+|                                                    |
+|  +-----+ +-----+ +-----+ +-----+                    |
+|  | REC | |PLAY | |FUNC | | FX |   <- 4 modifier keys  |
+|  +-----+ +-----+ +-----+ +-----+                    |
+|                                                    |
+|  +-----+ +-----+ +-----+ +-----+                    |
+|  |BPM +| |BPM -| |PAT +| |PAT -|  <- 4 more modifiers|
+|  +-----+ +-----+ +-----+ +-----+                    |
+|                                                    |
+|  [headphone jack] [sync in] [sync out]             |
++----------------------------------------------------+
 ```
 
-The 16 buttons are arranged in a 4 × 4 grid. From the top-left they are:
+There are **24 physical buttons** in total:
 
-- Row 0, col 0 → **REC** (start recording)
-- Row 0, col 1 → **PLAY** (start the beat)
-- Rows 0–2, cols 2–3 → step buttons 1–8
-- Row 2, col 2 → **FUNC** (held while pressing other buttons for advanced actions)
-- Row 2, col 3 → **FX** (pick one of the 16 effects)
-- Bottom row → tempo up / tempo down / pattern up / pattern down
+- **16 step buttons** in a 4×4 matrix. The same physical buttons are *polymorphic* — their meaning depends on which modifier is held (just like the real PO-33):
+  - in **normal play**: step 1–16
+  - in **write mode**, after picking a slot: toggle step 1–16 for the armed slot
+  - with **SOUND-equivalent** (`func + step_n` in our firmware): sample slot 1–16
+  - with **PATTERN-equivalent** (`pat ↑/pat ↓` then step): pattern slot 1–16
+  - with **FX** held: effect 1–15 (16 = swing)
+- **8 dedicated modifier buttons** wired to individual GPIOs (no matrix):
+  - `REC` — start/stop recording
+  - `PLAY` — start/stop sequencer
+  - `FUNC` — multi-function modifier (the closest analog to the PO-33's "SOUND" hold)
+  - `FX` — enter effect-select mode
+  - `BPM +` / `BPM -` — raise / lower tempo
+  - `PAT +` / `PAT -` — next / previous pattern
 
-There are no knobs. On the real PO-33 there are two knobs, but on our version we use the buttons to change those settings, since we have 16 buttons and no knobs.
+There are no knobs. On the real PO-33 there are two knobs (A and B) for tweaking parameters and fine tempo; we replace the knobs with extra modifier buttons because wiring two potentiometers to GPIOs would have cost more and added more failure modes. See §11 in `hardware/HARDWARE.md` for the verbatim PO-33 button-and-knob design and how ours maps to it.
 
 ### 1.5 Where to go from here
 
@@ -265,8 +270,8 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 
 - **Manual ref:** §2
 - **Layman:** Each pattern has 16 "slots in time" called steps. Each step is one sixteenth-note. The sequencer walks 1→2→...→16→1→...
-- **PO-33 button combo:** Implicit; the steps are the step buttons 1–8 + 9–16.
-- **Our hardware combo:** Same step buttons 1–8 (with row+col layout for 9–16 accessible via FUNC+step, or via the shell).
+- **PO-33 button combo:** Implicit; the steps are the 16 polymorphic numbered buttons (1–16).
+- **Our hardware combo:** Same — the 4×4 matrix holds 16 step buttons directly, numbered 1–16. When a modifier button (SOUND-equivalent, PATTERN-equivalent, FX) is held, the same buttons mean slot 1–16 / pattern 1–16 / effect 1–16 instead.
 - **Code location:** `main/sequencer/pattern.h` → `STEPS_PER_PATTERN 16`.
 - **Status:** ✅ done.
 
@@ -1076,7 +1081,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Stop pattern | PLAY | same |
 | Change pattern | H+PATTERN + number | PAT up / PAT down (cycles), or `pattern N` |
 | Change BPM | H+BPM + knob A | BPM up / BPM down, or `bpm N` |
-| Apply effect | H+FX + number | H+FX + number |
+| Apply effect | H+FX + number | H+FX + number (1–15 = effect, 16 = swing) |
+| Select a sample slot | H+SOUND + number | H+FUNC + number (16 slots) |
 | Save pattern | auto on power-off | `save` over UART |
 | Load on boot | auto | `load` over UART |
 | Erase sound | H+REC + slot number | not yet |

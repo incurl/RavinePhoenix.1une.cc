@@ -1,5 +1,12 @@
 /*
- * buttons.c — 4×4 matrix scan with debounce + short/long press detection.
+ * buttons.c — 4×4 matrix scan + 8 dedicated GPIO buttons.
+ *
+ *   The 4x4 matrix holds the 16 polymorphic step / slot / effect buttons.
+ *   The 8 dedicated GPIOs hold the modifier buttons (REC, PLAY, FUNC, FX,
+ *   BPM up/down, PAT up/down).
+ *
+ *   Both groups share the same debounce + short/long-press detection,
+ *   and both push events into a single FreeRTOS queue.
  */
 #include "buttons.h"
 #include "config.h"
@@ -11,12 +18,35 @@
 
 static const char *TAG = "btns";
 
+/* Matrix pins (16 step buttons). */
 static const gpio_num_t s_rows[BTN_ROW_COUNT] = BTN_ROW_PINS;
 static const gpio_num_t s_cols[BTN_COL_COUNT] = BTN_COL_PINS;
 
-static bool     s_state[BTN_ROW_COUNT][BTN_COL_COUNT];
-static int64_t  s_press_time[BTN_ROW_COUNT][BTN_COL_COUNT];
-static bool     s_long_fired[BTN_ROW_COUNT][BTN_COL_COUNT];
+/* Dedicated GPIO buttons (8 modifier buttons). */
+typedef struct {
+    gpio_num_t gpio;
+    uint8_t    id;        /* logical BTN_* ID */
+    bool       state;     /* current debounced state */
+    int64_t    press_ms;  /* when the current press started */
+    bool       long_fired;
+} gpio_btn_t;
+
+static gpio_btn_t s_gpio_btns[BTN_GPIO_COUNT] = {
+    { BTN_REC_GPIO,    BTN_REC,    false, 0, false },
+    { BTN_PLAY_GPIO,   BTN_PLAY,   false, 0, false },
+    { BTN_FUNC_GPIO,   BTN_FUNC,   false, 0, false },
+    { BTN_FX_GPIO,     BTN_FX,     false, 0, false },
+    { BTN_BPM_UP_GPIO, BTN_BPM_UP, false, 0, false },
+    { BTN_BPM_DN_GPIO, BTN_BPM_DN, false, 0, false },
+    { BTN_PAT_UP_GPIO, BTN_PAT_UP, false, 0, false },
+    { BTN_PAT_DN_GPIO, BTN_PAT_DN, false, 0, false },
+};
+
+/* Matrix state (16 step buttons). */
+static bool    s_state[BTN_ROW_COUNT][BTN_COL_COUNT];
+static int64_t s_press_time[BTN_ROW_COUNT][BTN_COL_COUNT];
+static bool    s_long_fired[BTN_ROW_COUNT][BTN_COL_COUNT];
+
 static QueueHandle_t s_queue = NULL;
 
 static int64_t now_ms(void)
@@ -24,8 +54,15 @@ static int64_t now_ms(void)
     return esp_timer_get_time() / 1000;
 }
 
+static void push_event(uint8_t btn_id, bool long_press)
+{
+    button_event_t ev = { .btn_id = btn_id, .long_press = long_press };
+    xQueueSend(s_queue, &ev, 0);
+}
+
 esp_err_t buttons_init(void)
 {
+    /* --- Matrix: rows are outputs, columns are inputs with pull-ups --- */
     for (int r = 0; r < BTN_ROW_COUNT; r++) {
         gpio_reset_pin(s_rows[r]);
         gpio_set_direction(s_rows[r], GPIO_MODE_OUTPUT);
@@ -36,25 +73,64 @@ esp_err_t buttons_init(void)
         gpio_set_direction(s_cols[c], GPIO_MODE_INPUT);
         gpio_pullup_en(s_cols[c]);
     }
-    memset(s_state, 0, sizeof(s_state));
+    memset(s_state,     0, sizeof(s_state));
     memset(s_press_time, 0, sizeof(s_press_time));
     memset(s_long_fired, 0, sizeof(s_long_fired));
 
-    s_queue = xQueueCreate(32, sizeof(button_event_t));
+    /* --- 8 dedicated GPIO buttons: inputs with pull-ups --- */
+    for (int i = 0; i < BTN_GPIO_COUNT; i++) {
+        gpio_reset_pin(s_gpio_btns[i].gpio);
+        gpio_set_direction(s_gpio_btns[i].gpio, GPIO_MODE_INPUT);
+        gpio_pullup_en(s_gpio_btns[i].gpio);
+        s_gpio_btns[i].state      = false;
+        s_gpio_btns[i].press_ms   = 0;
+        s_gpio_btns[i].long_fired = false;
+    }
+
+    s_queue = xQueueCreate(64, sizeof(button_event_t));
     if (!s_queue) return ESP_ERR_NO_MEM;
 
-    ESP_LOGI(TAG, "Button matrix ready (%dx%d)", BTN_ROW_COUNT, BTN_COL_COUNT);
+    ESP_LOGI(TAG, "Buttons ready: %dx%d matrix + %d GPIOs = %d total",
+             BTN_ROW_COUNT, BTN_COL_COUNT, BTN_GPIO_COUNT,
+             BTN_ROW_COUNT * BTN_COL_COUNT + BTN_GPIO_COUNT);
     return ESP_OK;
 }
 
-static uint8_t btn_id_for(int r, int c)
+/* Matrix button IDs start at BTN_STEP1. Row-major: btn = STEP1 + r*4 + c. */
+static uint8_t matrix_btn_id(int r, int c)
 {
-    /* Row-major mapping: btn = r * COL_COUNT + c */
-    return (uint8_t)(r * BTN_COL_COUNT + c);
+    return (uint8_t)(BTN_STEP1 + r * BTN_COL_COUNT + c);
 }
 
-void buttons_tick(void)
+static void scan_gpio_buttons(void)
 {
+    int64_t t = now_ms();
+    for (int i = 0; i < BTN_GPIO_COUNT; i++) {
+        gpio_btn_t *b = &s_gpio_btns[i];
+        bool pressed = (gpio_get_level(b->gpio) == 0);  /* active-low */
+        if (pressed != b->state) {
+            if (pressed) {
+                b->press_ms   = t;
+                b->long_fired = false;
+            } else {
+                if (!b->long_fired &&
+                    (t - b->press_ms) >= BTN_DEBOUNCE_MS) {
+                    push_event(b->id, false);
+                }
+            }
+            b->state = pressed;
+        } else if (pressed && !b->long_fired) {
+            if ((t - b->press_ms) >= BTN_LONG_PRESS_MS) {
+                b->long_fired = true;
+                push_event(b->id, true);
+            }
+        }
+    }
+}
+
+static void scan_matrix(void)
+{
+    int64_t t = now_ms();
     for (int r = 0; r < BTN_ROW_COUNT; r++) {
         gpio_set_level(s_rows[r], 0);
         for (int c = 0; c < BTN_COL_COUNT; c++) {
@@ -62,31 +138,31 @@ void buttons_tick(void)
             bool pressed = (level == 0);
             bool prev = s_state[r][c];
             if (pressed != prev) {
-                int64_t t = now_ms();
                 if (pressed) {
                     s_press_time[r][c] = t;
                     s_long_fired[r][c]  = false;
                 } else {
                     if (!s_long_fired[r][c] &&
                         (t - s_press_time[r][c]) >= BTN_DEBOUNCE_MS) {
-                        button_event_t ev = { .btn_id = btn_id_for(r, c),
-                                              .long_press = false };
-                        xQueueSend(s_queue, &ev, 0);
+                        push_event(matrix_btn_id(r, c), false);
                     }
                 }
                 s_state[r][c] = pressed;
             } else if (pressed && !s_long_fired[r][c]) {
-                int64_t t = now_ms();
                 if ((t - s_press_time[r][c]) >= BTN_LONG_PRESS_MS) {
                     s_long_fired[r][c] = true;
-                    button_event_t ev = { .btn_id = btn_id_for(r, c),
-                                          .long_press = true };
-                    xQueueSend(s_queue, &ev, 0);
+                    push_event(matrix_btn_id(r, c), true);
                 }
             }
         }
         gpio_set_level(s_rows[r], 1);
     }
+}
+
+void buttons_tick(void)
+{
+    scan_matrix();
+    scan_gpio_buttons();
 }
 
 button_event_t buttons_pop(void)

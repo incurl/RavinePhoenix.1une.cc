@@ -48,35 +48,94 @@
 #define I2S_DMA_BUF_LEN           256
 #define I2S_SAMPLE_RATE           SAMPLE_RATE_HZ
 
-/* ─── 4×4 button matrix (16 keys) ────────────────────────────── */
+/* ─── Button matrix ──────────────────────────────────────────── */
+/*
+ * Two distinct hardware groups:
+ *
+ *   (A) The 4x4 matrix below holds the 16 polymorphic *step* buttons
+ *       (numbered 1-16). On the real PO-33 these same physical buttons
+ *       also mean "sample slot 1-16" when SOUND is held, "pattern slot
+ *       1-16" when PATTERN is held, "effect 1-15 (+16 = swing)" when FX
+ *       is held, etc. We get the same polymorphism by using the same
+ *       matrix: BTN_STEP1..BTN_STEP16 mean step in normal play, and
+ *       step / slot / effect depending on which mode button is held.
+ *
+ *   (B) Eight dedicated (modifier) buttons are wired to individual
+ *       GPIOs as momentary-to-GND switches with internal pull-ups.
+ *       No matrix needed; we just poll them.
+ *
+ * See hardware/HARDWARE.md S11 "The PO-33's button/knob design
+ * (verbatim)" and S12 "How our subset maps onto the PO-33" for the
+ * canonical mapping.
+ */
+
 #define BTN_ROW_COUNT             4
 #define BTN_COL_COUNT             4
 #define BTN_ROW_PINS              { GPIO_NUM_35, GPIO_NUM_36, GPIO_NUM_37, GPIO_NUM_38 }
 #define BTN_COL_PINS              { GPIO_NUM_33, GPIO_NUM_34, GPIO_NUM_39, GPIO_NUM_40 }
 
-/** Logical button IDs (0..15). */
+/* Dedicated (modifier) buttons - one GPIO each, momentary to GND. */
+#define BTN_REC_GPIO              GPIO_NUM_41
+#define BTN_PLAY_GPIO             GPIO_NUM_42
+#define BTN_FUNC_GPIO             GPIO_NUM_11
+#define BTN_FX_GPIO               GPIO_NUM_12
+#define BTN_BPM_UP_GPIO           GPIO_NUM_13
+#define BTN_BPM_DN_GPIO           GPIO_NUM_43
+#define BTN_PAT_UP_GPIO           GPIO_NUM_44
+#define BTN_PAT_DN_GPIO           GPIO_NUM_45
+
+#define BTN_GPIO_COUNT             8   /* number of dedicated modifier buttons */
+
+/**
+ * Logical button IDs.
+ *
+ *   IDs 0..7   : 8 dedicated modifier buttons (REC, PLAY, FUNC, FX, BPM±, PAT±)
+ *   IDs 8..23  : 16 step buttons on the 4x4 matrix (STEP1..STEP16)
+ *
+ * Total: 24 logical buttons. (The real PO-33 has 16 + 2 knobs; we
+ * replace the knobs with extra modifier buttons.)
+ */
 enum {
-    BTN_REC   = 0,
-    BTN_PLAY  = 1,
-    BTN_STEP1 = 2,
-    BTN_STEP2 = 3,
-    BTN_STEP3 = 4,
-    BTN_STEP4 = 5,
-    BTN_STEP5 = 6,
-    BTN_STEP6 = 7,
-    BTN_STEP7 = 8,
-    BTN_STEP8 = 9,
-    BTN_FUNC  = 10,
-    BTN_FX    = 11,
-    BTN_BPM_UP = 12,
-    BTN_BPM_DN = 13,
-    BTN_PAT_UP = 14,
-    BTN_PAT_DN = 15,
+    /* Dedicated modifier buttons (GPIO inputs). */
+    BTN_REC    = 0,
+    BTN_PLAY   = 1,
+    BTN_FUNC   = 2,
+    BTN_FX     = 3,
+    BTN_BPM_UP = 4,
+    BTN_BPM_DN = 5,
+    BTN_PAT_UP = 6,
+    BTN_PAT_DN = 7,
+
+    /* Step / polymorphic buttons (4x4 matrix). */
+    BTN_STEP1  = 8,
+    BTN_STEP2  = 9,
+    BTN_STEP3  = 10,
+    BTN_STEP4  = 11,
+    BTN_STEP5  = 12,
+    BTN_STEP6  = 13,
+    BTN_STEP7  = 14,
+    BTN_STEP8  = 15,
+    BTN_STEP9  = 16,
+    BTN_STEP10 = 17,
+    BTN_STEP11 = 18,
+    BTN_STEP12 = 19,
+    BTN_STEP13 = 20,
+    BTN_STEP14 = 21,
+    BTN_STEP15 = 22,
+    BTN_STEP16 = 23,
+
+    BTN_COUNT  = 24
 };
 
 #define BTN_DEBOUNCE_MS           30
 #define BTN_LONG_PRESS_MS         600
 #define BTN_IDLE_SLEEP_MS         (5 * 60 * 1000)   /* 5 min idle → deep sleep */
+
+/**
+ * Returns true if the given button ID is one of the 16 step buttons
+ * (i.e. on the 4x4 matrix, in the polymorphic range).
+ */
+#define BTN_IS_STEP(id) ((id) >= BTN_STEP1 && (id) <= BTN_STEP16)
 
 /* ─── 2.4" TFT (ILI9341, SPI) ────────────────────────────────── */
 #define TFT_SPI_HOST              SPI2_HOST
