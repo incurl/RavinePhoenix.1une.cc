@@ -71,6 +71,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 | 5b | **8 individual 6 mm tactile switches** (for the **modifier buttons**: REC, PLAY, FUNC, FX, BPM↑, BPM↓, PAT↑, PAT↓) | Any 6×6 mm tactile switch; one per button | **Yes** | 8 | < $1 | Amazon, SparkFun, Adafruit, Digikey |
 | 6 | Speaker | 4 Ω or 8 Ω small loudspeaker, 0.5 W–3 W | Optional | 1 | $2–$5 | Amazon, any electronics store; you can also cannibalize from an old set of powered speakers |
 | 7 | I²S class-D amplifier (drives the speaker) | **MAX98357A** breakout (Adafruit #3006 or SparkFun) | Optional (only if you add a speaker) | 1 | $6–$10 | Adafruit, SparkFun, Amazon |
+| 7b | **Two 10 kΩ linear potentiometers** + 2 panel-mount knobs (for "Knob A" and "Knob B") | Any 10 kΩ linear-taper pot (Bourns PTV09A, Alpha RV16AF-10K, or equivalent). **Linear** taper (not audio/log) — small adjustments near one end need to feel uniform across the range. | Recommended | 2 | $1–$3 | Amazon, Mouser, Digikey, SparkFun |
 | 8 | LiPo battery, **single cell, 3.7 V nominal (4.2 V max), 2800 mAh** | A 18650-size protected Li-ion cell (e.g. **Panasonic NCR18650B**, **Samsung INR18650-30Q**, or an Adafruit #328-equivalent LiPo pouch). Must include a built-in protection circuit (PCM/BMS) against over-discharge, over-charge, and short circuit. | Recommended (chosen for this guide) | 1 | $5–$12 | Amazon, Adafruit, SparkFun, eBay, 18650BatteryStore, Illumn |
 | 9 | LiPo charging module (if you use a battery) | **TP4056** module (with protection, no separate load-share needed) | Optional (only with battery) | 1 | $1 | Amazon, AliExpress |
 | 10 | USB-C breakout (only if your dev board has micro-USB, not USB-C) | Generic USB-C breakout | Only if needed | 1 | $1 | Amazon, Adafruit |
@@ -343,6 +344,57 @@ When the cell no longer holds a useful charge (after 1–3 years), open the encl
 
 ---
 
+### 4.11 The two analog knobs (Knob A and Knob B)
+
+The real PO-33 has two physical knobs labelled **A** and **B**. They have no semantic name on the device itself — what they do depends on the active tweak mode. We wire two 10 kΩ linear potentiometers on ADC-capable GPIOs and read them through `esp_adc_cal`.
+
+| Knob | GPIO | ADC channel | ADC unit | Notes |
+|---|---|---|---|---|
+| **Knob A** | GPIO 20 | ADC1_CH9 | ADC1 | non-strapping, ADC-capable |
+| **Knob B** | GPIO 46 | ADC1_CH5 | ADC1 | non-strapping, ADC-capable |
+
+Each potentiometer is wired as a 3-terminal voltage divider:
+
+```
+3.3 V ──┐ ├─ 10 kΩ linear pot ──┐
+          │                      ├─ wiper ── GPIO 20 (Knob A) or GPIO 46 (Knob B)
+   GND ──┘                      │
+                               │
+                          (to ADC pin)
+```
+
+The firmware:
+
+- Configures the ADC channel with `ADC_ATTEN_DB_12` (full-scale ≈ 3.3 V).
+- Reads **8 samples** per `knobs_tick()` and averages them.
+- Applies a small **dead-zone** of ±4 in 0..255 units, so ADC noise doesn't show as jitter.
+- Exposes the value as `knobs_get_a()` / `knobs_get_b()` returning `uint8_t` (0..255).
+
+#### What each knob does (matching the PO-33 manual)
+
+The PO-33 names the knobs simply "A" and "B"; what they do depends on which tweak parameter is active (toggled with FX).
+
+| Active mode | Knob A | Knob B |
+|---|---|---|
+| **Tone** (`ton`) | pitch (semitones) | volume |
+| **Filter** (`Flt`) | low/high-pass cutoff frequency | resonance |
+| **Trim** (`tri`) | sample start point | sample length |
+| BPM held | fine tempo adjustment | cycle 3 tempo levels (Hip Hop / Disco / Techno) |
+| (no mode active) | repeats the last-set tweak | repeats the last-set tweak |
+
+In v1 firmware, only the "BPM held" row is wired through — knobs A and B move the tempo up/down by ±1 BPM per tick when the BPM-UP or BPM-DN modifier button is held. The tweak-mode rows are documented in `docs/DESIGN.md` §3.4 (F-016 / F-017 / F-018) and will be wired in a future revision; the data model already supports them.
+
+#### Knob vs. modifier button: which is "right"?
+
+The PO-33 uses knobs for fine continuous control and modifier buttons (REC, PLAY, FUNC, FX, BPM, PATTERN) for discrete actions. We follow the same model:
+
+- Use **knobs** when you want a smooth, continuous value (tempo, filter cutoff, pitch).
+- Use **modifier buttons** when you want a discrete action (start recording, switch pattern).
+
+The modifier buttons cycle pattern and BPM in big steps; the knobs would let you dial in a tempo precisely.
+
+---
+
 ## 5. Build order
 
 Do these steps **in order**. Don't skip ahead.
@@ -472,6 +524,27 @@ You should see the heap stats. If the boot hangs, you probably have a short circ
 The boot log should show: `Buttons ready: 4x4 matrix + 8 GPIOs = 24 total`. If you see fewer, one of the GPIO wires is disconnected.
 
 To test individual buttons, run the shell and press each one. The firmware doesn't echo button presses yet (that's a v2 feature), but `buttons_init()` succeeding is the smoke test.
+
+### 5.6c Step 6c — Wire the two analog knobs
+
+Each knob is a 3-wire device. The middle (wiper) terminal goes to the ADC pin; one end goes to 3.3 V, the other to GND.
+
+| Knob | GPIO (ADC pin) | 3.3 V end | GND end |
+|---|---|---|---|
+| **Knob A** | **GPIO 20** | left terminal | right terminal |
+| **Knob B** | **GPIO 46** | left terminal | right terminal |
+
+(The "left vs. right" is arbitrary; pick either and the firmware works the same — `knobs_get_a()` returns 0 at the GND end and 255 at the 3.3 V end, and vice versa.)
+
+After both knobs are wired, flash the firmware and test in the UART shell:
+
+```
+po33> free
+```
+
+The boot log should show: `Knobs ready (calibration: A=ok B=ok)`. If you see `calibration: A=fallback B=fallback`, the eFuse ADC calibration data wasn't found on your chip — the driver still works, just with slightly less accurate mV-to-12bit mapping.
+
+To smoke-test the knobs without any UI binding yet: from the shell you can type a hypothetical future command like `knob A` and `knob B` (not yet implemented). For now, just verify that turning the knobs doesn't crash the firmware and the boot log shows the expected line.
 
 ### 5.7 Step 7 — (Optional) Wire the status LEDs
 

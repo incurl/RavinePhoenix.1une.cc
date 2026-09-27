@@ -92,8 +92,12 @@
  *   IDs 0..7   : 8 dedicated modifier buttons (REC, PLAY, FUNC, FX, BPM±, PAT±)
  *   IDs 8..23  : 16 step buttons on the 4x4 matrix (STEP1..STEP16)
  *
- * Total: 24 logical buttons. (The real PO-33 has 16 + 2 knobs; we
- * replace the knobs with extra modifier buttons.)
+ * Total: 24 logical buttons + 2 analog knobs.
+ *
+ *   - The real PO-33 has 16 buttons + 2 knobs. We have 16 step buttons
+ *     (4x4 matrix) + 8 dedicated modifier buttons + 2 analog knobs.
+ *     See ui/knobs.c for the knob driver and hardware/HARDWARE.md S4.11
+ *     for the wiring.
  */
 enum {
     /* Dedicated modifier buttons (GPIO inputs). */
@@ -167,6 +171,29 @@ enum {
 #define BATTERY_ADC_CHANNEL       ADC_CHANNEL_3   /* GPIO4 in v6.0 ADC1; remap as needed */
 #define BATTERY_ADC_ATTEN         ADC_ATTEN_DB_12
 #define BATTERY_DIVIDER_RATIO     2.0f            /* R1=R2 */
+
+/* ─── Knobs (PO-33's "Knob A" and "Knob B") ─────────────────────── */
+/*
+ * Each knob is a 10 kΩ linear potentiometer wired as a voltage
+ * divider between 3.3 V and GND, with the wiper on the ADC pin.
+ *
+ *   PO-33 names them "Knob A" and "Knob B" (no semantic name on the
+ *   device; what they do depends on the active tweak mode). We use the
+ *   same names.
+ *
+ *   Knob A → ADC1_CH9  on GPIO 20
+ *   Knob B → ADC1_CH5  on GPIO 46
+ *
+ *   Both GPIOs are non-strapping and confirmed ADC-capable on the
+ *   ESP32-S3-WROOM-1-N16R8 module used by the DevKitC-1.
+ */
+#define KNOB_A_GPIO               GPIO_NUM_20
+#define KNOB_A_ADC_CHANNEL        ADC_CHANNEL_9
+#define KNOB_B_GPIO               GPIO_NUM_46
+#define KNOB_B_ADC_CHANNEL        ADC_CHANNEL_5
+#define KNOB_ADC_ATTEN            ADC_ATTEN_DB_12
+#define KNOB_SAMPLES              8     /* samples averaged per read */
+#define KNOB_DEADZONE             4     /* ignore deltas below this in 0..255 units */
 
 /* ─── Sequencer defaults ─────────────────────────────────────── */
 #define DEFAULT_BPM               120

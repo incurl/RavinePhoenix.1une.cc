@@ -76,6 +76,8 @@ Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top fa
 |  |BPM +| |BPM -| |PAT +| |PAT -|  <- 4 more modifiers|
 |  +-----+ +-----+ +-----+ +-----+                    |
 |                                                    |
+|  (Knob A)        (Knob B)     <- 2 analog knobs      |
+|                                                    |
 |  [headphone jack] [sync in] [sync out]             |
 +----------------------------------------------------+
 ```
@@ -96,7 +98,7 @@ There are **24 physical buttons** in total:
   - `BPM +` / `BPM -` — raise / lower tempo
   - `PAT +` / `PAT -` — next / previous pattern
 
-There are no knobs. On the real PO-33 there are two knobs (A and B) for tweaking parameters and fine tempo; we replace the knobs with extra modifier buttons because wiring two potentiometers to GPIOs would have cost more and added more failure modes. See §11 in `hardware/HARDWARE.md` for the verbatim PO-33 button-and-knob design and how ours maps to it.
+There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control: depending on the active tweak mode, knob A controls pitch / filter cutoff / sample start / fine tempo, and knob B controls volume / resonance / sample length / tempo level cycling. In v1 firmware the data model supports all of these — only the BPM-row binding (knobs nudge tempo when BPM ± is held) is wired through the knobs; the tweak-mode rows are queued for v2. See `hardware/HARDWARE.md` §4.11 for wiring, and the cheat sheet (§8 below) for what works today.
 
 ### 1.5 Where to go from here
 
@@ -344,29 +346,29 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 #### F-016 — Tweak Tone (Knob A = pitch, Knob B = volume)
 
 - **Manual ref:** §4.1 ("ton")
-- **Layman:** With Tweak = Tone, Knob A raises or lowers the pitch of the current sound by semitones; Knob B raises or lowers its volume.
+- **Layman:** With Tweak = Tone, **Knob A** raises or lowers the pitch of the current sound by semitones; **Knob B** raises or lowers its volume.
 - **PO-33 button combo:** Turn knob A / B.
-- **Our hardware combo:** Not yet. Long-press the slot button + BPM up/down to change pitch; long-press + FUNC + step to change volume.
-- **Code location:** The data is in `step_t.note` and `step_t.velocity`; we'd need UI hooks.
-- **Status:** ⚠️ partial. Data model supports it; UI does not.
+- **Our hardware combo:** Knob A → GPIO 20 (ADC1_CH9); Knob B → GPIO 46 (ADC1_CH5). The knob driver (`ui/knobs.c`) reads them on every button-scan tick. Wiring through to per-step pitch/volume is v2 work; the data model (`step_t.note`, `step_t.velocity`) already supports it.
+- **Code location:** `step_t.note` (pitch), `step_t.velocity` (volume); `ui/knobs.c` reads; `main/audio/amy_bridge.c` writes into `amy_event.midi_note` / `amy_event.velocity`.
+- **Status:** ⚠️ partial. Knobs wired and read; tweak-mode UI binding queued for v2.
 
 #### F-017 — Tweak Filter (Knob A = LP/HP, Knob B = resonance)
 
 - **Manual ref:** §4.2 ("Flt")
-- **Layman:** With Tweak = Filter, Knob A picks the cutoff frequency (low-pass or high-pass); Knob B picks how strong the filter is (resonance).
+- **Layman:** With Tweak = Filter, **Knob A** picks the cutoff frequency (low-pass or high-pass); **Knob B** picks how strong the filter is (resonance).
 - **PO-33 button combo:** Turn knobs.
-- **Our hardware combo:** Not yet.
-- **Code location:** `step_t.filter_cutoff` is the data field. `main/audio/amy_bridge.c` → `apply_fx()` case `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`.
-- **Status:** ⚠️ partial.
+- **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). The filter data field is `step_t.filter_cutoff` (0–255); v1 firmware maps a low-pass sweep into `amy_event.filter_freq` via the existing `PO33_FX_FILTER_SWEEP` effect.
+- **Code location:** `step_t.filter_cutoff`; `main/audio/amy_bridge.c` → `apply_fx()` → `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`.
+- **Status:** ⚠️ partial. Filter sweep works as an effect; knob → filter binding queued for v2.
 
 #### F-018 — Tweak Trim (Knob A = start point, Knob B = length)
 
 - **Manual ref:** §4.3 ("tri")
-- **Layman:** With Tweak = Trim, you pick where in the recording the playback actually starts, and how long the playback lasts. This is how you chop off silence at the start, or trim a long recording to a short snippet.
+- **Layman:** With Tweak = Trim, you pick where in the recording the playback actually starts (**Knob A**), and how long the playback lasts (**Knob B**). This is how you chop off silence at the start, or trim a long recording to a short snippet.
 - **PO-33 button combo:** Turn knob A = start, B = length.
-- **Our hardware combo:** Not yet. UART: `amy_bridge_set_trim(slot, start, end)`.
+- **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). Per-slot trim is already stored in `s_slots[slot].start` / `.end` and exposed via `amy_bridge_set_trim()` (UART). Knob → trim binding queued for v2.
 - **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_set_trim(slot, start, end)`. `s_slots[slot].start` / `.end` are stored.
-- **Status:** ⚠️ partial. Function exists, not bound to buttons.
+- **Status:** ⚠️ partial. Function exists; knob → trim binding queued for v2.
 
 ### 3.5 Section 5 — Effects (the 16 punch-ins)
 
@@ -1089,7 +1091,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Erase pattern | H+REC + PATTERN | not yet |
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
-| Tweak tone/filter/trim | FX cycles; knobs A/B adjust | not yet |
+| Tweak tone/filter/trim | FX cycles; knobs A/B adjust | Knob A/B wired (ADC); tweak-mode binding queued for v2 |
+| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM ± + (knob not yet bound to fine-tempo) — for now use BPM + / − buttons |
 | Sync out | always on | always on |
 | Sync in | H+REC + BPM cycles mode | partial |
 | Show battery | SOUND + BPM | not yet (TFT will show) |

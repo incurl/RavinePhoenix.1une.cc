@@ -21,6 +21,7 @@
 #include "sequencer/sequencer.h"
 #include "ui/buttons.h"
 #include "ui/display.h"
+#include "ui/knobs.h"
 #include "ui/leds.h"
 #include "storage/storage.h"
 #include "system/power_mgmt.h"
@@ -69,6 +70,7 @@ void app_main(void)
     /* 7. UI */
     ESP_ERROR_CHECK(display_init());
     ESP_ERROR_CHECK(buttons_init());
+    ESP_ERROR_CHECK(knobs_init());
 
     /* 8. Boot splash */
     display_show_boot_screen();
@@ -100,6 +102,7 @@ static void button_scan_task(void *arg)
 
     while (1) {
         buttons_tick();
+        knobs_tick();
         amy_bridge_pump_capture();
         vTaskDelayUntil(&last, period);
     }

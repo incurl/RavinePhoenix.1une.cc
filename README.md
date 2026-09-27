@@ -80,6 +80,7 @@ target_compile_definitions(amy PRIVATE
 │   ├── ui/
 │   │   ├── buttons.{c,h}
 │   │   ├── display.{c,h}
+│   │   ├── knobs.{c,h}           # Knob A (GPIO 20 / ADC1_CH9) + Knob B (GPIO 46 / ADC1_CH5)
 │   │   └── leds.{c,h}
 │   ├── storage/
 │   │   └── storage.{c,h}        # patterns + samples → LittleFS
