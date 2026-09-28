@@ -829,7 +829,7 @@ Triggered by FUNC button. Shows all 16 slots as small icons, filled if recorded,
 | SOUND  [●][●][●][●][●][●][●][●]  |  ← slots 1-8: drum
 |        [○][○][●][●][●][●][●][●]  |  ← slots 9-16: melodic
 |                                   |
-|        Slot 3: 1.2 s, 22050 Hz    |  ← info on the highlighted slot
+|        Slot 3: 1.2 s, 44100 Hz   |  ← info on the highlighted slot
 |        Trim: ▕████████░░░░░░░░    |  ← trim bar
 |        FX: scratch                |
 |                                   |
@@ -1194,9 +1194,9 @@ Some of these limits are tightly coupled to the hardware Teenage Engineering cho
 
 | # | Capability | Why we can exceed the PO-33 | Concrete ceiling |
 |---|---|---|---|
-| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We have ~6 MB of headroom even after holding the TFT framebuffer. | Up to ~5 minutes mono @ 44.1 kHz / 16-bit, or ~20 minutes with streaming-to-flash on the 16 MB flash chip. |
-| C2 | **Sample rate / quality** | AMY supports up to 48 kHz; the ESP32-S3 I²S peripheral supports higher. We chose 44.1 kHz to match AMY's native rate, but we *could* sample at 48 kHz. | 48 kHz mono = 5 MB/min; 96 kHz mono = 10 MB/min (would exceed our PSRAM). |
-| C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. | Up to ~30 s per melodic slot (assuming 4 slots × 30 s = 120 s + 8 × 3 s drums = 24 s, total 144 s ≈ 6.2 MB). |
+| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We use **44.1 kHz** to match AMY's native render rate; that gives us a live pool of **~50–75 s** mono in PSRAM after the TFT framebuffer and AMY state (see §11.3 for the full breakdown). | Per-project on flash: ~75 s typical per project in an 8 MB partition (~5 typical projects) or ~11 in a 16 MB partition. With streaming-to-flash on the 16 MB flash chip, you could push the live pool further. |
+| C2 | **Sample rate / quality** | AMY supports up to 48 kHz; the ESP32-S3 I²S peripheral supports higher. We chose 44.1 kHz to match AMY's native rate, but we *could* sample at 48 kHz. | At 44.1 kHz mono: ~5.3 MB/min; at 48 kHz mono: ~5.8 MB/min; at 96 kHz mono: ~11.5 MB/min. Anything above 48 kHz exceeds our PSRAM pool in practice. |
+| C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. **But at 44.1 kHz, 1 s of mono = 86 KB**, so a long melodic slot costs a lot. | Per-slot ceiling: up to ~30 s for a melodic slot in principle, but the *combined* pool is bounded by ~6 MB of PSRAM (after framebuffer + AMY state) = roughly **50–75 s of total sample time** (see §11.8 for the full breakdown). Practically, with a typical 8-slot project, that means **average ~6–9 s per slot** in moderate DSP load. |
 | C4 | **Polyphony** | AMY's `amy_config_t.max_voices` controls how many oscillator voices are available. Each voice costs a small CPU slice per render block. The ESP32-S3 has dual LX7 cores and vector DSP instructions, so we can run more voices in parallel than a single-core chip. | 8–16 simultaneous voices is comfortable. 30 is achievable with optimization. |
 | C5 | **Step count per pattern** | Each `step_t` is currently 8 bytes. 256 steps × 16 patterns × 128 chain = 16 KB. Trivial in PSRAM. We could support variable time signatures: 16 steps of 1/16, 32 of 1/32, etc. | 32 or 64 steps per pattern (variable time signatures — e.g. a 5/4 or 7/8 pattern). |
 | C6 | **Pattern count** | 16 patterns × ~3 KB each = 48 KB. PSRAM has megabytes to spare. | 64–256 patterns. |
@@ -1523,22 +1523,72 @@ If power is lost at any step:
 
 ### 11.8 Capacity math
 
-Let's work through a real example. Average project:
-- 8 samples × 2 s × 22 050 Hz × 2 bytes ≈ 700 KB (the PO-33 has 8 samples in practice for most projects).
-- 16 patterns × ~50 bytes/step × 16 steps ≈ 13 KB.
-- Chain: 128 bytes.
-- Metadata: 200 bytes.
-- **Total per project: ~715 KB.**
+We sample at **44 100 Hz × 16-bit mono** to match AMY's native render rate. At that rate:
 
-Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* for even one full-sized project. We need to **enlarge** this partition. Recommended: **`patterns` → 8 MB** (a `samples` partition can keep one or two "always-available" projects in PSRAM-friendly format; but that's a v3 optimization).
+- **1 second of mono audio = 88 200 B ≈ 86 KB.**
+- **40 seconds = 3.45 MB** (this is the v1 PO-33-equivalent pool size).
 
-With `patterns` at 8 MB:
-- 8 MB / 715 KB ≈ **11 full-size projects** with comfortable headroom.
-- Many more if projects are smaller (a project with 3 short samples is ~250 KB, so up to ~32 projects of that size).
+Let's work through a real example. Average project (the PO-33's typical usage):
 
-We propose a hard cap `PROJECTS_MAX = 32` for the UI's project picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 715 KB ≈ 22 MB which exceeds our 8 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+| Component | Math | Size |
+|---|---|---:|
+| Sample pool | 8 samples × 2 s × 44 100 Hz × 2 B = **1 411 200 B** | **~1.38 MB** |
+| Patterns | 16 patterns × 16 steps × ~50 B/step | **~13 KB** |
+| Chain | 128 B | **0.13 KB** |
+| Metadata | `meta.json` | **~0.2 KB** |
+| **Total per project (typical)** | | **~1.42 MB** |
 
-> **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **8 MB**. The `factory` app partition stays the same. The `samples` partition (currently unused) can be removed or repurposed for the active project's sample blob.
+The sample pool is **>97 %** of every project. Drop a sample or shorten one and the project shrinks proportionally; add a long sample and it grows proportionally.
+
+#### Live PSRAM sample pool ceiling (active project)
+
+The on-flash numbers above are for archived projects. The **active project's** sample pool must fit in PSRAM alongside the TFT framebuffer and AMY state. The math at 44 100 Hz:
+
+| Subsystem | Approx. size |
+|---|---:|
+| TFT framebuffer (240×320×2) | ~150 KB |
+| AMY state (idle / no audio) | ~100 KB |
+| AMY state (moderate — 4 voices + reverb) | ~1.5 MB |
+| AMY state (heavy — 16 voices + echo + chorus) | ~3.5 MB |
+| AMY state (stress — 30 voices + heavy DSP) | ~6 MB |
+| LittleFS cache, heap overhead, misc | ~256 KB |
+| **Available for samples** (8 MB PSRAM minus above) | **~6.3 MB (idle) down to ~1.8 MB (stress)** |
+
+At 88 200 B/s, that gives:
+
+| Scenario | Live sample memory |
+|---|---:|
+| Idle / no audio rendering | **~75 s** |
+| Moderate DSP (4 voices + reverb) | **~72 s** |
+| Heavy DSP (16 voices + echo + chorus) | **~49 s** |
+| Stress (30 voices, polyphony ceiling) | **~21 s** |
+
+**The PO-33's 40 s ceiling is matched under stress, beaten under typical loads.** The earlier 100–150 s figures in this section were based on the wrong sample rate (22 050 Hz) and have been replaced.
+
+#### On-flash partition size
+
+Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* for even one typical project at 44 100 Hz (1.42 MB). We need to **enlarge** this partition.
+
+| Partition size | Typical projects (~1.42 MB) | Tiny projects (~133 KB) |
+|---|---:|---:|
+| 1 MB | 0 | ~7 |
+| 8 MB | ~5 | ~60 |
+| **16 MB** | **~11** | ~120 |
+
+Recommended: **`patterns` → 16 MB**. That gives ~11 typical projects or ~120 tiny projects, with comfortable headroom for filesystem overhead. The 16 MB flash chip on the ESP32-S3-WROOM-1-N16R8 has plenty of room (the `factory` app partition is ~3 MB and the `nvs` + `phy_init` partitions are tiny, so most of the chip is free).
+
+A `samples` partition is **not needed** in v2 — the active project's sample pool lives in PSRAM, and archived projects' sample pools live in their project folder inside `patterns/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
+
+We propose a hard cap `PROJECTS_MAX = 32` for the UI's project picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+
+> **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **16 MB** and remove the unused `samples` partition. The `factory` app partition stays the same.
+
+#### Caveats on these numbers
+
+- **AMY state size is an estimate.** The "moderate / heavy / stress" rows come from looking at the AMY source structure (oscillator bank + chorus/echo buffers + reverb tail). Real numbers would need a profiling run with `-O2` and `amy_overload_check()` enabled.
+- **Polyphony ceiling on the ESP32-S3 is ~30 voices** before audio glitches. The "stress" row above is a real upper bound, not extrapolation.
+- **Per-sample lengths vary.** A project with 16 long samples (10 s each) uses ~28 MB on flash — one such project fills the 16 MB partition almost entirely. The 11-projects figure assumes the *typical* profile (8 short samples), not the max.
+- **Streaming-to-flash** (v3) would let a single project's *live* pool exceed the PSRAM ceiling by streaming long samples from LittleFS on demand. AMY does not natively support streaming; this is real engineering, not a config change.
 
 ### 11.9 v2 UI proposal — the Project picker screen
 
