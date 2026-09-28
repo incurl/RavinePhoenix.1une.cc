@@ -1295,7 +1295,7 @@ Honest note: items 1, 8, and 9 are aspirational. Items 2–7 are realistic on a 
 
 ## 11. Multi-sketch storage & restore
 
-> **Vocabulary.** The unit of creative work this section designs for is called a **sketch** (one sketch = samples + 16 patterns + a 128-step chain + metadata). The PO-33 calls the same idea a "song"; the Korg Electribe calls it a "Pattern Set"; Ableton Live calls it a "Live Set". We picked "sketch" because it's short, plain, and doesn't clash with sampler vocabulary. Throughout §11, the **C identifiers in the API block retain the historical `project` prefix** (e.g. `storage_project_save_active`) for source-compatibility with the v1 code; the v2 implementation should rename them to `storage_sketch_*`. **Outside code blocks, every "project" in this section means "sketch".**
+> **Vocabulary.** The unit of creative work this section designs for is called a **sketch** (one sketch = samples + 16 patterns + a 128-step chain + metadata). The PO-33 calls the same idea a "song"; the Korg Electribe calls it a "Pattern Set"; Ableton Live calls it a "Live Set". We picked "sketch" because it's short, plain, and doesn't clash with sampler vocabulary. Throughout §11, the **C identifiers in the API block use the `sketch` prefix** (e.g. `storage_sketch_save_active()`, `sketch_meta_t`, `SKETCHES_MAX`) — the rename has already happened in the design, so the v2 implementation should match. **Outside code blocks, every "project" in this section means "sketch".**
 
 ### 11.0 Why this section exists
 
@@ -1362,7 +1362,7 @@ Notes:
 - **`tmp/`** is a scratch area. Atomic-save writes to `tmp/<id4>.samples.bin.tmp` etc., then `rename()`s the file into place. A power loss during a write leaves the tmp file dangling; on boot we delete any leftover `*.tmp` files.
 - **No quota file.** Quotas (max N sketches, max total bytes per sketch) are enforced at runtime in `storage_sketch_save_active()` by checking free space first. LittleFS has a fixed partition size, so "free space" is `partition_size - used_bytes`.
 
-> **Note.** We've renamed `project.lst` to `sketches.lst` and `storage_project_*` → `storage_sketch_*` in this section. The v2 implementation should do the same source-code rename. v1 firmware code keeps the `project` prefix for source-compatibility until the rename lands.
+> **Note.** We've renamed `project.lst` to `sketches.lst` and `storage_project_*` → `storage_sketch_*` in this section. **The v2 source code should match.** v1 firmware doesn't yet contain these symbols (the multi-sketch system is a v2 addition), so there's nothing in `main/` to rename today — when the v2 implementation lands, the identifiers above are the ones to use.
 
 ### 11.3 On-RAM state
 
@@ -1448,33 +1448,33 @@ typedef struct {
     uint8_t  sample_count;     /* 0..16 */
     uint8_t  chain_len;        /* 0..128 */
     uint32_t total_samples;     /* playback duration in samples */
-} project_meta_t;
+} sketch_meta_t;
 
-#define PROJECTS_MAX 32          /* hard cap; see §11.8 capacity math */
-#define PROJECT_NAME_MAX 24
+#define SKETCHES_MAX 32          /* hard cap; see §11.8 capacity math */
+#define SKETCH_NAME_MAX 24
 
-esp_err_t storage_projects_init(void);
-size_t      storage_projects_count(void);
-esp_err_t storage_projects_list(project_meta_t *out, size_t max);
+esp_err_t storage_sketches_init(void);
+size_t      storage_sketches_count(void);
+esp_err_t storage_sketches_list(sketch_meta_t *out, size_t max);
 
-/* Returns the active project meta. */
-esp_err_t storage_get_active_project(project_meta_t *out);
+/* Returns the active sketch meta. */
+esp_err_t storage_get_active_sketch(sketch_meta_t *out);
 
 /* Create / switch / delete / rename. */
-esp_err_t storage_project_create(const char *name, project_meta_t *out_new);
-esp_err_t storage_project_switch(const char *id);   /* pages old to flash, loads new */
-esp_err_t storage_project_delete(const char *id);   /* requires confirmation flag */
-esp_err_t storage_project_rename(const char *id, const char *new_name);
-esp_err_t storage_project_save_active(void);         /* atomic write of active project */
+esp_err_t storage_sketch_create(const char *name, sketch_meta_t *out_new);
+esp_err_t storage_sketch_switch(const char *id);   /* pages old to flash, loads new */
+esp_err_t storage_sketch_delete(const char *id);   /* requires confirmation flag */
+esp_err_t storage_sketch_rename(const char *id, const char *new_name);
+esp_err_t storage_sketch_save_active(void);         /* atomic write of active sketch */
 
-/* Duplicate — clones the active project under a new 4-hex ID and new name. */
-esp_err_t storage_project_duplicate(const char *new_name, project_meta_t *out_new);
+/* Duplicate — clones the active sketch under a new 4-hex ID and new name. */
+esp_err_t storage_sketch_duplicate(const char *new_name, sketch_meta_t *out_new);
 
-/* Export / import — exports one project as a .zip containing its folder. */
-esp_err_t storage_project_export(const char *id, const char *dest_path);
-esp_err_t storage_project_import(const char *src_path, project_meta_t *out_new);
+/* Export / import — exports one sketch as a .zip containing its folder. */
+esp_err_t storage_sketch_export(const char *id, const char *dest_path);
+esp_err_t storage_sketch_import(const char *src_path, sketch_meta_t *out_new);
 
-/* Internal helper: returns the next free 4-hex ID by scanning project.lst. */
+/* Internal helper: returns the next free 4-hex ID by scanning sketches.lst. */
 char       *storage_next_free_id(void);
 ```
 
@@ -1482,14 +1482,14 @@ char       *storage_next_free_id(void);
 /* In sequencer.h — new function for live save-on-edit */
 
 esp_err_t sequencer_request_save(void);
-/* Posts a "save the active project" request to a queue that the
+/* Posts a "save the active sketch" request to a queue that the
  * storage task drains. Returns ESP_OK immediately. The save happens
  * in the background to keep audio playback glitch-free. */
 ```
 
 ```c
-/* In main/ui/menu.h — new screen for project management */
-void ui_menu_project_picker(void);   /* shows the project list, lets user pick */
+/* In main/ui/menu.h — new screen for sketch management */
+void ui_menu_sketch_picker(void);   /* shows the sketch list, lets user pick */
 ```
 
 All new functions are non-blocking for the audio path. The actual file I/O happens in a dedicated low-priority task so the I²S render task (AMY) is never starved. We use FreeRTOS stream buffers to pass sample-pool chunks to the storage task.
@@ -1587,7 +1587,7 @@ Recommended: **`patterns` → 16 MB**. That gives ~11 typical sketches or ~120 t
 
 A `samples` partition is **not needed** in v2 — the active sketch's sample pool lives in PSRAM, and archived sketches' sample pools live in their sketch folder inside `patterns/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
 
-We propose a hard cap `PROJECTS_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+We propose a hard cap `SKETCHES_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
 
 > **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **16 MB** and remove the unused `samples` partition. The `factory` app partition stays the same.
 
@@ -1631,7 +1631,7 @@ The "manage" mode shows a sub-menu with **create / duplicate / delete / rename /
 
 These are decisions I'm flagging now but punting to the implementer.
 
-1. **Save policy** — should `storage_project_save_active()` be:
+1. **Save policy** — should `storage_sketch_save_active()` be:
    - (a) **manual only** — user presses FUNC + REC or similar to save. Matches PO-33.
    - (b) **debounced auto-save** — every edit triggers a save 2 s later. No "did I forget to save?" anxiety.
    - (c) **both** — manual save is immediate; auto-save runs in background every N seconds if there are unsaved changes.

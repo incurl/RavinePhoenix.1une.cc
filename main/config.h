@@ -203,6 +203,29 @@ enum {
 #define PATTERN_COUNT             16
 #define PATTERN_CHAIN_MAX         128
 
+/* ─── Sketch (v2 multi-storage) naming convention ──────────────── */
+/*
+ * When the v2 multi-sketch storage system lands (see docs/DESIGN.md
+ * S11), all new identifiers in storage.h / sequencer.h / ui/menu.h
+ * MUST use the `sketch` prefix, NOT `project`. Example:
+ *
+ *   storage_sketch_save_active()   // not storage_project_save_active()
+ *   sketch_meta_t                  // not project_meta_t
+ *   SKETCHES_MAX                   // not PROJECTS_MAX
+ *   sketches.lst                   // not project.lst
+ *
+ * The user-facing word is "sketch" (PO-33 calls it a "song", Korg
+ * Electribe calls it a "Pattern Set", Ableton calls it a "Live Set").
+ * See docs/DESIGN.md S11 vocabulary callout for the full rationale.
+ *
+ * v1 firmware code does NOT yet contain sketch_/project_ identifiers,
+ * so there is nothing to rename today. The convention is documented
+ * here so the v2 implementer doesn't accidentally introduce the old
+ * `project` prefix.
+ */
+#define SKETCHES_MAX              32   /* hard cap for UI picker; see S11.8 */
+#define SKETCH_NAME_MAX           24    /* bytes, NUL-terminated */
+
 /* ─── UART shell ─────────────────────────────────────────────── */
 #define SHELL_UART_BAUD           115200
 
