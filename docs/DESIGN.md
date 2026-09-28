@@ -244,7 +244,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 #### F-004 — 40 seconds total sample memory
 
 - **Manual ref:** §1.1
-- **Layman:** Across all 16 slots combined, you can record up to 40 seconds of audio. Each slot is capped: 8 drum slots ≤ 3 s each, 8 melodic slots ≤ 4.5 s each (in the current firmware; the real PO-33 caps drum slots shorter).
+- **Layman:** Across all 16 slots combined, you can record up to 40 seconds of audio. Each slot is capped: 8 drum slots ≤ 2 s each, 8 melodic slots ≤ 3 s each (in the current firmware; the real PO-33 caps drum slots shorter).
 - **PO-33 button combo:** Implicit — the device just won't record past the slot's max.
 - **Our hardware combo:** Same.
 - **Code location:** `main/config.h` → `SAMPLE_TOTAL_SECONDS 40`, `SLOT_DRUM_MAX_SECONDS 2.0f`, `SLOT_MELODIC_MAX_SECONDS 3.0f`. `main/audio/amy_bridge.c` allocates `SAMPLE_POOL_SIZE_BYTES = 40 × 44100 × 2 ≈ 3.37 MB` in PSRAM.
