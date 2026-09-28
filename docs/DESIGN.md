@@ -132,7 +132,7 @@ A **slot** is a numbered storage location for a sample. Our device has **16 slot
 
 ### 2.4 Step
 
-A **step** is one beat in a bar of music. The PO-33 has **16 steps** in a row, which makes two bars of 4/4 music (or one bar with 16 sixteenth-notes — depending on how you count). Each step is a moment in time. The device walks through the steps one at a time. If you told it "play sound 3 on step 5", it will play sound 3 every time the playhead reaches step 5, then move on.
+A **step** is **one sixteenth-note** — one of sixteen evenly-spaced positions in a 4/4 bar of music. The PO-33 has **16 steps** in a row, which makes **one bar of 4/4** (4 beats × 4 sixteenth-notes = 16 sixteenth-notes). Each step is a moment in time. The device walks through the steps one at a time. If you told it "play sound 3 on step 5", it will play sound 3 every time the playhead reaches step 5, then move on.
 
 ### 2.5 Pattern
 
@@ -144,7 +144,16 @@ A **song** is an ordered list of patterns. Our device lets you chain up to **128
 
 ### 2.7 BPM (beats per minute)
 
-**BPM** is how fast the music goes. BPM = 120 means there are 120 beats per minute, so each beat lasts half a second, so each step (a sixteenth-note) lasts an eighth of a second. The real PO-33 has three "BPM levels" — Hip Hop (80 BPM), Disco (120 BPM), and Techno (140 BPM) — and you can fine-tune from there. Our firmware supports any BPM from 60 to 240.
+**BPM** is how fast the music goes. BPM = 120 means there are 120 beats per minute, so each beat lasts half a second (0.5 s), so each step (a sixteenth-note) lasts a sixteenth of a second (0.125 s). The real PO-33 has three "BPM levels" — Hip Hop (80 BPM), Disco (120 BPM), and Techno (140 BPM) — and you can fine-tune from there. Our firmware supports any BPM from 60 to 240.
+
+Quick reference for the math: step duration in seconds = 60 / BPM / 4. So:
+
+| BPM | Step duration | Bar duration (16 steps) |
+|---|---|---|
+| 60 | 0.25 s | 4 s |
+| 80 (Hip Hop) | 0.1875 s | 3 s |
+| 120 (Disco) | 0.125 s | 2 s |
+| 140 (Techno) | ≈0.107 s | ≈1.71 s |
 
 ### 2.8 Sequencer
 
