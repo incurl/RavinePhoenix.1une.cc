@@ -105,10 +105,10 @@ There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the P
 Once you have read §1, you have a mental model of the device. There are three things you might want to do next, and the rest of this document supports all three:
 
 - **Build the device.** Go to the [project website](https://ravinephoenix.1une.cc), where you can flash our firmware onto your board with one click in Chrome / Edge / Firefox over USB. The *Hardware* page there gives a full bill of materials and pin map.
-- **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
+- **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §11 is the v2 proposal for multi-project storage & restore. §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
 - **Read the source.** The repo at the [project URL](https://ravinephoenix.1une.cc) (or wherever you got this document) is roughly 3,500 lines of C across `main/audio`, `main/sequencer`, `main/ui`, `main/storage`, `main/system`, and `main/tests`. The audio engine is entirely in the vendored AMY library.
 
-If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §12 (the book).
+If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §11 (multi-project) → §12 (the book).
 
 ---
 
@@ -1291,7 +1291,321 @@ Honest note: items 1, 8, and 9 are aspirational. Items 2–7 are realistic on a 
 
 ---
 
+## 11. Multi-project storage & restore
+
+### 11.0 Why this section exists
+
+The current v1 firmware has a **single-bank** storage model:
+
+- 16 patterns in RAM as `g_patterns[16]`.
+- One chain of up to 128 pattern entries as `g_chain[128]`.
+- One sample pool in PSRAM.
+- A `storage_save_all()` that writes each pattern / slot to a flat file (`p0.bin`, `p1.bin`, …, `p15.bin`, `s0.bin`, …, `s15.bin`).
+- A `storage_load_all()` that unconditionally reads every file and clobbers RAM.
+
+This works — but only if you treat the device as if it holds **exactly one project at a time**. Start building a new chain, hit save, and you overwrite the project you'd been working on. There is no "save as", no "switch project", no "delete project". It is, in essence, the same storage model the real PO-33 has (it also holds exactly one song at a time, with up to 128 patterns in its chain).
+
+For a $5 dev board with **16 MB of flash** and **8 MB of PSRAM**, this is an absurd waste. We can store **dozens of independent projects**, each with its own sample pool, pattern bank, chain, and metadata. The user can flip between them. The active project lives in PSRAM (zero-latency playback); archived projects live in LittleFS on flash.
+
+This section is the **design** for that system. It is a v2 proposal — v1 firmware is unchanged. No code in this section is committed; everything below describes what the v2 implementation should look like.
+
+### 11.1 Concepts
+
+- **Project** — a self-contained creative unit: a name, a sample pool, 16 patterns, a chain, BPM, and metadata. The atomic unit the user saves, switches between, deletes, or duplicates.
+- **Active project** — the one project whose sample pool is in PSRAM and whose patterns are live in `g_patterns[16]`. At any moment, exactly one project is active. Switching to a different project pages its data into RAM; the previously-active project is flushed to flash.
+- **Project ID** — a **4-character hex string** (e.g. `a1b2`), assigned by a monotonic counter starting at `0000`. 16 bits of entropy (65 536 possible IDs); collisions are impossible because we only assign each ID once. 4 hex chars makes folder names short, easy to type on a UART shell, and trivial to recognise in a project picker UI.
+- **Project metadata** — a small JSON file describing a project: name (≤24 chars), label color (1 of 8), created-at Unix timestamp, last-modified-at Unix timestamp, BPM at last save, sample count, pattern count, chain length, total playback duration.
+- **Atomic write** — a save operation that either fully completes or is fully rolled back, so a power loss mid-write can never leave a half-written project. We achieve this with the classic write-to-temp-then-rename trick.
+- **Project slot** — a serial index from 0 to N-1, where N is determined by available flash. The slot number is for UI ordering and internal bookkeeping; the 4-hex ID is the canonical identifier. Two projects can never share a slot number.
+
+### 11.2 On-flash layout
+
+We currently have **one** LittleFS partition called `patterns` (256 KB in `partitions.csv`). It is large enough for ~32–64 projects of average size, so we **reuse it** rather than add a new partition. The layout inside the existing `patterns` partition becomes:
+
+```
+/patterns/
+├── project.lst                        # index: one line per project
+│                                       #   format: <id4> <slot> <name>
+│                                       #   sorted by slot for stable UI ordering
+│
+├── a1b2/                              # project with ID "a1b2"
+│   ├── meta.json                      # project metadata (see §11.1)
+│   ├── samples.bin                    # raw 16-bit PCM, the sample pool
+│   ├── patterns/                      # 16 patterns, one file each
+│   │   ├── p00.bin
+│   │   ├── p01.bin
+│   │   │   ...
+│   │   └── p15.bin
+│   └── chain.bin                      # chain (up to 128 entries)
+│
+├── b3c4/                              # next project
+│   ├── meta.json
+│   ├── samples.bin
+│   ├── patterns/
+│   │   ...
+│   └── chain.bin
+│
+└── tmp/                                # staging area for atomic writes
+    ├── samples.bin.tmp
+    └── ...
+```
+
+Notes:
+
+- **4-hex ID folders.** The folder name is the project ID (`0000`, `0001`, …, `ffff`). Folders are flat at the `patterns/` root — no nesting — so LittleFS directory traversal stays cheap.
+- **Hex counter** — IDs are assigned sequentially: the next ID is `storage_next_free_id()`, which walks the `project.lst` and returns `max(ids) + 1`, formatted as 4 hex chars. If the device has never had a project, the first ID is `0000`. If the device has `0000` and `0003`, the next is `0004`.
+- **`project.lst` is the master index.** It is rewritten atomically on every project create / delete / rename. The UI's "Project" menu reads this file.
+- **`tmp/`** is a scratch area. Atomic-save writes to `tmp/<id4>.samples.bin.tmp` etc., then `rename()`s the file into place. A power loss during a write leaves the tmp file dangling; on boot we delete any leftover `*.tmp` files.
+- **No quota file.** Quotas (max N projects, max total bytes per project) are enforced at runtime in `storage_save_project()` by checking free space first. LittleFS has a fixed partition size, so "free space" is `partition_size - used_bytes`.
+
+### 11.3 On-RAM state
+
+At any moment, exactly one project is loaded into PSRAM. The in-RAM data model does **not change** — it is still `g_patterns[16]`, `g_chain[128]`, and the PSRAM sample pool. What changes is the **mapping** between in-RAM state and on-flash state.
+
+Concretely:
+
+| In-RAM symbol | Holds the state of | Paged in when | Paged out when |
+|---|---|---|---|
+| `g_patterns[16]` | active project's 16 patterns | project switch (`storage_load_project`) | project switch (save then load new) |
+| `g_chain[128]` + `g_chain_len` | active project's chain | same | same |
+| PSRAM sample pool (3.37 MB) | active project's samples | same | same |
+| `s_bpm`, `s_pattern`, etc. | active project's transport state | same | same |
+
+**The PO-33's "chain" stays a chain.** Each project carries one chain. The difference from v1 is that there are now *N* chains on the device, one per project.
+
+### 11.4 Project lifecycle
+
+The state diagram for a project:
+
+```
+                +---------+    create    +----------+
+                |         | ----------> |          |
+                |  EMPTY  |             | CREATED  |  (no samples, no patterns, name = "New Project")
+                |         |             |          |
+                +---------+             +----------+
+                                          |
+                                          | first record
+                                          v
+                +---------+    load     +----------+
+                |         | <--------- |          |
+                |          |  -------  | SAVED    |  (on flash, may be active or not)
+                |          |  ---      |          |
+                |          |  <-       +----------+
+                |  ACTIVE  |
+                |          |  -------> 
+                +----+----+
+                     |   |
+        modify       |   |    save
+        (in RAM)     |   |   (atomic)
+                     |   |
+                     v   v
+                +----------+
+                | MODIFIED |  (RAM differs from flash; will be lost on power-off)
+                +----------+
+                     |
+                     | save (atomic)
+                     v
+                +----------+
+                |   SAVED  |  (RAM == flash, durable across power-off)
+                +----------+
+                     |
+                     | delete
+                     v
+                +----------+
+                | DELETED  |  (folder removed from flash; project.lst updated)
+                +----------+
+```
+
+State transitions:
+
+- `EMPTY → CREATED`: the user picks "New Project" on the TFT. We allocate the next 4-hex ID from the counter, write a default `meta.json` (name = "New Project", label color = 1, timestamps = now), and add an entry to `project.lst`. The active project becomes this one and starts empty.
+- `CREATED → MODIFIED`: any recording, edit, or transport change. Pure RAM.
+- `MODIFIED → SAVED`: user picks "Save" on the TFT, or auto-save fires. We write `samples.bin`, `patterns/p*.bin`, `chain.bin`, and `meta.json` (with bumped last-modified-at) atomically. RAM == flash.
+- `SAVED → MODIFIED`: user edits anything. Pure RAM.
+- `ACTIVE → DELETED`: user picks "Delete project" on the TFT. We require confirmation. We then `unlink()` the project folder and rewrite `project.lst`. If it was the active project, the device falls back to an empty project (or another project if one exists).
+- `ACTIVE → EMPTY`: like DELETE but for the active project. The user is left with no active project until they pick or create one.
+
+### 11.5 API additions
+
+These are the new public functions. **Signatures only** — no implementation in v1.
+
+```c
+/* In storage.h */
+
+typedef struct {
+    char     id[5];            /* 4 hex chars + null terminator */
+    char     name[25];
+    uint8_t  label_color;      /* 0..7 */
+    uint32_t created_at;       /* Unix timestamp */
+    uint32_t modified_at;
+    uint16_t bpm;              /* BPM at last save */
+    uint8_t  sample_count;     /* 0..16 */
+    uint8_t  chain_len;        /* 0..128 */
+    uint32_t total_samples;     /* playback duration in samples */
+} project_meta_t;
+
+#define PROJECTS_MAX 32          /* hard cap; see §11.8 capacity math */
+#define PROJECT_NAME_MAX 24
+
+esp_err_t storage_projects_init(void);
+size_t      storage_projects_count(void);
+esp_err_t storage_projects_list(project_meta_t *out, size_t max);
+
+/* Returns the active project meta. */
+esp_err_t storage_get_active_project(project_meta_t *out);
+
+/* Create / switch / delete / rename. */
+esp_err_t storage_project_create(const char *name, project_meta_t *out_new);
+esp_err_t storage_project_switch(const char *id);   /* pages old to flash, loads new */
+esp_err_t storage_project_delete(const char *id);   /* requires confirmation flag */
+esp_err_t storage_project_rename(const char *id, const char *new_name);
+esp_err_t storage_project_save_active(void);         /* atomic write of active project */
+
+/* Duplicate — clones the active project under a new 4-hex ID and new name. */
+esp_err_t storage_project_duplicate(const char *new_name, project_meta_t *out_new);
+
+/* Export / import — exports one project as a .zip containing its folder. */
+esp_err_t storage_project_export(const char *id, const char *dest_path);
+esp_err_t storage_project_import(const char *src_path, project_meta_t *out_new);
+
+/* Internal helper: returns the next free 4-hex ID by scanning project.lst. */
+char       *storage_next_free_id(void);
+```
+
+```c
+/* In sequencer.h — new function for live save-on-edit */
+
+esp_err_t sequencer_request_save(void);
+/* Posts a "save the active project" request to a queue that the
+ * storage task drains. Returns ESP_OK immediately. The save happens
+ * in the background to keep audio playback glitch-free. */
+```
+
+```c
+/* In main/ui/menu.h — new screen for project management */
+void ui_menu_project_picker(void);   /* shows the project list, lets user pick */
+```
+
+All new functions are non-blocking for the audio path. The actual file I/O happens in a dedicated low-priority task so the I²S render task (AMY) is never starved. We use FreeRTOS stream buffers to pass sample-pool chunks to the storage task.
+
+### 11.6 PO-33 parity vs. extension
+
+| Feature | PO-33 | v1 (current) | v2 (this section) |
+|---|---|---|---|
+| Sample memory | 40 s | 40 s | 40 s × N projects in flash; 40 s live in PSRAM |
+| Patterns | 16 | 16 | 16 per project, N projects |
+| Song chain | up to 128 | up to 128 | up to 128 **per project**, N projects |
+| # of "songs" | 1 | 1 | N (bottleneck: flash size) |
+| Save | auto on power-off | manual `save` UART command | auto on edit (debounced) + manual |
+| Back up | audio out to tape (slow, lossy) | `storage save` writes 1 set of files | export one project as .zip over USB-MSD (v3) |
+| Copy between devices | P2P audio cable | not implemented | USB-MSD export/import (v3) |
+
+The PO-33's "one song, one chain" is preserved **within** a project. What we add is that the device can hold N projects, each with its own chain. This is the same conceptual model as the Korg Electribe's "Pattern Set" or Ableton Live's "Live Set" — a higher-level container that owns a complete working state.
+
+### 11.7 Concurrency / atomicity
+
+LittleFS is journaled but not transactional across multiple files. We must be careful.
+
+**Atomic-write protocol for a project save:**
+
+1. Acquire a mutex to serialize saves against the storage task.
+2. Write all files to a unique `tmp/` subfolder, e.g. `tmp/<id4>/`.
+3. `rename()` each file into the project folder. LittleFS `rename()` is atomic within the same directory.
+4. After all files are renamed, rewrite `project.lst` atomically (`tmp/project.lst.tmp` → `project.lst`).
+5. Release the mutex.
+
+If power is lost at any step:
+
+- Files left in `tmp/<id4>/` are stale. On boot, the storage init scans `tmp/` and deletes any file older than 1 minute. (Or just any file; `tmp/` is not user-visible.)
+- Files in the project folder that were renamed are intact.
+- If `project.lst` was not yet rewritten, the old version is used. The user sees the old project list, which is the safe failure mode.
+- If `project.lst` *was* rewritten but the project folder rename was incomplete, the entry in `project.lst` will point to a project that's "half present". On boot, we validate each `project.lst` entry against the actual filesystem and drop any orphaned entries.
+
+### 11.8 Capacity math
+
+Let's work through a real example. Average project:
+- 8 samples × 2 s × 22 050 Hz × 2 bytes ≈ 700 KB (the PO-33 has 8 samples in practice for most projects).
+- 16 patterns × ~50 bytes/step × 16 steps ≈ 13 KB.
+- Chain: 128 bytes.
+- Metadata: 200 bytes.
+- **Total per project: ~715 KB.**
+
+Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* for even one full-sized project. We need to **enlarge** this partition. Recommended: **`patterns` → 8 MB** (a `samples` partition can keep one or two "always-available" projects in PSRAM-friendly format; but that's a v3 optimization).
+
+With `patterns` at 8 MB:
+- 8 MB / 715 KB ≈ **11 full-size projects** with comfortable headroom.
+- Many more if projects are smaller (a project with 3 short samples is ~250 KB, so up to ~32 projects of that size).
+
+We propose a hard cap `PROJECTS_MAX = 32` for the UI's project picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 715 KB ≈ 22 MB which exceeds our 8 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+
+> **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **8 MB**. The `factory` app partition stays the same. The `samples` partition (currently unused) can be removed or repurposed for the active project's sample blob.
+
+### 11.9 v2 UI proposal — the Project picker screen
+
+A new screen (extends §6):
+
+```
++-----------------------------------+
+|  PROJECTS                  3 / 32 |   ← top bar: count
+|                                   |
+|   * DRUM KIT 1       0003  a1b2 |   ← * marks active project; 0003 = slot, a1b2 = id
+|     DISCO DEMO       0001  b3c4 |
+|     AMBIENT 03       0002  1234 |
+|     (unused slot)             |   ← "Create new" hint
+|                                   |
+|   [step 1..8]  scroll list     |
+|   [step 9..16] hold FUNC to new |
+|                                   |
+|   press step 1-8 to load         |
+|   hold FUNC to create/delete     |
++-----------------------------------+
+```
+
+Button bindings:
+- Press **step 1–8**: load the corresponding project (after a "switching…" progress indicator).
+- **FUNC** held: enter "manage" mode (create / delete / rename).
+- **BPM up / BPM down**: scroll the list (since the picker shows 8 of 32 at a time).
+- **PAT up / PAT down**: jump to first / last project.
+
+The "manage" mode shows a sub-menu with **create / duplicate / delete / rename / export** options. Each is a step-button shortcut.
+
+### 11.10 Open questions for v2 implementation
+
+These are decisions I'm flagging now but punting to the implementer.
+
+1. **Save policy** — should `storage_project_save_active()` be:
+   - (a) **manual only** — user presses FUNC + REC or similar to save. Matches PO-33.
+   - (b) **debounced auto-save** — every edit triggers a save 2 s later. No "did I forget to save?" anxiety.
+   - (c) **both** — manual save is immediate; auto-save runs in background every N seconds if there are unsaved changes.
+
+   Recommendation: **(c)**. Manual save is the PO-33 way; auto-save is the safety net for novices.
+
+2. **Project delete confirmation** — how many button presses to confirm? PO-33 requires holding REC + PATTERN. We could:
+   - (a) require holding FUNC + the project's slot number for 2 s.
+   - (b) require a separate "delete mode" entered via FUNC + a step number.
+   - (c) require two separate presses (first selects, second confirms).
+
+   Recommendation: **(a)** — 2-second hold on the slot is unambiguous and matches the PO-33's destructive-action convention.
+
+3. **Storage backend** — should we:
+   - (a) **stick with LittleFS** (current v1 choice) — proven, journaled.
+   - (b) migrate to **FAT** (via esp_littlefs → esp_vfs_fat) — better Windows/macOS support for USB-MSD export.
+   - (c) use a **custom flat format** — fastest, but no USB access.
+
+   Recommendation: **(a) for v2**, then **(b)** for v3 when USB-MSD is added.
+
+4. **Backward compatibility with v1's storage** — the v1 storage has flat `p0.bin..p15.bin` and `s0.bin..s15.bin`. v2's project folder layout is incompatible. On first boot with v2 firmware, the storage init should:
+   - (a) detect the old flat layout and migrate it into a new project (e.g. `legacy-default/`) automatically. Safe.
+   - (b) leave the old files alone and start with an empty project. The user loses their old patterns if they don't migrate manually.
+
+   Recommendation: **(a) with a one-shot migration** — detect old layout, rename to `legacy-default/`, treat as the active project on first boot, then delete the flat files after the user saves once.
+
+5. **Project metadata format** — JSON (human-readable but parseable) vs. a custom key=value format (smaller, faster to parse). Recommendation: JSON, written by `cJSON` (already in ESP-IDF as a built-in component).
+
+---
+
 ## 12. Cliff's notes: reading "Make: Electronic Music from Scratch" alongside this project
+
 
 ### 12.0 Why this book pairs with our project
 
@@ -1447,4 +1761,4 @@ If you read the book and feel the urge to make your own instrument instead of (o
 
 ---
 
-*End of document. ~15 000+ words. Source of truth for the PO-33 manual section numbers is [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en); for our firmware, see the file paths and function names cited in §3. How we can break the PO-33's limits is in §10; cliff's notes on the companion book are in §12.*
+*End of document. ~18 000+ words. Source of truth for the PO-33 manual section numbers is [teenage.engineering/guides/po-33/en](https://teenage.engineering/guides/po-33/en); for our firmware, see the file paths and function names cited in §3. How we can break the PO-33's limits is in §10; the v2 multi-project storage proposal is in §11; cliff's notes on the companion book are in §12.*
