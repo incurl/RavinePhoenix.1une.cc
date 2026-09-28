@@ -1196,14 +1196,14 @@ Some of these limits are tightly coupled to the hardware Teenage Engineering cho
 
 | # | Capability | Why we can exceed the PO-33 | Concrete ceiling |
 |---|---|---|---|
-| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We use **44.1 kHz** to match AMY's native render rate; that gives us a live pool of **~50–75 s** mono in PSRAM after the TFT framebuffer and AMY state (see §11.3 for the full breakdown). | Per-sketch on flash: ~75 s typical per sketch in an 8 MB partition (~5 typical sketches) or ~11 in a 16 MB partition. With streaming-to-flash on the 16 MB flash chip, you could push the live pool further. |
+| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We use **44.1 kHz** to match AMY's native render rate; that gives us a live pool of **~50–75 s** mono in PSRAM after the TFT framebuffer and AMY state (see §11.3 for the full breakdown). | Per-sketch on flash: ~75 s typical per sketch in our 8 MB `patterns` partition (~5 typical sketches). With streaming-to-flash on the 16 MB flash chip, you could push the live pool further. |
 | C2 | **Sample rate / quality** | AMY supports up to 48 kHz; the ESP32-S3 I²S peripheral supports higher. We chose 44.1 kHz to match AMY's native rate, but we *could* sample at 48 kHz. | At 44.1 kHz mono: ~5.3 MB/min; at 48 kHz mono: ~5.8 MB/min; at 96 kHz mono: ~11.5 MB/min. Anything above 48 kHz exceeds our PSRAM pool in practice. |
 | C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. **But at 44.1 kHz, 1 s of mono = 86 KB**, so a long melodic slot costs a lot. | Per-slot ceiling: up to ~30 s for a melodic slot in principle, but the *combined* pool is bounded by ~6 MB of PSRAM (after framebuffer + AMY state) = roughly **50–75 s of total sample time** (see §11.8 for the full breakdown). Practically, with a typical 8-slot sketch, that means **average ~6–9 s per slot** in moderate DSP load. |
 | C4 | **Polyphony** | AMY's `amy_config_t.max_voices` controls how many oscillator voices are available. Each voice costs a small CPU slice per render block. The ESP32-S3 has dual LX7 cores and vector DSP instructions, so we can run more voices in parallel than a single-core chip. | 8–16 simultaneous voices is comfortable. 30 is achievable with optimization. |
 | C5 | **Step count per pattern** | Each `step_t` is currently 8 bytes. 256 steps × 16 patterns × 128 chain = 16 KB. Trivial in PSRAM. We could support variable time signatures: 16 steps of 1/16, 32 of 1/32, etc. | 32 or 64 steps per pattern (variable time signatures — e.g. a 5/4 or 7/8 pattern). |
 | C6 | **Pattern count** | 16 patterns × ~3 KB each = 48 KB. PSRAM has megabytes to spare. | 64–256 patterns. |
 | C7 | **Song length** | Pattern chain is currently 128 bytes. | 512–2048 patterns chained. |
-| C8 | **Storage** | 16 MB flash + LittleFS. We can persist samples, patterns, presets, and user-named sketches. | 16 patterns × 3 KB + 16 samples × ~220 KB = ~3.5 MB used; ~12 MB free for presets and user content. |
+| C8 | **Storage** | 16 MB flash + LittleFS. The `patterns` partition is **8 MB**; the rest is `factory` (3 MB) + `nvs` + `phy_init` (tiny). We can persist samples, patterns, presets, and user-named sketches. | 16 patterns × 3 KB + 16 samples × ~220 KB = ~3.5 MB used per typical sketch; ~4.5 MB free in `patterns` after 5 typical sketches. |
 | C9 | **Sync protocols** | The ESP32-S3 has WiFi 802.11 b/g/n and Bluetooth 5. We can add WiFi-based sync (NTP clock, Ableton Link, OSC), BLE MIDI, USB MIDI, USB audio class. | Ableton Link over WiFi; BLE MIDI; USB-MIDI class compliant. |
 | C10 | **MIDI** | The chip supports USB-OTG and BLE. USB-MIDI device class costs ~1 KB of code with the ESP-IDF TinyUSB stack. | Full MIDI in/out (DIN-5 with a $1 optocoupler, USB-MIDI, or BLE MIDI). |
 | C11 | **Effects** | AMY already gives us chorus, echo, reverb, distortion, filters. Multiple AMY effects can be chained per voice. | Chainable multi-effect per voice (e.g. filter + reverb + chorus on the same note). |
@@ -1232,7 +1232,7 @@ Mapping each row of §10.1 to a concrete "how we exceed it" answer.
 | L10 — 5 volume levels | master gain fixed at 100% | 1–100 dB in 1 dB steps | UI binding for volume keys |
 | L11 — 5 sync modes | 5 modes (not implemented) | unlimited + WiFi Link | New sync task; possibly Ableton Link port |
 | L12 — no wireless | none | WiFi sync, BLE MIDI, USB-MIDI | Significant: BLE stack + Link port |
-| L13 — 256 KB flash for samples | 256 KB on chip (we don't use it for samples) | 16 MB on chip | Already in partitions.csv |
+| L13 — 256 KB flash for samples | 256 KB on chip (we don't use it for samples) | 8 MB `patterns` partition on chip | Already in `partitions.csv` (renamed to use `patterns` at 8 MB) |
 | L14 — mic + line only | mic only | mic + line-in simultaneously | Second I²S RX channel + a 3.5 mm jack |
 | L15 — ~4 voices | 4 voices | 8–30 voices | Tweak `amy_config_t.max_voices` |
 | L16 — fixed LCD | 240×320 TFT | 240×320 or larger TFT, OLED, or e-ink | Already done; future versions: add a second screen |
@@ -1580,22 +1580,23 @@ Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* fo
 | Partition size | Typical sketches (~1.42 MB) | Tiny sketches (~133 KB) |
 |---|---:|---:|
 | 1 MB | 0 | ~7 |
-| 8 MB | ~5 | ~60 |
-| **16 MB** | **~11** | ~120 |
+| **8 MB** | **~5** | **~60** |
 
-Recommended: **`patterns` → 16 MB**. That gives ~11 typical sketches or ~120 tiny sketches, with comfortable headroom for filesystem overhead. The 16 MB flash chip on the ESP32-S3-WROOM-1-N16R8 has plenty of room (the `factory` app partition is ~3 MB and the `nvs` + `phy_init` partitions are tiny, so most of the chip is free).
+> The 16 MB row has been removed — bumping `patterns` past 8 MB would require shrinking the `factory` app partition below its current 3 MB, which is not worth it. If we ever want more, we'd add an external flash (e.g. an SPI NOR chip) rather than shrink the app partition.
+
+Recommended: **`patterns` → 8 MB**. That gives ~5 typical sketches or ~60 tiny sketches, with comfortable headroom for filesystem overhead. The 16 MB flash chip on the ESP32-S3-WROOM-1-N16R8 has plenty of room for the 3 MB `factory` app partition, the small `nvs` + `phy_init` partitions, and the 8 MB `patterns` partition.
 
 A `samples` partition is **not needed** in v2 — the active sketch's sample pool lives in PSRAM, and archived sketches' sample pools live in their sketch folder inside `patterns/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
 
-We propose a hard cap `SKETCHES_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+We propose a hard cap `SKETCHES_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 8 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
 
-> **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **16 MB** and remove the unused `samples` partition. The `factory` app partition stays the same.
+> **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **8 MB** and remove the unused `samples` partition. The `factory` app partition stays the same. **Done in `776bca7`** — `partitions.csv` now has `patterns, data, littlefs, 0x310000, 0x800000`.
 
 #### Caveats on these numbers
 
 - **AMY state size is an estimate.** The "moderate / heavy / stress" rows come from looking at the AMY source structure (oscillator bank + chorus/echo buffers + reverb tail). Real numbers would need a profiling run with `-O2` and `amy_overload_check()` enabled.
 - **Polyphony ceiling on the ESP32-S3 is ~30 voices** before audio glitches. The "stress" row above is a real upper bound, not extrapolation.
-- **Per-sample lengths vary.** A sketch with 16 long samples (10 s each) uses ~28 MB on flash — one such sketch fills the 16 MB partition almost entirely. The 11-sketches figure assumes the *typical* profile (8 short samples), not the max.
+- **Per-sample lengths vary.** A sketch with 16 long samples (10 s each) uses ~14 MB on flash — one such sketch fills the 8 MB partition almost entirely. The 5-sketches figure assumes the *typical* profile (8 short samples), not the max.
 - **Streaming-to-flash** (v3) would let a single sketch's *live* pool exceed the PSRAM ceiling by streaming long samples from LittleFS on demand. AMY does not natively support streaming; this is real engineering, not a config change.
 
 ### 11.9 v2 UI proposal — the Sketch picker screen
