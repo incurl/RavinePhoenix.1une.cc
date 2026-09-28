@@ -140,11 +140,11 @@ A **pattern** is a complete arrangement of sounds across all 16 steps. A pattern
 
 ### 2.6 Song
 
-A **song** is an ordered list of patterns. Our device lets you chain up to **128 patterns** in a row, so a song can be up to 128 × 16 beats long. After the last pattern in the song finishes, the device loops back to the first pattern.
+A **song** is an ordered list of patterns. Our device lets you chain up to **128 patterns** in a row, so a song can be up to 128 × 4 = **512 beats** (128 bars) long. After the last pattern in the song finishes, the device loops back to the first pattern.
 
 ### 2.7 BPM (beats per minute)
 
-**BPM** is how fast the music goes. BPM = 120 means there are 120 beats per minute, so each beat lasts half a second (0.5 s), so each step (a sixteenth-note) lasts a sixteenth of a second (0.125 s). The real PO-33 has three "BPM levels" — Hip Hop (80 BPM), Disco (120 BPM), and Techno (140 BPM) — and you can fine-tune from there. Our firmware supports any BPM from 60 to 240.
+**BPM** is how fast the music goes. BPM = 120 means there are 120 beats per minute, so each beat lasts half a second (0.5 s), so each step (a sixteenth-note) lasts **an eighth of a second** (0.125 s). The real PO-33 has three "BPM levels" — Hip Hop (80 BPM), Disco (120 BPM), and Techno (140 BPM) — and you can fine-tune from there. Our firmware supports any BPM from 60 to 240.
 
 Quick reference for the math: step duration in seconds = 60 / BPM / 4. So:
 
