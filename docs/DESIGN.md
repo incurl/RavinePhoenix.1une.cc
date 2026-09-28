@@ -105,10 +105,12 @@ There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the P
 Once you have read §1, you have a mental model of the device. There are three things you might want to do next, and the rest of this document supports all three:
 
 - **Build the device.** Go to the [project website](https://ravinephoenix.1une.cc), where you can flash our firmware onto your board with one click in Chrome / Edge / Firefox over USB. The *Hardware* page there gives a full bill of materials and pin map.
-- **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §11 is the v2 proposal for multi-project storage & restore. §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
+- **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §11 is the v2 proposal for multi-**sketch** storage & restore (we call the unit a "sketch" rather than "song"). §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
 - **Read the source.** The repo at the [project URL](https://ravinephoenix.1une.cc) (or wherever you got this document) is roughly 3,500 lines of C across `main/audio`, `main/sequencer`, `main/ui`, `main/storage`, `main/system`, and `main/tests`. The audio engine is entirely in the vendored AMY library.
 
-If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §11 (multi-project) → §12 (the book).
+If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §11 (multi-sketch) → §12 (the book).
+
+> **Naming.** Throughout this document, the unit of creative work stored on the device is called a **sketch** — one sketch = one pool of samples + 16 patterns + a 128-step chain + metadata. The PO-33 calls this a "song", the Korg Electribe calls it a "Pattern Set", and Ableton Live calls it a "Live Set". We picked "sketch" because it's short, plain, and avoids clashing with sampler vocabulary (we don't use "groove" because that word means *timing templates* elsewhere). The PO-33's "song chain" — an ordered list of up to 128 pattern numbers — still exists; we just call it the *pattern chain* inside a sketch.
 
 ---
 
@@ -1291,7 +1293,9 @@ Honest note: items 1, 8, and 9 are aspirational. Items 2–7 are realistic on a 
 
 ---
 
-## 11. Multi-project storage & restore
+## 11. Multi-sketch storage & restore
+
+> **Vocabulary.** The unit of creative work this section designs for is called a **sketch** (one sketch = samples + 16 patterns + a 128-step chain + metadata). The PO-33 calls the same idea a "song"; the Korg Electribe calls it a "Pattern Set"; Ableton Live calls it a "Live Set". We picked "sketch" because it's short, plain, and doesn't clash with sampler vocabulary. Throughout §11, the **C identifiers in the API block retain the historical `project` prefix** (e.g. `storage_project_save_active`) for source-compatibility with the v1 code; the v2 implementation should rename them to `storage_sketch_*`. **Outside code blocks, every "project" in this section means "sketch".**
 
 ### 11.0 Why this section exists
 
@@ -1303,20 +1307,20 @@ The current v1 firmware has a **single-bank** storage model:
 - A `storage_save_all()` that writes each pattern / slot to a flat file (`p0.bin`, `p1.bin`, …, `p15.bin`, `s0.bin`, …, `s15.bin`).
 - A `storage_load_all()` that unconditionally reads every file and clobbers RAM.
 
-This works — but only if you treat the device as if it holds **exactly one project at a time**. Start building a new chain, hit save, and you overwrite the project you'd been working on. There is no "save as", no "switch project", no "delete project". It is, in essence, the same storage model the real PO-33 has (it also holds exactly one song at a time, with up to 128 patterns in its chain).
+This works — but only if you treat the device as if it holds **exactly one sketch at a time**. Start building a new chain, hit save, and you overwrite the sketch you'd been working on. There is no "save as", no "switch sketch", no "delete sketch". It is, in essence, the same storage model the real PO-33 has (it also holds exactly one song at a time, with up to 128 patterns in its chain).
 
-For a $5 dev board with **16 MB of flash** and **8 MB of PSRAM**, this is an absurd waste. We can store **dozens of independent projects**, each with its own sample pool, pattern bank, chain, and metadata. The user can flip between them. The active project lives in PSRAM (zero-latency playback); archived projects live in LittleFS on flash.
+For a $5 dev board with **16 MB of flash** and **8 MB of PSRAM**, this is an absurd waste. We can store **dozens of independent sketches**, each with its own sample pool, pattern bank, chain, and metadata. The user can flip between them. The active sketch lives in PSRAM (zero-latency playback); archived sketches live in LittleFS on flash.
 
 This section is the **design** for that system. It is a v2 proposal — v1 firmware is unchanged. No code in this section is committed; everything below describes what the v2 implementation should look like.
 
 ### 11.1 Concepts
 
-- **Project** — a self-contained creative unit: a name, a sample pool, 16 patterns, a chain, BPM, and metadata. The atomic unit the user saves, switches between, deletes, or duplicates.
-- **Active project** — the one project whose sample pool is in PSRAM and whose patterns are live in `g_patterns[16]`. At any moment, exactly one project is active. Switching to a different project pages its data into RAM; the previously-active project is flushed to flash.
-- **Project ID** — a **4-character hex string** (e.g. `a1b2`), assigned by a monotonic counter starting at `0000`. 16 bits of entropy (65 536 possible IDs); collisions are impossible because we only assign each ID once. 4 hex chars makes folder names short, easy to type on a UART shell, and trivial to recognise in a project picker UI.
-- **Project metadata** — a small JSON file describing a project: name (≤24 chars), label color (1 of 8), created-at Unix timestamp, last-modified-at Unix timestamp, BPM at last save, sample count, pattern count, chain length, total playback duration.
-- **Atomic write** — a save operation that either fully completes or is fully rolled back, so a power loss mid-write can never leave a half-written project. We achieve this with the classic write-to-temp-then-rename trick.
-- **Project slot** — a serial index from 0 to N-1, where N is determined by available flash. The slot number is for UI ordering and internal bookkeeping; the 4-hex ID is the canonical identifier. Two projects can never share a slot number.
+- **Sketch** — a self-contained creative unit: a name, a sample pool, 16 patterns, a chain, BPM, and metadata. The atomic unit the user saves, switches between, deletes, or duplicates.
+- **Active sketch** — the one sketch whose sample pool is in PSRAM and whose patterns are live in `g_patterns[16]`. At any moment, exactly one sketch is active. Switching to a different sketch pages its data into RAM; the previously-active sketch is flushed to flash.
+- **Sketch ID** — a **4-character hex string** (e.g. `a1b2`), assigned by a monotonic counter starting at `0000`. 16 bits of entropy (65 536 possible IDs); collisions are impossible because we only assign each ID once. 4 hex chars makes folder names short, easy to type on a UART shell, and trivial to recognise in a project picker UI.
+- **Sketch metadata** — a small JSON file describing a sketch: name (≤24 chars), label color (1 of 8), created-at Unix timestamp, last-modified-at Unix timestamp, BPM at last save, sample count, pattern count, chain length, total playback duration.
+- **Atomic write** — a save operation that either fully completes or is fully rolled back, so a power loss mid-write can never leave a half-written sketch. We achieve this with the classic write-to-temp-then-rename trick.
+- **Sketch slot** — a serial index from 0 to N-1, where N is determined by available flash. The slot number is for UI ordering and internal bookkeeping; the 4-hex ID is the canonical identifier. Two sketches can never share a slot number.
 
 ### 11.2 On-flash layout
 
@@ -1492,15 +1496,17 @@ All new functions are non-blocking for the audio path. The actual file I/O happe
 
 | Feature | PO-33 | v1 (current) | v2 (this section) |
 |---|---|---|---|
-| Sample memory | 40 s | 40 s | 40 s × N projects in flash; 40 s live in PSRAM |
-| Patterns | 16 | 16 | 16 per project, N projects |
-| Song chain | up to 128 | up to 128 | up to 128 **per project**, N projects |
-| # of "songs" | 1 | 1 | N (bottleneck: flash size) |
+| Sample memory | 40 s | 40 s | 40 s × N sketches in flash; 40 s live in PSRAM |
+| Patterns | 16 | 16 | 16 per sketch, N sketches |
+| Pattern chain (the PO-33's "song chain") | up to 128 | up to 128 | up to 128 **per sketch**, N sketches |
+| # of sketches | 1 | 1 | N (bottleneck: flash size) |
 | Save | auto on power-off | manual `save` UART command | auto on edit (debounced) + manual |
-| Back up | audio out to tape (slow, lossy) | `storage save` writes 1 set of files | export one project as .zip over USB-MSD (v3) |
+| Back up | audio out to tape (slow, lossy) | `storage save` writes 1 set of files | export one sketch as .zip over USB-MSD (v3) |
 | Copy between devices | P2P audio cable | not implemented | USB-MSD export/import (v3) |
 
-The PO-33's "one song, one chain" is preserved **within** a project. What we add is that the device can hold N projects, each with its own chain. This is the same conceptual model as the Korg Electribe's "Pattern Set" or Ableton Live's "Live Set" — a higher-level container that owns a complete working state.
+The PO-33's "one song, one chain" is preserved **within** a sketch. What we add is that the device can hold N sketches, each with its own chain. This is the same conceptual model as the Korg Electribe's "Pattern Set" or Ableton Live's "Live Set" — a higher-level container that owns a complete working state.
+
+> **Vocabulary note.** The PO-33 calls its unit of creative work a "song". We call it a **sketch**. The two refer to the same idea (samples + patterns + a chain + metadata); we just picked a shorter word that doesn't have pop-music connotations or clash with sampler vocabulary (we avoid "groove" because that word means *timing templates* in the rest of the music-software world). The 16-step chain *within* a sketch is unchanged from the PO-33's "song chain".
 
 ### 11.7 Concurrency / atomicity
 
