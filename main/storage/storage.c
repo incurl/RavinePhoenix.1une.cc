@@ -1,5 +1,5 @@
 /*
- * storage.c — LittleFS partitions for samples + patterns.
+ * storage.c — LittleFS partition for sketches.
  *
  * v6.0 note: LittleFS is a component (joltwallet/littlefs) in
  * idf_component.yml, not an in-tree driver.
@@ -18,22 +18,22 @@
 
 static const char *TAG = "storage";
 
-#define PATTERNS_BASE "/patterns"
+#define SKETCHES_BASE "/sketches"
 
-static esp_littlefs_handle_t s_patterns_fs = NULL;
+static esp_littlefs_handle_t s_sketches_fs = NULL;
 
 esp_err_t storage_init(void)
 {
-    /* Samples live entirely in PSRAM; only patterns are persisted. */
-    esp_vfs_littlefs_conf_t patterns_conf = {
-        .base_path          = PATTERNS_BASE,
-        .partition_label    = "patterns",
+    /* Samples live entirely in PSRAM; only sketches are persisted. */
+    esp_vfs_littlefs_conf_t sketches_conf = {
+        .base_path          = SKETCHES_BASE,
+        .partition_label    = "sketches",
         .format_if_mount_failed = true,
         .dont_mount         = false,
     };
-    ESP_ERROR_CHECK(esp_littlefs_create(&patterns_conf, &s_patterns_fs));
+    ESP_ERROR_CHECK(esp_littlefs_create(&sketches_conf, &s_sketches_fs));
 
-    ESP_LOGI(TAG, "LittleFS mounted at %s", PATTERNS_BASE);
+    ESP_LOGI(TAG, "LittleFS mounted at %s", SKETCHES_BASE);
     return ESP_OK;
 }
 
@@ -48,7 +48,7 @@ esp_err_t storage_save_pattern(uint8_t idx)
 {
     if (idx >= PATTERN_COUNT) return ESP_ERR_INVALID_ARG;
     char path[64];
-    snprintf(path, sizeof(path), "%s/p%u.bin", PATTERNS_BASE, idx);
+    snprintf(path, sizeof(path), "%s/p%u.bin", SKETCHES_BASE, idx);
     FILE *f = fopen(path, "wb");
     if (!f) return ESP_FAIL;
     size_t w = fwrite(&g_patterns[idx], 1, sizeof(pattern_t), f);
@@ -60,7 +60,7 @@ esp_err_t storage_load_pattern(uint8_t idx)
 {
     if (idx >= PATTERN_COUNT) return ESP_ERR_INVALID_ARG;
     char path[64];
-    snprintf(path, sizeof(path), "%s/p%u.bin", PATTERNS_BASE, idx);
+    snprintf(path, sizeof(path), "%s/p%u.bin", SKETCHES_BASE, idx);
     FILE *f = fopen(path, "rb");
     if (!f) return ESP_ERR_NOT_FOUND;
     size_t r = fread(&g_patterns[idx], 1, sizeof(pattern_t), f);
@@ -70,7 +70,7 @@ esp_err_t storage_load_pattern(uint8_t idx)
 
 esp_err_t storage_save_all(void)
 {
-    ESP_LOGI(TAG, "Saving %d patterns...", PATTERN_COUNT);
+    ESP_LOGI(TAG, "Saving %d step patterns...", PATTERN_COUNT);
     for (int i = 0; i < PATTERN_COUNT; i++) {
         esp_err_t e = storage_save_pattern((uint8_t)i);
         if (e != ESP_OK) {
@@ -86,7 +86,7 @@ esp_err_t storage_save_all(void)
 
         char path[64];
         snprintf(path, sizeof(path), "%s/s%u.bin",
-                 PATTERNS_BASE, (unsigned)s);
+                 SKETCHES_BASE, (unsigned)s);
         FILE *f = fopen(path, "wb");
         if (!f) return ESP_FAIL;
         fwrite(p, sizeof(int16_t), n, f);
@@ -97,14 +97,14 @@ esp_err_t storage_save_all(void)
 
 esp_err_t storage_load_all(void)
 {
-    ESP_LOGI(TAG, "Loading patterns + samples...");
+    ESP_LOGI(TAG, "Loading step patterns + samples...");
     for (int i = 0; i < PATTERN_COUNT; i++) {
         storage_load_pattern((uint8_t)i);
     }
     for (int s = 0; s < SLOT_COUNT; s++) {
         char path[64];
         snprintf(path, sizeof(path), "%s/s%d.bin",
-                 PATTERNS_BASE, s);
+                 SKETCHES_BASE, s);
         FILE *f = fopen(path, "rb");
         if (!f) continue;
         fseek(f, 0, SEEK_END);

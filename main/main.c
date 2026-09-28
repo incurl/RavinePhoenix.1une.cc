@@ -134,7 +134,7 @@ static void po33_shell_help(void)
            "  stoprec           stop recording\n"
            "  pattern <0..15>   select pattern\n"
            "  free              show free heap\n"
-           "  save              save patterns + samples\n"
+           "  save              save sketches + samples\n"
            "  load              reload from flash\n"
            "  sleep             enter deep sleep\n");
 }

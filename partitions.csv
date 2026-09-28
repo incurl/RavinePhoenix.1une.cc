@@ -1,10 +1,13 @@
 # ESP-IDF Partition Table
 # Name,   Type, SubType, Offset,  Size
 # Note: samples live entirely in PSRAM (40 s × 44.1 kHz × 2 B = ~3.4 MB).
-# Only patterns are persisted to flash.
-# 16 MB total flash on the N16R8; patterns partition is 8 MB (= 0x800000)
+# Only sketches are persisted to flash.
+# 16 MB total flash on the N16R8; sketches partition is 8 MB (= 0x800000)
 # so we can hold ~5 typical sketches at 44.1 kHz. See docs/DESIGN.md S11.8.
+# Note: the per-sketch 16 patterns (g_patterns[16]) are kept named
+# "pattern" deliberately to match the PO-33's terminology; only the
+# sketch unit (PO-33's "song") is named "sketch" here. See S11.
 nvs,      data, nvs,     0x9000,   0x6000
 phy_init, data, phy,     0xf000,   0x1000
 factory,  app,  factory, 0x10000,  0x300000
-patterns, data, littlefs,0x310000, 0x800000
+sketches,  data, littlefs,0x310000, 0x800000
