@@ -165,7 +165,7 @@ An **effect** (called "FX" for short) is a modification applied to a sound. Effe
 
 ### 2.10 Tweak parameter
 
-A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware uses the buttons to do the same thing.
+A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware also uses two physical knobs — wired to GPIO 20 (Knob A) and GPIO 46 (Knob B), with the `ui/knobs.c` driver reading them every button-scan tick — but the full PO-33-style tweak-mode UX (cycle Tone / Filter / Trim with the FX button, then turn a knob to adjust) is queued for v2. In v1, the knob hardware is wired and read, and §3.4 features F-016/F-017/F-018 are flagged as "knobs wired, tweak binding pending".
 
 ### 2.11 Punch-in
 
