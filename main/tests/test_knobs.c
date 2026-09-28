@@ -32,6 +32,11 @@ TEST_CASE("knob GPIOs are distinct from each other", "[knobs]")
 
 TEST_CASE("knob GPIOs don't collide with other subsystems", "[knobs]")
 {
+    /* BTN_ROW_PINS / BTN_COL_PINS are brace initializers, so bind them
+     * to local arrays before indexing (BTN_ROW_PINS[0] does not parse). */
+    const gpio_num_t rows[BTN_ROW_COUNT] = BTN_ROW_PINS;
+    const gpio_num_t cols[BTN_COL_COUNT] = BTN_COL_PINS;
+
     const gpio_num_t used_by_others[] = {
         I2S_OUT_BCLK_GPIO, I2S_OUT_LRCK_GPIO, I2S_OUT_DATA_GPIO,
         I2S_IN_BCLK_GPIO,  I2S_IN_LRCK_GPIO,  I2S_IN_DATA_GPIO,
@@ -39,11 +44,10 @@ TEST_CASE("knob GPIOs don't collide with other subsystems", "[knobs]")
         TFT_RST_GPIO, TFT_BL_GPIO,
         LED_REC_GPIO, LED_PLAY_GPIO,
         SYNC_OUT_GPIO, SYNC_IN_GPIO,
-        BTN_ROW_PINS[0], BTN_ROW_PINS[1], BTN_ROW_PINS[2], BTN_ROW_PINS[3],
-        BTN_COL_PINS[0], BTN_COL_PINS[1], BTN_COL_PINS[2], BTN_COL_PINS[3],
-        BTN_REC_GPIO, BTN_PLAY_GPIO, BTN_FUNC_GPIO, BTN_FX_GPIO,
-        BTN_BPM_UP_GPIO, BTN_BPM_DN_GPIO,
-        BTN_PAT_UP_GPIO, BTN_PAT_DN_GPIO,
+        rows[0], rows[1], rows[2], rows[3],
+        cols[0], cols[1], cols[2], cols[3],
+        BTN_SOUND_GPIO, BTN_PATTERN_GPIO, BTN_BPM_GPIO,
+        BTN_REC_GPIO, BTN_FX_GPIO, BTN_PLAY_GPIO, BTN_WRITE_GPIO,
     };
     const gpio_num_t mine[] = { KNOB_A_GPIO, KNOB_B_GPIO };
     for (size_t i = 0; i < sizeof(mine) / sizeof(mine[0]); i++) {

@@ -74,61 +74,77 @@
 #define BTN_ROW_PINS              { GPIO_NUM_35, GPIO_NUM_36, GPIO_NUM_37, GPIO_NUM_38 }
 #define BTN_COL_PINS              { GPIO_NUM_33, GPIO_NUM_34, GPIO_NUM_39, GPIO_NUM_40 }
 
-/* Dedicated (modifier) buttons - one GPIO each, momentary to GND. */
-#define BTN_REC_GPIO              GPIO_NUM_41
-#define BTN_PLAY_GPIO             GPIO_NUM_42
-#define BTN_FUNC_GPIO             GPIO_NUM_11
-#define BTN_FX_GPIO               GPIO_NUM_12
-#define BTN_BPM_UP_GPIO           GPIO_NUM_13
-#define BTN_BPM_DN_GPIO           GPIO_NUM_43
-#define BTN_PAT_UP_GPIO           GPIO_NUM_44
-#define BTN_PAT_DN_GPIO           GPIO_NUM_45
+/* Dedicated (modifier) buttons - one GPIO each, momentary to GND.
+ *
+ * Layout mirrors the PO-33's modifier row + column:
+ *
+ *   top row  (left to right):  SOUND, PATTERN, BPM
+ *   right column (top to bottom, under Knob B):
+ *                              REC, FX, PLAY, WRITE
+ *
+ * Each PO-33 BPM-handle / PATTERN-/+ pair collapses to a single button.
+ * The PO-33's "WRITE" key replaces our previous generic "FUNC" key,
+ * reflecting the actual PO-33 use (WRITE enters/exits write mode).
+ * GPIO 45 (formerly PAT_DN) is freed for v2 expansion
+ * (e.g. octave +/- or screen brightness).
+ */
+#define BTN_SOUND_GPIO            GPIO_NUM_11      /* top row, leftmost   */
+#define BTN_PATTERN_GPIO          GPIO_NUM_44      /* top row, middle     */
+#define BTN_BPM_GPIO              GPIO_NUM_13      /* top row, rightmost  */
+#define BTN_REC_GPIO              GPIO_NUM_41      /* right column, top   */
+#define BTN_FX_GPIO               GPIO_NUM_12      /* right column, 2nd   */
+#define BTN_PLAY_GPIO             GPIO_NUM_42      /* right column, 3rd   */
+#define BTN_WRITE_GPIO            GPIO_NUM_43      /* right column, bottom */
 
-#define BTN_GPIO_COUNT             8   /* number of dedicated modifier buttons */
+#define BTN_GPIO_COUNT             7   /* number of dedicated modifier buttons */
 
 /**
  * Logical button IDs.
  *
- *   IDs 0..7   : 8 dedicated modifier buttons (REC, PLAY, FUNC, FX, BPM±, PAT±)
- *   IDs 8..23  : 16 step buttons on the 4x4 matrix (STEP1..STEP16)
+ *   IDs 0..6   : 7 dedicated modifier buttons (REC, PLAY, SOUND, WRITE,
+ *                FX, BPM, PATTERN). Order mirrors the PO-33's modifier
+ *                row + right column.
+ *   IDs 7..22  : 16 step buttons on the 4x4 matrix (STEP1..STEP16)
  *
- * Total: 24 logical buttons + 2 analog knobs.
+ * Total: 23 logical buttons + 2 analog knobs.
  *
- *   - The real PO-33 has 16 buttons + 2 knobs. We have 16 step buttons
- *     (4x4 matrix) + 8 dedicated modifier buttons + 2 analog knobs.
- *     See ui/knobs.c for the knob driver and hardware/HARDWARE.md S4.11
- *     for the wiring.
+ *   The 4x4 step matrix uses only 8 GPIOs (4 row + 4 col), so the
+ *   7 dedicated modifier buttons + the matrix's 8 GPIOs + 2 ADC
+ *   channels = 17 GPIOs total - well within the ESP32-S3's budget.
+ *   See ui/knobs.c for the knob driver and hardware/HARDWARE.md S4.11
+ *   for the wiring.
  */
 enum {
-    /* Dedicated modifier buttons (GPIO inputs). */
-    BTN_REC    = 0,
-    BTN_PLAY   = 1,
-    BTN_FUNC   = 2,
-    BTN_FX     = 3,
-    BTN_BPM_UP = 4,
-    BTN_BPM_DN = 5,
-    BTN_PAT_UP = 6,
-    BTN_PAT_DN = 7,
+    /* Dedicated modifier buttons (GPIO inputs).
+     * Order matches the chosen physical layout (top row + right
+     * column under Knob B). */
+    BTN_SOUND    = 0,    /* was BTN_FUNC; PO-33's "S" modifier    */
+    BTN_PATTERN  = 1,    /* was BTN_PAT_UP; PO-33's pattern mod   */
+    BTN_BPM      = 2,    /* was BTN_BPM_UP; PO-33's BPM handle   */
+    BTN_REC      = 3,    /* top of right column; PO-33's record  */
+    BTN_FX       = 4,    /* PO-33's "FX" modifier                 */
+    BTN_PLAY     = 5,    /* PO-33's play                         */
+    BTN_WRITE    = 6,    /* bottom of right column; PO-33's write */
 
     /* Step / polymorphic buttons (4x4 matrix). */
-    BTN_STEP1  = 8,
-    BTN_STEP2  = 9,
-    BTN_STEP3  = 10,
-    BTN_STEP4  = 11,
-    BTN_STEP5  = 12,
-    BTN_STEP6  = 13,
-    BTN_STEP7  = 14,
-    BTN_STEP8  = 15,
-    BTN_STEP9  = 16,
-    BTN_STEP10 = 17,
-    BTN_STEP11 = 18,
-    BTN_STEP12 = 19,
-    BTN_STEP13 = 20,
-    BTN_STEP14 = 21,
-    BTN_STEP15 = 22,
-    BTN_STEP16 = 23,
+    BTN_STEP1    = 7,
+    BTN_STEP2    = 8,
+    BTN_STEP3    = 9,
+    BTN_STEP4    = 10,
+    BTN_STEP5    = 11,
+    BTN_STEP6    = 12,
+    BTN_STEP7    = 13,
+    BTN_STEP8    = 14,
+    BTN_STEP9    = 15,
+    BTN_STEP10 = 16,
+    BTN_STEP11 = 17,
+    BTN_STEP12 = 18,
+    BTN_STEP13 = 19,
+    BTN_STEP14 = 20,
+    BTN_STEP15 = 21,
+    BTN_STEP16 = 22,
 
-    BTN_COUNT  = 24
+    BTN_COUNT    = 23
 };
 
 #define BTN_DEBOUNCE_MS           30

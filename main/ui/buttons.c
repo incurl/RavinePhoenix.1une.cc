@@ -1,9 +1,9 @@
 /*
- * buttons.c — 4×4 matrix scan + 8 dedicated GPIO buttons.
+ * buttons.c — 4×4 matrix scan + 7 dedicated GPIO buttons.
  *
  *   The 4x4 matrix holds the 16 polymorphic step / slot / effect buttons.
- *   The 8 dedicated GPIOs hold the modifier buttons (REC, PLAY, FUNC, FX,
- *   BPM up/down, PAT up/down).
+ *   The 7 dedicated GPIOs hold the PO-33 modifier buttons (SOUND, PATTERN,
+ *   BPM, REC, FX, PLAY, WRITE).
  *
  *   Both groups share the same debounce + short/long-press detection,
  *   and both push events into a single FreeRTOS queue.
@@ -22,7 +22,13 @@ static const char *TAG = "btns";
 static const gpio_num_t s_rows[BTN_ROW_COUNT] = BTN_ROW_PINS;
 static const gpio_num_t s_cols[BTN_COL_COUNT] = BTN_COL_PINS;
 
-/* Dedicated GPIO buttons (8 modifier buttons). */
+/* Dedicated GPIO buttons (7 modifier buttons, laid out PO-33 style).
+ *
+ * Order matches the physical layout:
+ *   top row (left to right):    SOUND, PATTERN, BPM
+ *   right column (top-to-bottom, under Knob B):
+ *                               REC, FX, PLAY, WRITE
+ */
 typedef struct {
     gpio_num_t gpio;
     uint8_t    id;        /* logical BTN_* ID */
@@ -32,14 +38,15 @@ typedef struct {
 } gpio_btn_t;
 
 static gpio_btn_t s_gpio_btns[BTN_GPIO_COUNT] = {
-    { BTN_REC_GPIO,    BTN_REC,    false, 0, false },
-    { BTN_PLAY_GPIO,   BTN_PLAY,   false, 0, false },
-    { BTN_FUNC_GPIO,   BTN_FUNC,   false, 0, false },
-    { BTN_FX_GPIO,     BTN_FX,     false, 0, false },
-    { BTN_BPM_UP_GPIO, BTN_BPM_UP, false, 0, false },
-    { BTN_BPM_DN_GPIO, BTN_BPM_DN, false, 0, false },
-    { BTN_PAT_UP_GPIO, BTN_PAT_UP, false, 0, false },
-    { BTN_PAT_DN_GPIO, BTN_PAT_DN, false, 0, false },
+    /* Top row */
+    { BTN_SOUND_GPIO,   BTN_SOUND,   false, 0, false },
+    { BTN_PATTERN_GPIO, BTN_PATTERN, false, 0, false },
+    { BTN_BPM_GPIO,     BTN_BPM,     false, 0, false },
+    /* Right column (under Knob B) */
+    { BTN_REC_GPIO,     BTN_REC,     false, 0, false },
+    { BTN_FX_GPIO,      BTN_FX,      false, 0, false },
+    { BTN_PLAY_GPIO,    BTN_PLAY,    false, 0, false },
+    { BTN_WRITE_GPIO,   BTN_WRITE,   false, 0, false },
 };
 
 /* Matrix state (16 step buttons). */
@@ -77,7 +84,7 @@ esp_err_t buttons_init(void)
     memset(s_press_time, 0, sizeof(s_press_time));
     memset(s_long_fired, 0, sizeof(s_long_fired));
 
-    /* --- 8 dedicated GPIO buttons: inputs with pull-ups --- */
+    /* --- 7 dedicated GPIO buttons: inputs with pull-ups --- */
     for (int i = 0; i < BTN_GPIO_COUNT; i++) {
         gpio_reset_pin(s_gpio_btns[i].gpio);
         gpio_set_direction(s_gpio_btns[i].gpio, GPIO_MODE_INPUT);
@@ -90,7 +97,7 @@ esp_err_t buttons_init(void)
     s_queue = xQueueCreate(64, sizeof(button_event_t));
     if (!s_queue) return ESP_ERR_NO_MEM;
 
-    ESP_LOGI(TAG, "Buttons ready: %dx%d matrix + %d GPIOs = %d total",
+    ESP_LOGI(TAG, "Buttons ready: %dx%d matrix + %d modifier GPIOs = %d total",
              BTN_ROW_COUNT, BTN_COL_COUNT, BTN_GPIO_COUNT,
              BTN_ROW_COUNT * BTN_COL_COUNT + BTN_GPIO_COUNT);
     return ESP_OK;

@@ -68,7 +68,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 | 3 | I²S MEMS microphone breakout | **INMP441** module (the common "CJMCU-441" or Adafruit #4466) | **Yes** | 1 | $2–$5 | Amazon, Adafruit, AliExpress, SparkFun |
 | 4 | 2.4″ TFT display, ILI9341 driver, SPI | **ILI9341** 240×320 module (the common "2.4 inch SPI TFT" with an SPI interface, NOT the parallel one) | **Yes** | 1 | $4–$8 | Amazon, AliExpress, Adafruit (#1770), Waveshare |
 | 5 | 4×4 matrix of 16 tactile buttons (for the **step buttons** 1–16) | Either a pre-built 4×4 membrane keypad (Amazon "4x4 matrix keypad") OR 16 individual 6 mm tactile switches + a small PCB or perfboard | **Yes** | 1 (or 16) | $2–$4 | Amazon, SparkFun, Adafruit, Digikey |
-| 5b | **8 individual 6 mm tactile switches** (for the **modifier buttons**: REC, PLAY, FUNC, FX, BPM↑, BPM↓, PAT↑, PAT↓) | Any 6×6 mm tactile switch; one per button | **Yes** | 8 | < $1 | Amazon, SparkFun, Adafruit, Digikey |
+| 5b | **7 individual 6 mm tactile switches** (for the **modifier buttons**: SOUND, PATTERN, BPM, REC, FX, PLAY, WRITE) | Any 6×6 mm tactile switch; one per button | **Yes** | 7 | < $1 | Amazon, SparkFun, Adafruit, Digikey |
 | 6 | Speaker | 4 Ω or 8 Ω small loudspeaker, 0.5 W–3 W | Optional | 1 | $2–$5 | Amazon, any electronics store; you can also cannibalize from an old set of powered speakers |
 | 7 | I²S class-D amplifier (drives the speaker) | **MAX98357A** breakout (Adafruit #3006 or SparkFun) | Optional (only if you add a speaker) | 1 | $6–$10 | Adafruit, SparkFun, Amazon |
 | 7b | **Two 10 kΩ linear potentiometers** + 2 panel-mount knobs (for "Knob A" and "Knob B") | Any 10 kΩ linear-taper pot (Bourns PTV09A, Alpha RV16AF-10K, or equivalent). **Linear** taper (not audio/log) — small adjustments near one end need to feel uniform across the range. | Recommended | 2 | $1–$3 | Amazon, Mouser, Digikey, SparkFun |
@@ -93,7 +93,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 - **PCM5102A** — there are several boards. Make sure it has an **I²S input** (sometimes called "digital input"). Some cheap boards are I²S-only with no analog fallback. Either is fine.
 - **INMP441** — verify the board has 3.3 V compatible logic. The INMP441 chip itself is 3.3 V; some breakout boards include level shifters that may interfere. The common "CJMCU-441" board works fine on 3.3 V.
 - **ILI9341** — there are two common variants: SPI and parallel. We need **SPI**. Look for boards labelled "SPI TFT" or that expose SCK/MOSI/CS pins.
-- **4×4 keypad** — the cheap membrane keypads from Amazon work great. Look for "4x4 matrix array 16 key" or similar. Avoid the ones with 8 pins (we need 8: 4 rows + 4 cols) — wait, that's correct, 8 pins.
+- **4×4 keypad** — the cheap membrane keypads from Amazon work great. Look for "4x4 matrix array 16 key" or similar. It exposes exactly 8 pins: 4 rows + 4 columns.
 - **Speaker** — any small 4 Ω or 8 Ω speaker works. 0.5 W is plenty for a tabletop device.
 - **MAX98357A** — Adafruit #3006 or SparkFun breakout. Verify the gain-select pin (GAIN) is broken out so you can set it to 9 dB.
 - **Battery (2800 mAh LiPo / Li-ion)** — this guide picks a single 18650-format protected Li-ion cell at **2800 mAh**, which is the sweet spot of capacity, size, and cost for a tabletop device. A genuine **Panasonic NCR18650B** is rated 3400 mAh but is commonly de-rated to 2800 mAh at 0.2C continuous discharge (real-world capacity, not the marketing number). For the most honest number, use 2800 mAh as the *effective* capacity, not the printed 3400 mAh. **Always buy protected cells** (the protection circuit prevents over-discharge below ~2.5 V, which permanently damages Li-ion). Avoid cheap "3000 mAh", "4000 mAh", "5000 mAh" cells on Amazon — those numbers are routinely fabricated. Stick to name-brand cells (Panasonic, Samsung, LG, Sony, Murata) from reputable sellers. **Do not buy cells without a protection circuit.**
@@ -194,22 +194,56 @@ You can wire this with a pre-built membrane keypad (the 4×4 ones on Amazon come
 
 If you're wiring individual tactile switches, place each switch so its two pins sit on a unique row × column wire pair, with one side going to the row trace and the other to the column trace. Most people use a small perfboard for this.
 
-### 4.5b The 8 dedicated modifier buttons (one GPIO each)
+### 4.5b The 7 dedicated modifier buttons (one GPIO each)
 
-In addition to the 4×4 matrix, the device has **eight dedicated (modifier) buttons**, each wired to a single GPIO. They mirror the dedicated buttons on the real PO-33. Each is a momentary tactile switch between the GPIO and GND (no matrix, no external resistor — the firmware enables the internal pull-up).
+In addition to the 4×4 matrix, the device has **seven dedicated (modifier) buttons**, each wired to a single GPIO. They mirror the dedicated buttons on the real PO-33 and are laid out the same way: **three across the top** of the panel and **four down the right-hand side**, with the top of that column tucked under Knob B.
+
+```
+      ┌────────────────────────────────────────────────────────────┐
+      │              2.4"  TFT   ILI9341   240 × 320               │
+      │                 SPI2   GPIO 4/5/6/7/47/48                  │
+      │                                                            │
+      └────────────────────────────────────────────────────────────┘
+
+
+    ┌─────────┐  ┌──────────┐  ┌─────────┐   (o)         (o)
+    │  SOUND  │  │ PATTERN  │  │   BPM   │  Knob A      Knob B
+    └─────────┘  └──────────┘  └─────────┘ GPIO 20     GPIO 46
+                                            A1_CH9      A1_CH5
+
+    ┌───┐┌───┐┌───┐┌───┐                               ┌─────────┐
+    │ 1 ││ 2 ││ 3 ││ 4 │                               │   REC   │
+    └───┘└───┘└───┘└───┘                               └─────────┘
+    ┌───┐┌───┐┌───┐┌───┐                               ┌─────────┐
+    │ 5 ││ 6 ││ 7 ││ 8 │                               │   FX    │
+    └───┘└───┘└───┘└───┘                               └─────────┘
+    ┌───┐┌───┐┌───┐┌───┐                               ┌─────────┐
+    │ 9 ││ 10││ 11││ 12│                               │  PLAY   │
+    └───┘└───┘└───┘└───┘                               └─────────┘
+    ┌───┐┌───┐┌───┐┌───┐                               ┌─────────┐
+    │ 13││ 14││ 15││ 16│                               │  WRITE  │
+    └───┘└───┘└───┘└───┘                               └─────────┘
+
+    Step matrix  16 buttons on 8 GPIOs — rows 35/36/37/38   cols 33/34/39/40
+    Top row      SOUND=11    PATTERN=44    BPM=13        + 2 knobs
+    Right column REC=41   FX=12   PLAY=42   WRITE=43   (under Knob B)
+    Knobs        Knob A = GPIO 20 (ADC1_CH9)   Knob B = GPIO 46 (ADC1_CH5)
+    Totals       23 buttons + 2 knobs = 17 of 45 GPIOs   (12 free, incl. 45)
+```
+
+Each is a momentary tactile switch between the GPIO and GND (no matrix, no external resistor — the firmware enables the internal pull-up).
 
 | Button | GPIO | What it does (PO-33 mode) | What it does (our firmware) |
 |---|---|---|---|
-| `REC`    | **GPIO 41** | record (hold + number to record into slot) | start/stop recording |
-| `PLAY`   | **GPIO 42** | play/stop pattern | start/stop sequencer |
-| `FUNC`   | **GPIO 11** | (no exact equivalent on PO-33) | multi-function: held + step = "select slot/effect/pattern" |
-| `FX`     | **GPIO 12** | cycle tweak parameter (Tone / Filter / Trim); hold + number 1–16 = apply effect | toggle FX-select mode |
-| `BPM ↑`  | **GPIO 13** | (PO-33 has a single BPM handle that can be turned) | increase tempo |
-| `BPM ↓`  | **GPIO 43** | | decrease tempo |
-| `PAT ↑`  | **GPIO 44** | (PO-33 has a single PATTERN button + hold + number 1–16) | next pattern |
-| `PAT ↓`  | **GPIO 45** | | previous pattern |
+| `SOUND`   | **GPIO 11** | hold S + number 1–16 plays / selects that slot | hold + step 1–16 = select / play a sample slot |
+| `PATTERN` | **GPIO 44** | hold + number 1–16 picks a pattern | tap = next pattern, long press = previous |
+| `BPM`     | **GPIO 13** | press cycles 80 / 120 / 140; hold + knob A = fine tempo | tap = +1 BPM, long press = −1 BPM |
+| `REC`     | **GPIO 41** | record (hold + number records into that slot) | start / stop recording |
+| `FX`      | **GPIO 12** | hold + number 1–16 applies that effect | enter FX-select mode |
+| `PLAY`    | **GPIO 42** | play / stop pattern | start / stop sequencer |
+| `WRITE`   | **GPIO 43** | enter write mode (·) | enter / exit write mode |
 
-Why these GPIOs? All eight are general-purpose, none are strapping pins (GPIO 0–3 are strapping on the ESP32-S3 and we avoid them), and none conflict with I²S (8/9/10/15/16/17), the TFT (4/5/6/7/47/48), or the button matrix (33/34/35/36/37/38/39/40).
+Why these GPIOs? All seven are general-purpose, none are strapping pins (GPIO 0–3 are strapping on the ESP32-S3 and we avoid them), and none conflict with I²S (8/9/10/15/16/17), the TFT (4/5/6/7/47/48), the button matrix (33/34/35/36/37/38/39/40), or the two knobs (20 and 46). **GPIO 45** — which used to carry `PAT ↓` — is now free for future expansion.
 
 Each switch needs two wires:
 
@@ -220,7 +254,7 @@ Each switch needs two wires:
 
 The internal pull-up is enabled in firmware, so no external resistor is needed.
 
-If you would rather wire all 24 buttons (16 matrix + 8 dedicated) onto a single perfboard with one shared GND bus, you will end up with ~9 wires from the dev board to the perfboard: 4 row + 4 column + 8 dedicated GPIO signals (the 8 GNDs share one common wire).
+If you would rather wire all 23 buttons (16 matrix + 7 dedicated) onto a single perfboard with one shared GND bus, you will end up with ~8 wires from the dev board to the perfboard: 4 row + 4 column + 7 dedicated GPIO signals (the 7 GNDs share one common wire).
 
 ### 4.6 Status LEDs (optional)
 
@@ -379,19 +413,19 @@ The PO-33 names the knobs simply "A" and "B"; what they do depends on which twea
 | **Tone** (`ton`) | pitch (semitones) | volume |
 | **Filter** (`Flt`) | low/high-pass cutoff frequency | resonance |
 | **Trim** (`tri`) | sample start point | sample length |
-| BPM held | fine tempo adjustment | cycle 3 tempo levels (Hip Hop / Disco / Techno) |
+| `BPM` held | fine tempo adjustment | cycle 3 tempo levels (Hip Hop / Disco / Techno) |
 | (no mode active) | repeats the last-set tweak | repeats the last-set tweak |
 
-In v1 firmware, only the "BPM held" row is wired through — knobs A and B move the tempo up/down by ±1 BPM per tick when the BPM-UP or BPM-DN modifier button is held. The tweak-mode rows are documented in `docs/DESIGN.md` §3.4 (F-016 / F-017 / F-018) and will be wired in a future revision; the data model already supports them.
+In v1 firmware, only the "`BPM` held" row is wired through — knobs A and B move the tempo up/down by ±1 BPM per tick when the `BPM` modifier button is held. The tweak-mode rows are documented in `docs/DESIGN.md` §3.4 (F-016 / F-017 / F-018) and will be wired in a future revision; the data model already supports them.
 
 #### Knob vs. modifier button: which is "right"?
 
-The PO-33 uses knobs for fine continuous control and modifier buttons (REC, PLAY, FUNC, FX, BPM, PATTERN) for discrete actions. We follow the same model:
+The PO-33 uses knobs for fine continuous control and modifier buttons (SOUND, PATTERN, BPM, REC, FX, PLAY, WRITE) for discrete actions. We follow the same model:
 
 - Use **knobs** when you want a smooth, continuous value (tempo, filter cutoff, pitch).
 - Use **modifier buttons** when you want a discrete action (start recording, switch pattern).
 
-The modifier buttons cycle pattern and BPM in big steps; the knobs would let you dial in a tempo precisely.
+The `PATTERN` and `BPM` buttons step through in whole units; the knobs would let you dial in a tempo precisely.
 
 ---
 
@@ -491,27 +525,26 @@ Eight wires from the dev board to the keypad (or 4×4 grid of switches).
 | `GPIO 39` | Col 3 | |
 | `GPIO 40` | Col 4 | (right column) |
 
-### 5.6b Step 6b — Wire the 8 dedicated modifier buttons
+### 5.6b Step 6b — Wire the 7 dedicated modifier buttons
 
-Each is a single momentary tactile switch between one GPIO and GND. The firmware enables the internal pull-up — **no external resistor needed**. You can wire each as a separate lead, or run all 8 GNDs together on a single bus.
+Each is a single momentary tactile switch between one GPIO and GND. The firmware enables the internal pull-up — **no external resistor needed**. You can wire each as a separate lead, or run all 7 GNDs together on a single bus.
 
-| Button | GPIO |
-|---|---|
-| REC    | GPIO 41 |
-| PLAY   | GPIO 42 |
-| FUNC   | GPIO 11 |
-| FX     | GPIO 12 |
-| BPM ↑  | GPIO 13 |
-| BPM ↓  | GPIO 43 |
-| PAT ↑  | GPIO 44 |
-| PAT ↓  | GPIO 45 |
+| Button | GPIO | Panel position |
+|---|---|---|
+| SOUND   | GPIO 11 | top row, leftmost |
+| PATTERN | GPIO 44 | top row, middle |
+| BPM     | GPIO 13 | top row, rightmost |
+| REC     | GPIO 41 | right column, top |
+| FX      | GPIO 12 | right column, 2nd |
+| PLAY    | GPIO 42 | right column, 3rd |
+| WRITE   | GPIO 43 | right column, bottom |
 
-A clean way to wire all 24 buttons:
+A clean way to wire all 23 buttons:
 
 1. Mount the 16 step buttons on a single perfboard in a 4×4 grid.
-2. Mount the 8 modifier buttons along the top of the same perfboard (or wherever they fit ergonomically).
+2. Mount the 7 modifier buttons on the same perfboard in the PO-33 layout: **three across the top left** (SOUND, PATTERN, BPM) and **four down the right-hand side** (REC, FX, PLAY, WRITE), with the top of the column sitting under Knob B.
 3. Add a single GND bus along one edge of the perfboard.
-4. Row wires, column wires, and 8 modifier GPIO signals come off the perfboard to the dev board. GNDs all share one wire.
+4. Row wires, column wires, and 7 modifier GPIO signals come off the perfboard to the dev board. GNDs all share one wire.
 
 After wiring everything, flash the firmware. From the UART shell:
 
@@ -521,7 +554,7 @@ po33> free
 
 You should see the heap stats. If the boot hangs, you probably have a short circuit between two GPIO pins or between a GPIO and ground. Use a multimeter in continuity mode to check.
 
-The boot log should show: `Buttons ready: 4x4 matrix + 8 GPIOs = 24 total`. If you see fewer, one of the GPIO wires is disconnected.
+The boot log should show: `Buttons ready: 4x4 matrix + 7 modifier GPIOs = 23 total`. If you see fewer, one of the GPIO wires is disconnected.
 
 To test individual buttons, run the shell and press each one. The firmware doesn't echo button presses yet (that's a v2 feature), but `buttons_init()` succeeding is the smoke test.
 

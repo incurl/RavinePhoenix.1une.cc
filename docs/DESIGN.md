@@ -60,45 +60,51 @@ The full source lives in this repository; the project website with one-click bro
 Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top face:
 
 ```
-+----------------------------------------------------+
-|         [tiny TFT screen, 2.4" diagonal]           |
-|                                                    |
-|       step 1  step 2  step 3  step 4                |
-|       step 5  step 6  step 7  step 8                |
-|       step 9  step 10 step 11 step 12               |
-|       step 13 step 14 step 15 step 16               |
-|                                                    |
-|  +-----+ +-----+ +-----+ +-----+                    |
-|  | REC | |PLAY | |FUNC | | FX |   <- 4 modifier keys  |
-|  +-----+ +-----+ +-----+ +-----+                    |
-|                                                    |
-|  +-----+ +-----+ +-----+ +-----+                    |
-|  |BPM +| |BPM -| |PAT +| |PAT -|  <- 4 more modifiers|
-|  +-----+ +-----+ +-----+ +-----+                    |
-|                                                    |
-|  (Knob A)        (Knob B)     <- 2 analog knobs      |
-|                                                    |
-|  [headphone jack] [sync in] [sync out]             |
-+----------------------------------------------------+
+      +------------------------------------------------------------+
+      |              2.4"  TFT   ILI9341   240 x 320               |
+      |                 SPI2   GPIO 4/5/6/7/47/48                  |
+      |                                                            |
+      +------------------------------------------------------------+
+
+
+    +---------+  +----------+  +---------+   (o)         (o)
+    |  SOUND  |  | PATTERN  |  |   BPM   |  Knob A      Knob B
+    +---------+  +----------+  +---------+ GPIO 20     GPIO 46
+                                            A1_CH9      A1_CH5
+
+    +---+ +---+ +---+ +---+                            +---------+
+    | 1 | | 2 | | 3 | | 4 |                            |   REC   |
+    +---+ +---+ +---+ +---+                            +---------+
+    +---+ +---+ +---+ +---+                            +---------+
+    | 5 | | 6 | | 7 | | 8 |                            |   FX    |
+    +---+ +---+ +---+ +---+                            +---------+
+    +---+ +---+ +---+ +---+                            +---------+
+    | 9 | | 10| | 11| | 12|                            |  PLAY   |
+    +---+ +---+ +---+ +---+                            +---------+
+    +---+ +---+ +---+ +---+                            +---------+
+    | 13| | 14| | 15| | 16|                            |  WRITE  |
+    +---+ +---+ +---+ +---+                            +---------+
 ```
 
-There are **24 physical buttons** in total:
+There are **23 physical buttons** in total:
 
 - **16 step buttons** in a 4×4 matrix. The same physical buttons are *polymorphic* — their meaning depends on which modifier is held (just like the real PO-33):
   - in **normal play**: step 1–16
   - in **write mode**, after picking a slot: toggle step 1–16 for the armed slot
-  - with **SOUND-equivalent** (`func + step_n` in our firmware): sample slot 1–16
-  - with **PATTERN-equivalent** (`pat ↑/pat ↓` then step): pattern slot 1–16
+  - with **SOUND** held (`SOUND + step_n`): sample slot 1–16
+  - with **PATTERN** held (`PATTERN + step_n`): pattern slot 1–16
   - with **FX** held: effect 1–15 (16 = swing)
-- **8 dedicated modifier buttons** wired to individual GPIOs (no matrix):
+- **7 dedicated modifier buttons** wired to individual GPIOs (no matrix), laid
+  out exactly like the PO-33's modifier row and column:
+  - `SOUND` — hold + step 1–16 plays / selects a sample slot (the PO-33's "S" key)
+  - `PATTERN` — hold + step 1–16 selects a pattern; tap to advance, long-press to go back
+  - `BPM` — tap to raise the tempo, long-press to lower it; hold + Knob A for fine tempo
   - `REC` — start/stop recording
-  - `PLAY` — start/stop sequencer
-  - `FUNC` — multi-function modifier (the closest analog to the PO-33's "SOUND" hold)
   - `FX` — enter effect-select mode
-  - `BPM +` / `BPM -` — raise / lower tempo
-  - `PAT +` / `PAT -` — next / previous pattern
+  - `PLAY` — start/stop sequencer
+  - `WRITE` — enter / exit write mode (the PO-33's "·" key)
 
-There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control: depending on the active tweak mode, knob A controls pitch / filter cutoff / sample start / fine tempo, and knob B controls volume / resonance / sample length / tempo level cycling. In v1 firmware the data model supports all of these — only the BPM-row binding (knobs nudge tempo when BPM ± is held) is wired through the knobs; the tweak-mode rows are queued for v2. See `hardware/HARDWARE.md` §4.11 for wiring, and the cheat sheet (§8 below) for what works today.
+There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control: depending on the active tweak mode, knob A controls pitch / filter cutoff / sample start / fine tempo, and knob B controls volume / resonance / sample length / tempo level cycling. In v1 firmware the data model supports all of these — only the BPM-row binding (knobs nudge tempo when `BPM` is held) is wired through the knobs; the tweak-mode rows are queued for v2. See `hardware/HARDWARE.md` §4.11 for wiring, and the cheat sheet (§8 below) for what works today.
 
 ### 1.5 Where to go from here
 
@@ -266,17 +272,17 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §1.3
 - **Layman:** Hold **SOUND** (S) and press the slot number 1–16, and that slot's sound plays once.
 - **PO-33 button combo:** Hold S + number.
-- **Our hardware combo:** Not yet — the SOUND button is not implemented as a discrete button. We have "REC" and "PLAY" and "FUNC" and "FX" but no "S" key. Use the UART shell instead: `rec 5` then play it via the shell, or trigger it from the sequencer.
+- **Our hardware combo:** The `SOUND` button now exists (`BTN_SOUND`, GPIO 11 — leftmost of the top row), so the physical "hold S + number" gesture is wired. The handler behind it is not written yet, so for now use the UART shell: `rec 5` to record, then trigger the slot from the sequencer.
 - **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_play_note(slot, midi_note, velocity, ...)`.
-- **Status:** ⚠️ partial. Sound trigger works internally (the sequencer calls it) but no dedicated "hold-S + number" UI button.
+- **Status:** ⚠️ partial. The `SOUND` button exists and is scanned, and sound trigger works internally (the sequencer calls it), but the hold-S + number handler is not wired yet.
 
 #### F-007 — 16 patterns
 
 - **Manual ref:** §2 (PO-33 manual "patterns")
 - **Layman:** You can store 16 different patterns on the device, numbered 1–16. Each pattern is a complete beat on its own. You switch between them with the bottom-right button group.
 - **PO-33 button combo:** Hold **PATTERN** (⠛) + 1–16 to pick one.
-- **Our hardware combo:** We have a "PAT up" and "PAT down" button on the bottom row, instead of a full 1–16 selector. Pressing PAT up cycles 0→1→2→...→15→0→... Pressing PAT down cycles backward. UART: `pattern 5`.
-- **Code location:** `main/sequencer/sequencer.h` → `PATTERN_COUNT 16`, `sequencer_set_pattern(uint8_t)`. `main/ui/buttons.h` → `BTN_PAT_UP`, `BTN_PAT_DN`.
+- **Our hardware combo:** We have a single `PATTERN` button (`BTN_PATTERN`, GPIO 44 — middle of the top row), just like the real PO-33, rather than a 1–16 selector. Tapping it advances 0→1→…→15→0→…; a long press steps backward. UART: `pattern 5`.
+- **Code location:** `main/sequencer/sequencer.h` → `PATTERN_COUNT 16`, `sequencer_set_pattern(uint8_t)`. `main/config.h` → `BTN_PATTERN`, `BTN_PATTERN_GPIO`.
 - **Status:** ✅ done.
 
 #### F-008 — 16 steps per pattern
@@ -293,7 +299,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §2.1
 - **Layman:** You enter "write mode" by pressing **WRITE** (·). Now when you press a step button, the slot you select gets added to that step. Press WRITE again to exit write mode.
 - **PO-33 button combo:** Press WRITE → press a slot number → press step numbers where you want that slot to play → press WRITE again.
-- **Our hardware combo:** Not yet — we don't have a WRITE button. Use UART: `pattern 0; sequencer_set_step_slot(0, 5, 3, 60)` from a shell command, or wire it up via the FUNC button later.
+- **Our hardware combo:** The `WRITE` button now exists (`BTN_WRITE`, GPIO 43 — bottom of the right column), matching the PO-33's "·" key, but the write-mode handler is not wired yet. For now use UART: `pattern 0`, then `sequencer_set_step_slot(0, 5, 3, 60)`.
 - **Code location:** `main/sequencer/sequencer.h` → `sequencer_set_step_slot(uint8_t pattern, uint8_t step, uint8_t slot, uint8_t note)`.
 - **Status:** ⚠️ partial. Code supports it; UI button combo missing.
 
@@ -350,7 +356,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4
 - **Layman:** You cycle between three tweak modes by pressing **FX** repeatedly: Tone, Filter, Trim. Each one has two knobs (A and B) that change different aspects.
 - **PO-33 button combo:** Press FX to cycle: Tone → Filter → Trim → Tone.
-- **Our hardware combo:** Not yet. The FX button is reserved for effects. We'd need a separate "Tweak" mode button (perhaps FUNC+FX).
+- **Our hardware combo:** Not yet. The FX button is reserved for effects. We'd need a separate "Tweak" mode button (perhaps SOUND + FX).
 - **Code location:** Needs a new `tweak_mode_t` state machine in `main/ui/display.c` plus handlers.
 - **Status:** ❌ missing.
 
@@ -401,7 +407,7 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §6
 - **Layman:** Hold **BPM** and turn Knob A to fine-tune the tempo, or press BPM repeatedly to cycle between three preset levels: Hip Hop (80), Disco (120), Techno (140).
 - **PO-33 button combo:** Hold BPM + knob A, or press BPM.
-- **Our hardware combo:** Press BPM up (`BTN_BPM_UP`) or BPM down (`BTN_BPM_DN`). UART: `bpm 140`.
+- **Our hardware combo:** Press `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row): a tap raises the tempo by one, a long press lowers it. (Hold + Knob A for fine tempo is queued for v2.) UART: `bpm 140`.
 - **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`. `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`.
 - **Status:** ✅ done (but the three preset levels — Hip Hop / Disco / Techno — are not implemented yet, only continuous BPM).
 
@@ -760,13 +766,13 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 **On a real PO-33:** Hold **BPM** and turn knob A to fine-tune, or press BPM to cycle through 80 / 120 / 140.
 
-**On our firmware:** Press **BPM up** or **BPM down** (the bottom-row buttons). Or over the UART shell: `bpm 140`.
+**On our firmware:** Press **BPM** (rightmost of the top row) — a tap raises the tempo, a long press lowers it. Or over the UART shell: `bpm 140`.
 
 ### 5.4 How do I switch to another pattern?
 
 **On a real PO-33:** Hold **PATTERN** (⠛) + number 1–16.
 
-**On our firmware:** Press **PAT up** or **PAT down** to cycle. Or: `pattern 5` over the UART shell.
+**On our firmware:** Tap **PATTERN** to advance, long-press to step back. Or: `pattern 5` over the UART shell.
 
 ### 5.5 How do I apply an effect?
 
@@ -833,7 +839,7 @@ Implementation: top bar is one `fill_rect(0,0,240,18)` in blue; playhead is one 
 
 ### 6.2 Screen 2 — Sound select
 
-Triggered by FUNC button. Shows all 16 slots as small icons, filled if recorded, hollow if empty, current slot highlighted.
+Triggered by the SOUND button. Shows all 16 slots as small icons, filled if recorded, hollow if empty, current slot highlighted.
 
 ```
 +-----------------------------------+
@@ -872,7 +878,7 @@ Implementation: red `fill_rect` background; green VU meter drawn frame-by-frame 
 
 ### 6.4 Screen 4 — Pattern edit (write mode)
 
-Triggered by a dedicated WRITE button or by long-press on PLAY.
+Triggered by the WRITE button (`BTN_WRITE`, GPIO 43) or by long-press on PLAY.
 
 ```
 +-----------------------------------+
@@ -919,7 +925,7 @@ Implementation: 16 tiles, each a small `fill_rect` with the index number and sho
 
 ### 6.6 Screen 6 — Tweak mode
 
-Triggered by FUNC + FX. Shows the currently selected tweak parameter (Tone / Filter / Trim), the two knob values, and a mini visualization of what those knobs do.
+Triggered by SOUND + FX. Shows the currently selected tweak parameter (Tone / Filter / Trim), the two knob values, and a mini visualization of what those knobs do.
 
 ```
 +-----------------------------------+
@@ -939,7 +945,7 @@ Implementation: parameter name on top; two value-bar visualizations; current par
 
 ### 6.7 Screen 7 — Sync
 
-Triggered by FUNC + BPM. Shows the current sync mode (SY0–SY5) and whether this device is master or slave.
+Triggered by SOUND + BPM. Shows the current sync mode (SY0–SY5) and whether this device is master or slave.
 
 ```
 +-----------------------------------+
@@ -957,7 +963,7 @@ Implementation: ~20 lines.
 
 ### 6.8 Screen 8 — Alarm
 
-Triggered by FUNC + clock-area touch. Shows the current time, the alarm time, the alarm slot, on/off.
+Triggered by SOUND + clock-area touch. Shows the current time, the alarm time, the alarm slot, on/off.
 
 ```
 +-----------------------------------+
@@ -1092,10 +1098,11 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Stop recording | REC | same, or `stoprec` |
 | Play pattern | PLAY | same |
 | Stop pattern | PLAY | same |
-| Change pattern | H+PATTERN + number | PAT up / PAT down (cycles), or `pattern N` |
-| Change BPM | H+BPM + knob A | BPM up / BPM down, or `bpm N` |
+| Change pattern | H+PATTERN + number | `PATTERN` tap = next, long press = previous, or `pattern N` |
+| Change BPM | H+BPM + knob A | `BPM` tap = +1, long press = −1, or `bpm N` |
 | Apply effect | H+FX + number | H+FX + number (1–15 = effect, 16 = swing) |
-| Select a sample slot | H+SOUND + number | H+FUNC + number (16 slots) |
+| Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); handler queued for v2 |
+| Select a sample slot | H+SOUND + number | H+SOUND + number (16 slots) |
 | Save pattern | auto on power-off | `save` over UART |
 | Load on boot | auto | `load` over UART |
 | Erase sound | H+REC + slot number | not yet |
@@ -1103,7 +1110,7 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
 | Tweak tone/filter/trim | FX cycles; knobs A/B adjust | Knob A/B wired (ADC); tweak-mode binding queued for v2 |
-| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM ± + (knob not yet bound to fine-tempo) — for now use BPM + / − buttons |
+| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM + knob A (not yet bound) — for now tap / long-press `BPM` |
 | Sync out | always on | always on |
 | Sync in | H+REC + BPM cycles mode | partial |
 | Show battery | SOUND + BPM | not yet (TFT will show) |
@@ -1614,26 +1621,26 @@ A new screen (extends §6):
 
 ```
 +-----------------------------------+
-|  SKETCHES                  3 / 32 |   ← top bar: count
+|  SKETCHES                  3 / 32 |       ← top bar: count
 |                                   |
-|   * DRUM KIT 1       0003  a1b2 |   ← * marks active sketch; 0003 = slot, a1b2 = id
-|     DISCO DEMO       0001  b3c4 |
-|     AMBIENT 03       0002  1234 |
-|     (unused slot)             |   ← "Create new" hint
+|   * DRUM KIT 1       0003  a1b2   |       ← * marks active sketch
+|     DISCO DEMO       0001  b3c4   |       0003 = slot, a1b2 = id
+|     AMBIENT 03       0002  1234   |
+|     (unused slot)                 |       ← "Create new" hint
 |                                   |
-|   [step 1..8]  scroll list     |
-|   [step 9..16] hold FUNC to new |
+|   [step 1..8]  scroll list        |
+|   [step 9..16] hold SOUND = new   |
 |                                   |
-|   press step 1-8 to load         |
-|   hold FUNC to create/delete     |
+|   press step 1-8 to load          |
+|   hold SOUND to create/delete     |
 +-----------------------------------+
 ```
 
 Button bindings:
 - Press **step 1–8**: load the corresponding sketch (after a "switching…" progress indicator).
-- **FUNC** held: enter "manage" mode (create / delete / rename).
-- **BPM up / BPM down**: scroll the list (since the picker shows 8 of 32 at a time).
-- **PAT up / PAT down**: jump to first / last sketch.
+- **SOUND** held: enter "manage" mode (create / delete / rename).
+- **BPM** tap / long-press: scroll the list (since the picker shows 8 of 32 at a time).
+- **PATTERN** tap / long-press: jump to first / last sketch.
 
 The "manage" mode shows a sub-menu with **create / duplicate / delete / rename / export** options. Each is a step-button shortcut.
 
@@ -1642,15 +1649,15 @@ The "manage" mode shows a sub-menu with **create / duplicate / delete / rename /
 These are decisions I'm flagging now but punting to the implementer.
 
 1. **Save policy** — should `storage_sketch_save_active()` be:
-   - (a) **manual only** — user presses FUNC + REC or similar to save. Matches PO-33.
+   - (a) **manual only** — user presses WRITE + REC or similar to save. Matches PO-33.
    - (b) **debounced auto-save** — every edit triggers a save 2 s later. No "did I forget to save?" anxiety.
    - (c) **both** — manual save is immediate; auto-save runs in background every N seconds if there are unsaved changes.
 
    Recommendation: **(c)**. Manual save is the PO-33 way; auto-save is the safety net for novices.
 
 2. **Sketch delete confirmation** — how many button presses to confirm? PO-33 requires holding REC + PATTERN. We could:
-   - (a) require holding FUNC + the sketch's slot number for 2 s.
-   - (b) require a separate "delete mode" entered via FUNC + a step number.
+   - (a) require holding SOUND + the sketch's slot number for 2 s.
+   - (b) require a separate "delete mode" entered via SOUND + a step number.
    - (c) require two separate presses (first selects, second confirms).
 
    Recommendation: **(a)** — 2-second hold on the slot is unambiguous and matches the PO-33's destructive-action convention.

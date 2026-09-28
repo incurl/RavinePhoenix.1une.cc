@@ -39,8 +39,8 @@ permalink: /hardware/
             <td class="p-2 font-mono">2.4″ TFT ILI9341</td>
             <td class="p-2">240×320, SPI</td></tr>
         <tr><td class="p-2">Buttons</td>
-            <td class="p-2 font-mono">16× 6&nbsp;mm tact</td>
-            <td class="p-2">4×4 matrix, momentary-to-GND</td></tr>
+            <td class="p-2 font-mono">23× 6&nbsp;mm tact</td>
+            <td class="p-2">16 in a 4×4 scan matrix + 7 PO-33 modifiers</td></tr>
         <tr><td class="p-2">Status LEDs</td>
             <td class="p-2 font-mono">2× 3&nbsp;mm LED</td>
             <td class="p-2">REC + PLAY indicators</td></tr>
@@ -93,15 +93,36 @@ permalink: /hardware/
     </div>
 
     <div class="card">
-      <h3 class="card-title">4×4 button matrix</h3>
+      <h3 class="card-title">Buttons — matrix + modifiers</h3>
       <p class="card-text mt-2">
-        Row-major mapping: <code>btn_id = row × 4 + col</code>.
-        Internal pull-ups enabled on column inputs.
+        23 buttons: 16 step buttons on a 4×4 scan matrix
+        (<code>btn_id = BTN_STEP1 + row × 4 + col</code>) plus 7 PO-33
+        modifier keys on their own GPIOs. Internal pull-ups everywhere.
       </p>
       <table class="w-full text-sm font-mono mt-3">
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-          <tr><td class="py-1.5">Rows</td><td class="py-1.5 text-right">GPIO35, 36, 37, 38</td></tr>
-          <tr><td class="py-1.5">Cols</td><td class="py-1.5 text-right">GPIO33, 34, 39, 40</td></tr>
+          <tr><td class="py-1.5">Matrix rows</td><td class="py-1.5 text-right">GPIO35, 36, 37, 38</td></tr>
+          <tr><td class="py-1.5">Matrix cols</td><td class="py-1.5 text-right">GPIO33, 34, 39, 40</td></tr>
+          <tr><td class="py-1.5">SOUND</td><td class="py-1.5 text-right">GPIO11</td></tr>
+          <tr><td class="py-1.5">PATTERN</td><td class="py-1.5 text-right">GPIO44</td></tr>
+          <tr><td class="py-1.5">BPM</td><td class="py-1.5 text-right">GPIO13</td></tr>
+          <tr><td class="py-1.5">REC</td><td class="py-1.5 text-right">GPIO41</td></tr>
+          <tr><td class="py-1.5">FX</td><td class="py-1.5 text-right">GPIO12</td></tr>
+          <tr><td class="py-1.5">PLAY</td><td class="py-1.5 text-right">GPIO42</td></tr>
+          <tr><td class="py-1.5">WRITE</td><td class="py-1.5 text-right">GPIO43</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Knobs (ADC)</h3>
+      <p class="card-text mt-2">
+        Two 10&nbsp;kΩ linear pots, read on ADC1 and debounced in software.
+      </p>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">Knob A</td><td class="py-1.5 text-right">GPIO20 / ADC1_CH9</td></tr>
+          <tr><td class="py-1.5">Knob B</td><td class="py-1.5 text-right">GPIO46 / ADC1_CH5</td></tr>
         </tbody>
       </table>
     </div>
@@ -129,6 +150,6 @@ permalink: /hardware/
   </p>
   <p class="text-slate-600 dark:text-slate-400">
     The 5-minute idle timer drops the chip into deep sleep automatically.
-    Any button press wakes it back up via GPIO interrupt on the column pins.
+    Any button press wakes it back up — via a GPIO interrupt on the matrix column pins or on any of the seven modifier GPIOs.
   </p>
 </section>

@@ -38,15 +38,15 @@ esp_err_t power_mgmt_init(void)
     /* Configure wake sources.
      *
      *   - Any matrix column low  -> wake (a step button press)
-     *   - Any modifier button low -> wake (REC, PLAY, FUNC, FX, BPM±, PAT±)
+     *   - Any modifier button low -> wake (SOUND, PATTERN, BPM, REC, FX, PLAY, WRITE)
      */
     const gpio_num_t cols[BTN_COL_COUNT] = BTN_COL_PINS;
     for (int i = 0; i < BTN_COL_COUNT; i++) {
         gpio_wakeup_enable(cols[i], GPIO_INTR_LOW_LEVEL);
     }
     const gpio_num_t modifier_gpios[] = {
-        BTN_REC_GPIO, BTN_PLAY_GPIO, BTN_FUNC_GPIO, BTN_FX_GPIO,
-        BTN_BPM_UP_GPIO, BTN_BPM_DN_GPIO, BTN_PAT_UP_GPIO, BTN_PAT_DN_GPIO,
+        BTN_SOUND_GPIO, BTN_PATTERN_GPIO, BTN_BPM_GPIO,
+        BTN_REC_GPIO, BTN_FX_GPIO, BTN_PLAY_GPIO, BTN_WRITE_GPIO,
     };
     for (size_t i = 0; i < sizeof(modifier_gpios) / sizeof(modifier_gpios[0]); i++) {
         gpio_wakeup_enable(modifier_gpios[i], GPIO_INTR_LOW_LEVEL);
