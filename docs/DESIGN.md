@@ -1196,14 +1196,14 @@ Some of these limits are tightly coupled to the hardware Teenage Engineering cho
 
 | # | Capability | Why we can exceed the PO-33 | Concrete ceiling |
 |---|---|---|---|
-| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We use **44.1 kHz** to match AMY's native render rate; that gives us a live pool of **~50–75 s** mono in PSRAM after the TFT framebuffer and AMY state (see §11.3 for the full breakdown). | Per-project on flash: ~75 s typical per project in an 8 MB partition (~5 typical projects) or ~11 in a 16 MB partition. With streaming-to-flash on the 16 MB flash chip, you could push the live pool further. |
+| C1 | **Sample memory** | The ESP32-S3-WROOM-1-N16R8 module has 8 MB of Octal PSRAM. The PO-33 uses roughly 1.6 MB (40 s × ~22 kHz × 16-bit ≈ 1.76 MB). We use **44.1 kHz** to match AMY's native render rate; that gives us a live pool of **~50–75 s** mono in PSRAM after the TFT framebuffer and AMY state (see §11.3 for the full breakdown). | Per-sketch on flash: ~75 s typical per sketch in an 8 MB partition (~5 typical sketches) or ~11 in a 16 MB partition. With streaming-to-flash on the 16 MB flash chip, you could push the live pool further. |
 | C2 | **Sample rate / quality** | AMY supports up to 48 kHz; the ESP32-S3 I²S peripheral supports higher. We chose 44.1 kHz to match AMY's native rate, but we *could* sample at 48 kHz. | At 44.1 kHz mono: ~5.3 MB/min; at 48 kHz mono: ~5.8 MB/min; at 96 kHz mono: ~11.5 MB/min. Anything above 48 kHz exceeds our PSRAM pool in practice. |
-| C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. **But at 44.1 kHz, 1 s of mono = 86 KB**, so a long melodic slot costs a lot. | Per-slot ceiling: up to ~30 s for a melodic slot in principle, but the *combined* pool is bounded by ~6 MB of PSRAM (after framebuffer + AMY state) = roughly **50–75 s of total sample time** (see §11.8 for the full breakdown). Practically, with a typical 8-slot project, that means **average ~6–9 s per slot** in moderate DSP load. |
+| C3 | **Per-slot duration** | Because we have PSRAM, each slot's length is bounded only by the total pool. **But at 44.1 kHz, 1 s of mono = 86 KB**, so a long melodic slot costs a lot. | Per-slot ceiling: up to ~30 s for a melodic slot in principle, but the *combined* pool is bounded by ~6 MB of PSRAM (after framebuffer + AMY state) = roughly **50–75 s of total sample time** (see §11.8 for the full breakdown). Practically, with a typical 8-slot sketch, that means **average ~6–9 s per slot** in moderate DSP load. |
 | C4 | **Polyphony** | AMY's `amy_config_t.max_voices` controls how many oscillator voices are available. Each voice costs a small CPU slice per render block. The ESP32-S3 has dual LX7 cores and vector DSP instructions, so we can run more voices in parallel than a single-core chip. | 8–16 simultaneous voices is comfortable. 30 is achievable with optimization. |
 | C5 | **Step count per pattern** | Each `step_t` is currently 8 bytes. 256 steps × 16 patterns × 128 chain = 16 KB. Trivial in PSRAM. We could support variable time signatures: 16 steps of 1/16, 32 of 1/32, etc. | 32 or 64 steps per pattern (variable time signatures — e.g. a 5/4 or 7/8 pattern). |
 | C6 | **Pattern count** | 16 patterns × ~3 KB each = 48 KB. PSRAM has megabytes to spare. | 64–256 patterns. |
 | C7 | **Song length** | Pattern chain is currently 128 bytes. | 512–2048 patterns chained. |
-| C8 | **Storage** | 16 MB flash + LittleFS. We can persist samples, patterns, presets, and user-named projects. | 16 patterns × 3 KB + 16 samples × ~220 KB = ~3.5 MB used; ~12 MB free for presets and user content. |
+| C8 | **Storage** | 16 MB flash + LittleFS. We can persist samples, patterns, presets, and user-named sketches. | 16 patterns × 3 KB + 16 samples × ~220 KB = ~3.5 MB used; ~12 MB free for presets and user content. |
 | C9 | **Sync protocols** | The ESP32-S3 has WiFi 802.11 b/g/n and Bluetooth 5. We can add WiFi-based sync (NTP clock, Ableton Link, OSC), BLE MIDI, USB MIDI, USB audio class. | Ableton Link over WiFi; BLE MIDI; USB-MIDI class compliant. |
 | C10 | **MIDI** | The chip supports USB-OTG and BLE. USB-MIDI device class costs ~1 KB of code with the ESP-IDF TinyUSB stack. | Full MIDI in/out (DIN-5 with a $1 optocoupler, USB-MIDI, or BLE MIDI). |
 | C11 | **Effects** | AMY already gives us chorus, echo, reverb, distortion, filters. Multiple AMY effects can be chained per voice. | Chainable multi-effect per voice (e.g. filter + reverb + chorus on the same note). |
@@ -1317,23 +1317,23 @@ This section is the **design** for that system. It is a v2 proposal — v1 firmw
 
 - **Sketch** — a self-contained creative unit: a name, a sample pool, 16 patterns, a chain, BPM, and metadata. The atomic unit the user saves, switches between, deletes, or duplicates.
 - **Active sketch** — the one sketch whose sample pool is in PSRAM and whose patterns are live in `g_patterns[16]`. At any moment, exactly one sketch is active. Switching to a different sketch pages its data into RAM; the previously-active sketch is flushed to flash.
-- **Sketch ID** — a **4-character hex string** (e.g. `a1b2`), assigned by a monotonic counter starting at `0000`. 16 bits of entropy (65 536 possible IDs); collisions are impossible because we only assign each ID once. 4 hex chars makes folder names short, easy to type on a UART shell, and trivial to recognise in a project picker UI.
+- **Sketch ID** — a **4-character hex string** (e.g. `a1b2`), assigned by a monotonic counter starting at `0000`. 16 bits of entropy (65 536 possible IDs); collisions are impossible because we only assign each ID once. 4 hex chars makes folder names short, easy to type on a UART shell, and trivial to recognise in a sketch picker UI.
 - **Sketch metadata** — a small JSON file describing a sketch: name (≤24 chars), label color (1 of 8), created-at Unix timestamp, last-modified-at Unix timestamp, BPM at last save, sample count, pattern count, chain length, total playback duration.
 - **Atomic write** — a save operation that either fully completes or is fully rolled back, so a power loss mid-write can never leave a half-written sketch. We achieve this with the classic write-to-temp-then-rename trick.
 - **Sketch slot** — a serial index from 0 to N-1, where N is determined by available flash. The slot number is for UI ordering and internal bookkeeping; the 4-hex ID is the canonical identifier. Two sketches can never share a slot number.
 
 ### 11.2 On-flash layout
 
-We currently have **one** LittleFS partition called `patterns` (256 KB in `partitions.csv`). It is large enough for ~32–64 projects of average size, so we **reuse it** rather than add a new partition. The layout inside the existing `patterns` partition becomes:
+We currently have **one** LittleFS partition called `patterns` (256 KB in `partitions.csv`). It is large enough for ~32–64 sketches of average size, so we **reuse it** rather than add a new partition. The layout inside the existing `patterns` partition becomes:
 
 ```
 /patterns/
-├── project.lst                        # index: one line per project
+├── sketches.lst                       # index: one line per sketch
 │                                       #   format: <id4> <slot> <name>
 │                                       #   sorted by slot for stable UI ordering
 │
-├── a1b2/                              # project with ID "a1b2"
-│   ├── meta.json                      # project metadata (see §11.1)
+├── a1b2/                              # sketch with ID "a1b2"
+│   ├── meta.json                      # sketch metadata (see §11.1)
 │   ├── samples.bin                    # raw 16-bit PCM, the sample pool
 │   ├── patterns/                      # 16 patterns, one file each
 │   │   ├── p00.bin
@@ -1342,7 +1342,7 @@ We currently have **one** LittleFS partition called `patterns` (256 KB in `parti
 │   │   └── p15.bin
 │   └── chain.bin                      # chain (up to 128 entries)
 │
-├── b3c4/                              # next project
+├── b3c4/                              # next sketch
 │   ├── meta.json
 │   ├── samples.bin
 │   ├── patterns/
@@ -1356,35 +1356,37 @@ We currently have **one** LittleFS partition called `patterns` (256 KB in `parti
 
 Notes:
 
-- **4-hex ID folders.** The folder name is the project ID (`0000`, `0001`, …, `ffff`). Folders are flat at the `patterns/` root — no nesting — so LittleFS directory traversal stays cheap.
-- **Hex counter** — IDs are assigned sequentially: the next ID is `storage_next_free_id()`, which walks the `project.lst` and returns `max(ids) + 1`, formatted as 4 hex chars. If the device has never had a project, the first ID is `0000`. If the device has `0000` and `0003`, the next is `0004`.
-- **`project.lst` is the master index.** It is rewritten atomically on every project create / delete / rename. The UI's "Project" menu reads this file.
+- **4-hex ID folders.** The folder name is the sketch ID (`0000`, `0001`, …, `ffff`). Folders are flat at the `patterns/` root — no nesting — so LittleFS directory traversal stays cheap.
+- **Hex counter** — IDs are assigned sequentially: the next ID is `storage_next_free_id()`, which walks the `sketches.lst` and returns `max(ids) + 1`, formatted as 4 hex chars. If the device has never had a sketch, the first ID is `0000`. If the device has `0000` and `0003`, the next is `0004`.
+- **`sketches.lst` is the master index.** It is rewritten atomically on every sketch create / delete / rename. The UI's "Sketch" menu reads this file.
 - **`tmp/`** is a scratch area. Atomic-save writes to `tmp/<id4>.samples.bin.tmp` etc., then `rename()`s the file into place. A power loss during a write leaves the tmp file dangling; on boot we delete any leftover `*.tmp` files.
-- **No quota file.** Quotas (max N projects, max total bytes per project) are enforced at runtime in `storage_save_project()` by checking free space first. LittleFS has a fixed partition size, so "free space" is `partition_size - used_bytes`.
+- **No quota file.** Quotas (max N sketches, max total bytes per sketch) are enforced at runtime in `storage_sketch_save_active()` by checking free space first. LittleFS has a fixed partition size, so "free space" is `partition_size - used_bytes`.
+
+> **Note.** We've renamed `project.lst` to `sketches.lst` and `storage_project_*` → `storage_sketch_*` in this section. The v2 implementation should do the same source-code rename. v1 firmware code keeps the `project` prefix for source-compatibility until the rename lands.
 
 ### 11.3 On-RAM state
 
-At any moment, exactly one project is loaded into PSRAM. The in-RAM data model does **not change** — it is still `g_patterns[16]`, `g_chain[128]`, and the PSRAM sample pool. What changes is the **mapping** between in-RAM state and on-flash state.
+At any moment, exactly one sketch is loaded into PSRAM. The in-RAM data model does **not change** — it is still `g_patterns[16]`, `g_chain[128]`, and the PSRAM sample pool. What changes is the **mapping** between in-RAM state and on-flash state.
 
 Concretely:
 
 | In-RAM symbol | Holds the state of | Paged in when | Paged out when |
 |---|---|---|---|
-| `g_patterns[16]` | active project's 16 patterns | project switch (`storage_load_project`) | project switch (save then load new) |
-| `g_chain[128]` + `g_chain_len` | active project's chain | same | same |
-| PSRAM sample pool (3.37 MB) | active project's samples | same | same |
-| `s_bpm`, `s_pattern`, etc. | active project's transport state | same | same |
+| `g_patterns[16]` | active sketch's 16 patterns | sketch switch (`storage_sketch_load`) | sketch switch (save then load new) |
+| `g_chain[128]` + `g_chain_len` | active sketch's chain | same | same |
+| PSRAM sample pool (3.37 MB) | active sketch's samples | same | same |
+| `s_bpm`, `s_pattern`, etc. | active sketch's transport state | same | same |
 
-**The PO-33's "chain" stays a chain.** Each project carries one chain. The difference from v1 is that there are now *N* chains on the device, one per project.
+**The PO-33's "chain" stays a chain.** Each sketch carries one chain. The difference from v1 is that there are now *N* chains on the device, one per sketch.
 
-### 11.4 Project lifecycle
+### 11.4 Sketch lifecycle
 
-The state diagram for a project:
+The state diagram for a sketch:
 
 ```
                 +---------+    create    +----------+
                 |         | ----------> |          |
-                |  EMPTY  |             | CREATED  |  (no samples, no patterns, name = "New Project")
+                |  EMPTY  |             | CREATED  |  (no samples, no patterns, name = "New Sketch")
                 |         |             |          |
                 +---------+             +----------+
                                           |
@@ -1416,18 +1418,18 @@ The state diagram for a project:
                      | delete
                      v
                 +----------+
-                | DELETED  |  (folder removed from flash; project.lst updated)
+                | DELETED  |  (folder removed from flash; sketches.lst updated)
                 +----------+
 ```
 
 State transitions:
 
-- `EMPTY → CREATED`: the user picks "New Project" on the TFT. We allocate the next 4-hex ID from the counter, write a default `meta.json` (name = "New Project", label color = 1, timestamps = now), and add an entry to `project.lst`. The active project becomes this one and starts empty.
+- `EMPTY → CREATED`: the user picks "New Sketch" on the TFT. We allocate the next 4-hex ID from the counter, write a default `meta.json` (name = "New Sketch", label color = 1, timestamps = now), and add an entry to `sketches.lst`. The active sketch becomes this one and starts empty.
 - `CREATED → MODIFIED`: any recording, edit, or transport change. Pure RAM.
 - `MODIFIED → SAVED`: user picks "Save" on the TFT, or auto-save fires. We write `samples.bin`, `patterns/p*.bin`, `chain.bin`, and `meta.json` (with bumped last-modified-at) atomically. RAM == flash.
 - `SAVED → MODIFIED`: user edits anything. Pure RAM.
-- `ACTIVE → DELETED`: user picks "Delete project" on the TFT. We require confirmation. We then `unlink()` the project folder and rewrite `project.lst`. If it was the active project, the device falls back to an empty project (or another project if one exists).
-- `ACTIVE → EMPTY`: like DELETE but for the active project. The user is left with no active project until they pick or create one.
+- `ACTIVE → DELETED`: user picks "Delete sketch" on the TFT. We require confirmation. We then `unlink()` the sketch folder and rewrite `sketches.lst`. If it was the active sketch, the device falls back to an empty sketch (or another sketch if one exists).
+- `ACTIVE → EMPTY`: like DELETE but for the active sketch. The user is left with no active sketch until they pick or create one.
 
 ### 11.5 API additions
 
@@ -1512,20 +1514,20 @@ The PO-33's "one song, one chain" is preserved **within** a sketch. What we add 
 
 LittleFS is journaled but not transactional across multiple files. We must be careful.
 
-**Atomic-write protocol for a project save:**
+**Atomic-write protocol for a sketch save:**
 
 1. Acquire a mutex to serialize saves against the storage task.
 2. Write all files to a unique `tmp/` subfolder, e.g. `tmp/<id4>/`.
-3. `rename()` each file into the project folder. LittleFS `rename()` is atomic within the same directory.
-4. After all files are renamed, rewrite `project.lst` atomically (`tmp/project.lst.tmp` → `project.lst`).
+3. `rename()` each file into the sketch folder. LittleFS `rename()` is atomic within the same directory.
+4. After all files are renamed, rewrite `sketches.lst` atomically (`tmp/sketches.lst.tmp` → `sketches.lst`).
 5. Release the mutex.
 
 If power is lost at any step:
 
 - Files left in `tmp/<id4>/` are stale. On boot, the storage init scans `tmp/` and deletes any file older than 1 minute. (Or just any file; `tmp/` is not user-visible.)
-- Files in the project folder that were renamed are intact.
-- If `project.lst` was not yet rewritten, the old version is used. The user sees the old project list, which is the safe failure mode.
-- If `project.lst` *was* rewritten but the project folder rename was incomplete, the entry in `project.lst` will point to a project that's "half present". On boot, we validate each `project.lst` entry against the actual filesystem and drop any orphaned entries.
+- Files in the sketch folder that were renamed are intact.
+- If `sketches.lst` was not yet rewritten, the old version is used. The user sees the old sketch list, which is the safe failure mode.
+- If `sketches.lst` *was* rewritten but the sketch folder rename was incomplete, the entry in `sketches.lst` will point to a sketch that's "half present". On boot, we validate each `sketches.lst` entry against the actual filesystem and drop any orphaned entries.
 
 ### 11.8 Capacity math
 
@@ -1534,7 +1536,7 @@ We sample at **44 100 Hz × 16-bit mono** to match AMY's native render rate. At 
 - **1 second of mono audio = 88 200 B ≈ 86 KB.**
 - **40 seconds = 3.45 MB** (this is the v1 PO-33-equivalent pool size).
 
-Let's work through a real example. Average project (the PO-33's typical usage):
+Let's work through a real example. Average sketch (the PO-33's typical usage):
 
 | Component | Math | Size |
 |---|---|---:|
@@ -1542,13 +1544,13 @@ Let's work through a real example. Average project (the PO-33's typical usage):
 | Patterns | 16 patterns × 16 steps × ~50 B/step | **~13 KB** |
 | Chain | 128 B | **0.13 KB** |
 | Metadata | `meta.json` | **~0.2 KB** |
-| **Total per project (typical)** | | **~1.42 MB** |
+| **Total per sketch (typical)** | | **~1.42 MB** |
 
-The sample pool is **>97 %** of every project. Drop a sample or shorten one and the project shrinks proportionally; add a long sample and it grows proportionally.
+The sample pool is **>97 %** of every sketch. Drop a sample or shorten one and the sketch shrinks proportionally; add a long sample and it grows proportionally.
 
-#### Live PSRAM sample pool ceiling (active project)
+#### Live PSRAM sample pool ceiling (active sketch)
 
-The on-flash numbers above are for archived projects. The **active project's** sample pool must fit in PSRAM alongside the TFT framebuffer and AMY state. The math at 44 100 Hz:
+The on-flash numbers above are for archived sketches. The **active sketch's** sample pool must fit in PSRAM alongside the TFT framebuffer and AMY state. The math at 44 100 Hz:
 
 | Subsystem | Approx. size |
 |---|---:|
@@ -1573,19 +1575,19 @@ At 88 200 B/s, that gives:
 
 #### On-flash partition size
 
-Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* for even one typical project at 44 100 Hz (1.42 MB). We need to **enlarge** this partition.
+Partition `patterns` is **256 KB** in `partitions.csv` — that's *too small* for even one typical sketch at 44 100 Hz (1.42 MB). We need to **enlarge** this partition.
 
-| Partition size | Typical projects (~1.42 MB) | Tiny projects (~133 KB) |
+| Partition size | Typical sketches (~1.42 MB) | Tiny sketches (~133 KB) |
 |---|---:|---:|
 | 1 MB | 0 | ~7 |
 | 8 MB | ~5 | ~60 |
 | **16 MB** | **~11** | ~120 |
 
-Recommended: **`patterns` → 16 MB**. That gives ~11 typical projects or ~120 tiny projects, with comfortable headroom for filesystem overhead. The 16 MB flash chip on the ESP32-S3-WROOM-1-N16R8 has plenty of room (the `factory` app partition is ~3 MB and the `nvs` + `phy_init` partitions are tiny, so most of the chip is free).
+Recommended: **`patterns` → 16 MB**. That gives ~11 typical sketches or ~120 tiny sketches, with comfortable headroom for filesystem overhead. The 16 MB flash chip on the ESP32-S3-WROOM-1-N16R8 has plenty of room (the `factory` app partition is ~3 MB and the `nvs` + `phy_init` partitions are tiny, so most of the chip is free).
 
-A `samples` partition is **not needed** in v2 — the active project's sample pool lives in PSRAM, and archived projects' sample pools live in their project folder inside `patterns/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
+A `samples` partition is **not needed** in v2 — the active sketch's sample pool lives in PSRAM, and archived sketches' sample pools live in their sketch folder inside `patterns/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
 
-We propose a hard cap `PROJECTS_MAX = 32` for the UI's project picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+We propose a hard cap `PROJECTS_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 16 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
 
 > **Action item for v2 implementation:** update `partitions.csv` to enlarge the `patterns` partition from 256 KB to **16 MB** and remove the unused `samples` partition. The `factory` app partition stays the same.
 
@@ -1593,18 +1595,18 @@ We propose a hard cap `PROJECTS_MAX = 32` for the UI's project picker — beyond
 
 - **AMY state size is an estimate.** The "moderate / heavy / stress" rows come from looking at the AMY source structure (oscillator bank + chorus/echo buffers + reverb tail). Real numbers would need a profiling run with `-O2` and `amy_overload_check()` enabled.
 - **Polyphony ceiling on the ESP32-S3 is ~30 voices** before audio glitches. The "stress" row above is a real upper bound, not extrapolation.
-- **Per-sample lengths vary.** A project with 16 long samples (10 s each) uses ~28 MB on flash — one such project fills the 16 MB partition almost entirely. The 11-projects figure assumes the *typical* profile (8 short samples), not the max.
-- **Streaming-to-flash** (v3) would let a single project's *live* pool exceed the PSRAM ceiling by streaming long samples from LittleFS on demand. AMY does not natively support streaming; this is real engineering, not a config change.
+- **Per-sample lengths vary.** A sketch with 16 long samples (10 s each) uses ~28 MB on flash — one such sketch fills the 16 MB partition almost entirely. The 11-sketches figure assumes the *typical* profile (8 short samples), not the max.
+- **Streaming-to-flash** (v3) would let a single sketch's *live* pool exceed the PSRAM ceiling by streaming long samples from LittleFS on demand. AMY does not natively support streaming; this is real engineering, not a config change.
 
-### 11.9 v2 UI proposal — the Project picker screen
+### 11.9 v2 UI proposal — the Sketch picker screen
 
 A new screen (extends §6):
 
 ```
 +-----------------------------------+
-|  PROJECTS                  3 / 32 |   ← top bar: count
+|  SKETCHES                  3 / 32 |   ← top bar: count
 |                                   |
-|   * DRUM KIT 1       0003  a1b2 |   ← * marks active project; 0003 = slot, a1b2 = id
+|   * DRUM KIT 1       0003  a1b2 |   ← * marks active sketch; 0003 = slot, a1b2 = id
 |     DISCO DEMO       0001  b3c4 |
 |     AMBIENT 03       0002  1234 |
 |     (unused slot)             |   ← "Create new" hint
@@ -1618,10 +1620,10 @@ A new screen (extends §6):
 ```
 
 Button bindings:
-- Press **step 1–8**: load the corresponding project (after a "switching…" progress indicator).
+- Press **step 1–8**: load the corresponding sketch (after a "switching…" progress indicator).
 - **FUNC** held: enter "manage" mode (create / delete / rename).
 - **BPM up / BPM down**: scroll the list (since the picker shows 8 of 32 at a time).
-- **PAT up / PAT down**: jump to first / last project.
+- **PAT up / PAT down**: jump to first / last sketch.
 
 The "manage" mode shows a sub-menu with **create / duplicate / delete / rename / export** options. Each is a step-button shortcut.
 
@@ -1636,8 +1638,8 @@ These are decisions I'm flagging now but punting to the implementer.
 
    Recommendation: **(c)**. Manual save is the PO-33 way; auto-save is the safety net for novices.
 
-2. **Project delete confirmation** — how many button presses to confirm? PO-33 requires holding REC + PATTERN. We could:
-   - (a) require holding FUNC + the project's slot number for 2 s.
+2. **Sketch delete confirmation** — how many button presses to confirm? PO-33 requires holding REC + PATTERN. We could:
+   - (a) require holding FUNC + the sketch's slot number for 2 s.
    - (b) require a separate "delete mode" entered via FUNC + a step number.
    - (c) require two separate presses (first selects, second confirms).
 
@@ -1650,13 +1652,13 @@ These are decisions I'm flagging now but punting to the implementer.
 
    Recommendation: **(a) for v2**, then **(b)** for v3 when USB-MSD is added.
 
-4. **Backward compatibility with v1's storage** — the v1 storage has flat `p0.bin..p15.bin` and `s0.bin..s15.bin`. v2's project folder layout is incompatible. On first boot with v2 firmware, the storage init should:
-   - (a) detect the old flat layout and migrate it into a new project (e.g. `legacy-default/`) automatically. Safe.
-   - (b) leave the old files alone and start with an empty project. The user loses their old patterns if they don't migrate manually.
+4. **Backward compatibility with v1's storage** — the v1 storage has flat `p0.bin..p15.bin` and `s0.bin..s15.bin`. v2's sketch folder layout is incompatible. On first boot with v2 firmware, the storage init should:
+   - (a) detect the old flat layout and migrate it into a new sketch (e.g. `legacy-default/`) automatically. Safe.
+   - (b) leave the old files alone and start with an empty sketch. The user loses their old patterns if they don't migrate manually.
 
-   Recommendation: **(a) with a one-shot migration** — detect old layout, rename to `legacy-default/`, treat as the active project on first boot, then delete the flat files after the user saves once.
+   Recommendation: **(a) with a one-shot migration** — detect old layout, rename to `legacy-default/`, treat as the active sketch on first boot, then delete the flat files after the user saves once.
 
-5. **Project metadata format** — JSON (human-readable but parseable) vs. a custom key=value format (smaller, faster to parse). Recommendation: JSON, written by `cJSON` (already in ESP-IDF as a built-in component).
+5. **Sketch metadata format** — JSON (human-readable but parseable) vs. a custom key=value format (smaller, faster to parse). Recommendation: JSON, written by `cJSON` (already in ESP-IDF as a built-in component).
 
 ---
 
