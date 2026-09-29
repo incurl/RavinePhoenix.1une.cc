@@ -239,7 +239,7 @@ enum {
  * here so the v2 implementer doesn't accidentally introduce the old
  * `project` prefix.
  */
-#define SKETCHES_MAX              32   /* hard cap for UI picker; see S11.8 */
+#define SKETCHES_MAX              16   /* hard cap for UI picker; see S11.8 */
 #define SKETCH_NAME_MAX           24    /* bytes, NUL-terminated */
 
 /* ─── UART shell ─────────────────────────────────────────────── */

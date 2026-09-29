@@ -1466,7 +1466,7 @@ typedef struct {
     uint32_t total_samples;     /* playback duration in samples */
 } sketch_meta_t;
 
-#define SKETCHES_MAX 32          /* hard cap; see §11.8 capacity math */
+#define SKETCHES_MAX 16          /* hard cap; see §11.8 capacity math */
 #define SKETCH_NAME_MAX 24
 
 esp_err_t storage_sketches_init(void);
@@ -1604,7 +1604,7 @@ Recommended: **`sketches` → 8 MB**. That gives ~5 typical sketches or ~60 tiny
 
 A `samples` partition is **not needed** in v2 — the active sketch's sample pool lives in PSRAM, and archived sketches' sample pools live in their sketch folder inside `sketches/`. The `samples` partition in the current `partitions.csv` is unused; we recommend removing it.
 
-We propose a hard cap `SKETCHES_MAX = 32` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (32 × 1.42 MB ≈ 45 MB which exceeds our 8 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
+We propose a hard cap `SKETCHES_MAX = 16` for the UI's sketch picker — beyond that the list becomes hard to navigate anyway. The hard cap is **not** enforced by flash space (16 × 1.42 MB ≈ 23 MB which still exceeds our 8 MB partition) — it's a UI limit. Real capacity is whatever fits in the partition.
 
 > **Action item for v2 implementation:** update `partitions.csv` to enlarge the `sketches` partition from 256 KB to **8 MB** and remove the unused `samples` partition. The `factory` app partition stays the same. **Done in `776bca7`** — `partitions.csv` now has `patterns, data, littlefs, 0x310000, 0x800000`.  *(Later renamed to `sketches` partition — see the §11.2 Note below.)*
 
@@ -1621,7 +1621,7 @@ A new screen (extends §6):
 
 ```
 +-----------------------------------+
-|  SKETCHES                  3 / 32 |       ← top bar: count
+|  SKETCHES                  3 / 16 |       ← top bar: count
 |                                   |
 |   * DRUM KIT 1       0003  a1b2   |       ← * marks active sketch
 |     DISCO DEMO       0001  b3c4   |       0003 = slot, a1b2 = id
@@ -1639,7 +1639,7 @@ A new screen (extends §6):
 Button bindings:
 - Press **step 1–8**: load the corresponding sketch (after a "switching…" progress indicator).
 - **SOUND** held: enter "manage" mode (create / delete / rename).
-- **BPM** tap / long-press: scroll the list (since the picker shows 8 of 32 at a time).
+- **BPM** tap / long-press: scroll the list (since the picker shows 8 of 16 at a time).
 - **PATTERN** tap / long-press: jump to first / last sketch.
 
 The "manage" mode shows a sub-menu with **create / duplicate / delete / rename / export** options. Each is a step-button shortcut.
