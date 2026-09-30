@@ -97,9 +97,9 @@ There are **23 physical buttons** in total:
 - **7 dedicated modifier buttons** wired to individual GPIOs (no matrix), laid
   out exactly like the PO-33's modifier row and column:
   - `SOUND` — hold + step 1–16 **selects** a sample slot (the PO-33's "S" key); press the same step with `SOUND` released to play it (strict two-step flow); tap and long-press alone are no-ops
-  - `PATTERN` — hold + step 1–16 selects a pattern (the PO-33's "⠛" key); tap and long-press alone are no-ops
+  - `PATTERN` — hold + step 1–16 selects a pattern AND appends it to the song chain (PO-33 "⠛" key); tap and long-press alone are no-ops
   - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press held: **Knob A = swing** (8 levels), **Knob B = fine BPM** (60–240)
-  - `REC` — start/stop recording (handler queued — see F-001 status note)
+  - `REC` — hold + step 1-16 records into that slot; release stops recording (F-001)
   - `FX` — **tap = tweak-mode cycle** (Tone / Filter / Trim, F-015); hold + step 1–15 = punch-in effect; step 16 = "no effect"
   - `PLAY` — start/stop sequencer
   - `WRITE` — enter / exit write mode (the PO-33's "·" key, handler queued)
@@ -229,8 +229,11 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Layman:** You press a button, the device starts listening through its microphone, you make a sound, you press the button again, and now the device has that sound stored in one of its 16 slots.
 - **PO-33 button combo:** Hold **REC** (star), then press the number of the slot (1–16) where you want to store the sound. Press **REC** again to stop.
 - **Our hardware combo:** Hold button "REC", then press a step button 1–16. Hold "REC" again to stop. (Identical button mapping.) Or via UART shell: `rec <slot>` then `stoprec`.
-- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_start_record(uint8_t slot)`, `amy_bridge_stop_record()`, `amy_bridge_pump_capture()`. The underlying recording API works (UART: `rec <slot>` + `stoprec`).
-- **Status:** ⚠️ partial. The recording API exists and works via UART. **The `BTN_REC` button has no input binding** (the `case BTN_REC` arm of `input_drain()`'s switch is a no-op), so the "hold REC + step N" gesture is not yet wired. The s_modifiers[] table has no entry for BTN_REC. Once added it would mirror PATTERN/SOUND/FX: `REC + step N` → `amy_bridge_start_record(N)`, release REC → `amy_bridge_stop_record()`. The latter needs release detection, which requires a separate path from PATTERN/SOUND/FX (those are *press*-bound, REC is *hold*-bound).
+- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_start_record(uint8_t slot)`, `amy_bridge_stop_record()`, `amy_bridge_pump_capture()`. The recording API works (UART: `rec <slot>` + `stoprec`). Bindings in `main/ui/input.c`:
+  - `s_held_modifiers[]` entry `{BTN_REC, rec_on_step, rec_on_release}`. `rec_on_step(N)` calls `amy_bridge_start_record(N - 1)`. `rec_on_release()` calls `amy_bridge_stop_record()` (fired on the true→false edge of `buttons_is_pressed(BTN_REC)` at the end of every drain).
+  - The `REC LED` (via `leds_set_rec(true/false)`) mirrors the recording state.
+  - First-press-wins: while `BTN_REC` is held, the first step press starts recording; subsequent step presses are no-ops (PO-33 manual: single-slot per REC hold).
+- **Status:** ✅ done. PO-33 ground truth (lode/PO-33 README): "hold record (star) + number, make sound, release buttons". Single-slot-per-hold matches the manual wording. The hold-release detection lives in the same end-of-drain polling block as `s_bpm_held`.
 
 #### F-002 — Record from line-in
 
@@ -349,9 +352,9 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §3
 - **Layman:** You can build a "song" by listing patterns in order: 1, 1, 1, 2, 3, 3, ... up to 128 entries. When you play, the device walks through the list. When it reaches the end, it loops back to the start.
 - **PO-33 button combo:** Hold **PATTERN** + 1–16 to add the current pattern to the chain; repeating the same pattern multiple times in the chain makes it play that many times before advancing.
-- **Our hardware combo:** Not exposed via UI. The internal `g_chain[]` buffer holds up to 128 entries; chain logic is implemented in `main/sequencer/sequencer.c` `on_step()` callback.
-- **Code location:** `main/sequencer/pattern.h` → `PATTERN_CHAIN_MAX 128`, `g_chain[]`, `g_chain_len`. `main/sequencer/sequencer.c` → `on_step()` increments `chain_idx` and rewrites `s_pattern` when reaching the chain end.
-- **Status:** ⚠️ partial. Internally wired; no UI button combo to add patterns to the chain.
+- **Our hardware combo:** Hold `PATTERN` and press numbers 1–16 in sequence; each press both selects that pattern AND appends it to `g_chain[]` (per the PO-33 manual: "hold pattern (⠛) + number(s)" → "choosing a single pattern multiple times is allowed"). The chain plays in order, looping back to the start. UART: `pattern N` still calls `sequencer_set_pattern(N)` without appending, so the user can pre-select a pattern without touching the chain.
+- **Code location:** `main/sequencer/sequencer.{c,h}` → `sequencer_chain_append(uint8_t)`, `sequencer_chain_clear()`, `g_chain[]`, `g_chain_len`. `on_step()` increments `chain_idx` and rewrites `s_pattern` when reaching the chain end. `main/ui/input.c` → `s_modifiers[]` entry `{BTN_PATTERN, pattern_on_step}`; `pattern_on_step()` calls both `sequencer_set_pattern()` and `sequencer_chain_append()`.
+- **Status:** ✅ done. PO-33 ground truth. Reorder / remove from chain (F-014) still queued (would need a chain-edit mode; current chain is append-only).
 
 #### F-014 — Reorder / remove patterns from chain
 

@@ -19,9 +19,9 @@ Source of truth: [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-3
 |11 | [select tweak] turn knob A/B → tweak parameter                          | F-016/F-017/F-018: knobs wire, binding pending                | knobs read but not bound                  | ❌ MISSING |
 |12 | [play pattern] hold fx + number (1-15) → add effect                    | F-019: FX + step 1-15 sets active_fx (carried to next note)  | FX + step 1-15 → sequencer_set_active_fx | ✅ done (b4fce86); but **does NOT save into pattern** — this is the "add effect" semantics, not "add+save in pattern" |
 |13 | [write mode] [play] hold fx + number (1-15) → add+save effect in pattern | F-019: "save in pattern queued"                              | not implemented                           | ❌ MISSING (depends on write mode, #6) |
-|14 | [write mode] [play] hold fx + 16 → clear effect in pattern             | (not in our docs at all)                                     | step 16 logs "swing stub"                | ❌ WRONG (we invented "FX+16=swing"; PO-33 says FX+16=clear-effect; swing is BPM+knob A!) |
-|15 | hold bpm (handle) + turn knob A → change swing                         | F-020/F-021 + HARDWARE.md §4.5b: BPM long-press + Knob A = fine tempo | BPM long-press + Knob A = fine tempo | ❌ WRONG (this should be SWING, not fine tempo!) |
-|16 | hold bpm (handle) + turn knob B → change tempo (fine tuned)            | F-020/F-021: ❌ missing                                       | Knob B never read                          | ❌ MISSING |
+|14 | [write mode] [play] hold fx + 16 → clear effect in pattern             | F-019: step 16 = PO33_FX_NONE ("no effect")                   | step 16 sets PO33_FX_NONE                | ✅ done (badaa4f). The PO-33 "clear in pattern" half lands in write mode (F-009, queued). |
+|15 | hold bpm (handle) + turn knob A → change swing                         | F-020: BPM long-press + Knob A = swing (8 levels); release keeps the level | sequencer_set_swing() from s_bpm_held polling; on_step() defers off-beat notes via s_swing_timer | ✅ done (badaa4f) |
+|16 | hold bpm (handle) + turn knob B → change tempo (fine tuned)            | F-020: BPM long-press + Knob B = continuous fine BPM         | knobs_get_b() read; knob_b_to_bpm() maps to [60..240] | ✅ done (badaa4f) |
 |17 | press bpm (handle) → change tempo (pre-defined modes)                  | F-020/F-021: tap cycles 80/120/140 (Hip Hop/Disco/Techno)   | BPM tap → sequencer_cycle_bpm_preset     | ✅ DONE |
 |18 | click bpm + number → change volume (max 5)                              | F-022: ❌ missing                                              | not bound                                 | ❌ MISSING |
 |19 | [select sound] hold write + sound + number → copy sound                 | F-023: ❌ missing                                              | no WRITE handler                          | ❌ MISSING (multi-modifier combo; not supported by framework) |
@@ -71,23 +71,36 @@ F-001 status says "✅ done" because the code has `amy_bridge_start_record()`. B
 |---|---|
 | PLAY tap → play/stop toggle | Matches PO-33 "press play (>)" |
 | BPM tap → cycle tempo presets (Hip Hop 80 / Disco 120 / Techno 140) | Matches PO-33 "press bpm (handle) to toggle between different levels" |
-| PATTERN held + step → select pattern | Matches PO-33 "hold pattern (⠛) + number" |
+| PATTERN held + step → select pattern AND append to chain | Matches PO-33 "hold pattern (⠛) + number" + "change patterns" |
 | SOUND held + step → select slot | Matches PO-33 "hold sound (S) + number" |
 | Step press without modifier after SOUND select → plays once | Matches PO-33 "[select sound] press number" |
+| REC held + step → record; release → stop | Matches PO-33 "hold record (star) + number, make sound, release buttons" |
+| BPM held + Knob A → swing (8 levels) | Matches PO-33 "change swing" |
+| BPM held + Knob B → fine BPM | Matches PO-33 "change tempo (fine tuned)" |
+| FX held + step 1–15 → set active FX | Matches PO-33 "hold fx (FX) + number (1-15)" |
+| FX held + step 16 → PO33_FX_NONE ("no effect") | Matches PO-33 manual effects table entry 16 |
 
 ## What's queued vs what's a lie
 
-The docs flag many items as "queued for v2". The issue is that *some* of those queued items have *wrong* specifics committed. Specifically:
-- BPM-Knob bindings: committed with WRONG mapping (swing vs fine tempo swapped)
-- FX+16 binding: committed with WRONG mapping (swing stub invented; should be clear-effect, behind write mode)
-- FX tap tweak-mode cycle: docs say "needs separate Tweak button"; correct is "FX tap cycles tweak"
+Items 1, 9, 14, 15, 16 in the table above were previously marked MISSING/WRONG; they're now done.
 
-## Recommended fixes (in priority order)
+What's still queued (and not "lie"-grade — just deferred):
+- F-009/F-010 write mode + fill pattern (audit items 6, 7, 13)
+- F-015 FX tap = tweak-mode cycle (audit item 10)
+- F-016/F-017/F-018 tweak-mode knob bindings (audit item 11)
+- F-022 volume level + battery status (audit items 18, 25, 26)
+- F-023/F-024/F-025/F-026/F-027 copy/delete (audit items 19-23)
+- F-037 factory reset (audit item 24)
+- F-038 active sounds/patterns display (audit item 27)
 
-1. **Swap BPM + knob bindings.** Knob A = swing (8 discrete levels? or continuous?). Knob B = fine tempo. This is a 4-line code change (rename `knob_a_to_bpm` → `knob_a_to_swing`, add `knob_b_to_bpm`; update `s_bpm_held` polling to read both knobs).
-2. **Remove the FX+16 swing stub. Replace with `PO33_FX_NONE` (entry 16 = "no effect" in PO-33's list).** Also fix the docs to say "FX+16 = clear effect in pattern" (behind write mode), not "swing".
-3. **F-015 docs: "press FX to toggle tweak mode"** — same button as punch-in FX. Two roles, no separate button needed.
-4. **Audit `po33_fx_t` ordering** against PO-33 manual list; add `PO33_FX_SCRATCH` (PO-33's entry 11, missing from our enum).
-5. **F-001 status flip to ⚠️ partial** (REC has no binding).
-6. **F-013 status: replace vs append semantics** — our `pattern_on_step` replaces; PO-33 chain-build appends.
+The remaining lie (F-015 said "needs separate Tweak button"; correct is FX tap cycles tweak) is a docs-only lie fixed by the REC+chain commit.
+
+## Recommended fixes (in priority order, after this commit)
+
+1. **FX tap = tweak-mode cycle** — same `BTN_FX` button, two roles. Add a `tweak_mode_t {TWEAK_TONE, TWEAK_FILTER, TWEAK_TRIM}` state machine; `BTN_FX` tap cycles, held-+-step routes to FX selection as today.
+2. **Tweak-mode knob bindings** — once tweak mode is in place, bind Knob A/B per F-016/F-017/F-018 (pitch/cutoff/start, volume/resonance/length).
+3. **BPM held + step 1–5 = volume level** (F-022) — extend the BPM held mode to also accept step 1–5 presses.
+4. **Multi-modifier combos** (F-023/F-024/F-025/F-026/F-027) — would require a multi-modifier framework entry.
+5. **Audit `po33_fx_t` enum ordering** vs PO-33 manual effects list. Flash-format-breaking; needs its own discussion.
+6. **WRITE enter/exit write mode** (F-009) — biggest remaining piece; needed for F-010, F-013's "save in pattern", F-023, F-025.
 

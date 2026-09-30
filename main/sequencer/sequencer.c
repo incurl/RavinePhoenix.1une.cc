@@ -139,6 +139,26 @@ void sequencer_set_pattern(uint8_t pattern)
     s_step = 0;
 }
 
+void sequencer_chain_append(uint8_t pattern)
+{
+    /* PO-33 manual: "hold pattern (⠛) + number(s) -> adds each number
+     * to the chain; choosing a single pattern multiple times is
+     * allowed". We append; refuse if the chain is full so we never
+     * overflow the g_chain[] buffer. */
+    if (pattern >= PATTERN_COUNT) return;
+    if (g_chain_len >= PATTERN_CHAIN_MAX) {
+        /* Silent no-op. The caller can pre-check with
+         * sequencer_chain_len() if it cares. */
+        return;
+    }
+    g_chain[g_chain_len++] = pattern;
+}
+
+void sequencer_chain_clear(void)
+{
+    g_chain_len = 0;
+}
+
 uint16_t sequencer_get_bpm(void)         { return s_bpm; }
 uint8_t  sequencer_get_current_step(void){ return s_step; }
 uint8_t  sequencer_get_current_pattern(void){ return s_pattern; }

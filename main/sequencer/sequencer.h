@@ -20,6 +20,8 @@ bool sequencer_is_playing(void);
 void sequencer_set_bpm(uint16_t bpm);
 void sequencer_cycle_bpm_preset(void);
 void sequencer_set_pattern(uint8_t pattern);
+void sequencer_chain_append(uint8_t pattern);  /* PO-33 chain build */
+void sequencer_chain_clear(void);
 
 /* Active slot / active FX. Set by the SOUND / FX hold-+-number
  * dispatcher in ui/input.c, consumed by on_step() so that subsequent

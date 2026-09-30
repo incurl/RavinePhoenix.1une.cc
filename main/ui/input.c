@@ -58,15 +58,33 @@ typedef struct {
     modifier_step_cb_t on_step;
 } modifier_binding_t;
 
+/* Hold-bound modifier: while btn_id is held, step presses route to
+ * on_step(step_1_to_16); when the modifier is released (true->false
+ * edge), on_release() fires once. Use this for REC (which the PO-33
+ * binds as hold-REC + step-N + release-REC). The press-bound
+ * s_modifiers[] table above doesn't fit REC because REC needs to do
+ * something on *release*, not just on each step press. */
+typedef void (*held_modifier_release_cb_t)(void);
+typedef struct {
+    uint8_t                     btn_id;
+    modifier_step_cb_t          on_step;
+    held_modifier_release_cb_t  on_release;
+} held_modifier_binding_t;
+
 static void pattern_on_step(uint8_t step_1_to_16);
+static void rec_on_step(uint8_t step_1_to_16);
+static void rec_on_release(void);
 
 static const modifier_binding_t s_modifiers[] = {
     /* PO-33 ground truth (https://github.com/lode/PO-33 README):
      *   "select pattern — hold pattern (⠛) + number"
      *   "change patterns — hold pattern (⠛) + number(s)"
-     * Tap and long-press of PATTERN alone are no-ops; the only PO-33
-     * behaviour is "hold + number". The chain-build variant lands
-     * alongside F-013 (still ❌ missing). */
+     *
+     * Both behaviours land in pattern_on_step(): it sets the active
+     * pattern AND appends to the chain. Repeated presses append
+     * multiple copies (PO-33: "choosing a single pattern multiple
+     * times is allowed"). Tap and long-press of PATTERN alone are
+     * no-ops; the only PO-33 behaviour is "hold + number". */
     { BTN_PATTERN, pattern_on_step },
 
     /* PO-33: "select sound — hold sound (S) + number"
@@ -87,6 +105,24 @@ static const modifier_binding_t s_modifiers[] = {
 };
 
 #define MODIFIER_COUNT (sizeof(s_modifiers) / sizeof(s_modifiers[0]))
+
+/* Hold-bound modifiers. REC is currently the only entry; WRITE will
+ * land here too once write-mode state is implemented. The priority
+ * order matters when multiple modifiers are held simultaneously: the
+ * first match in the array wins. With only REC for now, it always
+ * wins when held (which is the PO-33 behaviour — the user is
+ * recording, so step presses mean "select slot to record into", not
+ * anything else). */
+static const held_modifier_binding_t s_held_modifiers[] = {
+    /* PO-33: "hold record (star) + number" -> record own sound;
+     *        release -> stop. The PO-33 manual wording is single-
+     * shot per REC hold ("hold record + number, make sound, release
+     * buttons"). Subsequent step presses while REC stays held are
+     * no-ops; first press wins. */
+    { BTN_REC, rec_on_step, rec_on_release },
+};
+
+#define HELD_MODIFIER_COUNT (sizeof(s_held_modifiers) / sizeof(s_held_modifiers[0]))
 
 /* ─── Helpers ──────────────────────────────────────────────────── */
 
@@ -138,9 +174,57 @@ static uint16_t knob_b_to_bpm(uint8_t knob_v)
 
 static void pattern_on_step(uint8_t step_1_to_16)
 {
-    /* PO-33: "hold PATTERN + number" loads that pattern directly.
-     * We map step 1..16 -> pattern 0..15. */
-    sequencer_set_pattern((uint8_t)(step_1_to_16 - 1));
+    /* PO-33: "hold PATTERN + number" -> selects pattern + appends to
+     * the song chain. The PO-33 manual lists two distinct verbs:
+     *   "select pattern — hold pattern (⠛) + number"
+     *   "change patterns — hold pattern (⠛) + number(s)"
+     * Both share the same gesture and the same data path: every press
+     * selects the pattern AND appends a copy to g_chain[] (so the
+     * pattern will replay). Per the manual, repeating the same pattern
+     * is allowed ("choosing a single pattern multiple times is
+     * allowed"), which we honour by always appending rather than
+     * replacing.
+     *
+     * Note: the *display* of which-pattern-is-currently-playing is
+     * still just `s_pattern`; the chain only affects the loop, not
+     * the current step. A user pressing PATTERN + 5, then PATTERN + 7
+     * will hear pattern 5 play, then pattern 7 play, then loop. */
+    uint8_t pattern = (uint8_t)(step_1_to_16 - 1);
+    sequencer_set_pattern(pattern);
+    sequencer_chain_append(pattern);
+}
+
+/* REC hold-bound callbacks. The PO-33 manual says:
+ *   "hold record (star) + number" -> record own sound
+ *   "make sound" -> capture
+ *   "release buttons" -> stop
+ *
+ * rec_on_step fires on the FIRST step press while REC is held; the
+ * first press wins (PO-33 is single-slot per REC hold; subsequent
+ * presses while still held are no-ops). rec_on_release fires on the
+ * true->false edge of BTN_REC. REC LED mirrors the recording state. */
+static bool s_recording = false;
+
+/* Previous-tick state of BTN_REC, used to detect the true->false
+ * edge (release) at the end-of-drain polling block. */
+static bool s_rec_prev_held = false;
+
+static void rec_on_step(uint8_t step_1_to_16)
+{
+    if (s_recording) return;     /* first press wins; ignore the rest */
+    uint8_t slot = (uint8_t)(step_1_to_16 - 1);
+    if (amy_bridge_start_record(slot) == ESP_OK) {
+        s_recording = true;
+        leds_set_rec(true);
+    }
+}
+
+static void rec_on_release(void)
+{
+    if (!s_recording) return;
+    amy_bridge_stop_record();
+    leds_set_rec(false);
+    s_recording = false;
 }
 
 static void sound_on_step(uint8_t step_1_to_16)
@@ -200,13 +284,33 @@ static void play_active_slot(void)
                          (po33_fx_t)sequencer_get_active_fx(), 0, 0);
 }
 
-/* Find the first modifier currently being held, if any. Returns NULL
- * when no modifier is held. */
-static const modifier_binding_t *active_modifier(void)
+/* Find the first press-bound modifier currently being held, or NULL.
+ * Pure helper -- callers handle precedence rules. */
+static const modifier_binding_t *find_press_modifier(uint8_t btn_id)
 {
     for (size_t i = 0; i < MODIFIER_COUNT; i++) {
-        if (buttons_is_pressed(s_modifiers[i].btn_id)) {
-            return &s_modifiers[i];
+        if (s_modifiers[i].btn_id == btn_id) return &s_modifiers[i];
+    }
+    return NULL;
+}
+
+/* Find the first hold-bound modifier currently being held, or NULL. */
+static const held_modifier_binding_t *find_held_modifier(uint8_t btn_id)
+{
+    for (size_t i = 0; i < HELD_MODIFIER_COUNT; i++) {
+        if (s_held_modifiers[i].btn_id == btn_id) return &s_held_modifiers[i];
+    }
+    return NULL;
+}
+
+/* Returns the highest-priority held modifier (if any), preferring
+ * hold-bound over press-bound. With our current tables this is just
+ * "REC if held, else NULL". */
+static const held_modifier_binding_t *active_held_modifier(void)
+{
+    for (size_t i = 0; i < HELD_MODIFIER_COUNT; i++) {
+        if (buttons_is_pressed(s_held_modifiers[i].btn_id)) {
+            return &s_held_modifiers[i];
         }
     }
     return NULL;
@@ -229,9 +333,32 @@ void input_drain(void)
         /* Modifier + step routing (PO-33 "hold + number" idiom).
          * Runs *before* the per-btn switch because we want step
          * presses to be routed even when their default step handler
-         * would also fire. */
+         * would also fire.
+         *
+         * Precedence: hold-bound (REC) wins over press-bound
+         * (PATTERN/SOUND/FX). With only one of each currently, this
+         * matches the PO-33 manual: while REC is held, step presses
+         * always mean "select slot to record into", not "select
+         * pattern" etc. */
         if (BTN_IS_STEP(ev.btn_id) && !ev.long_press) {
-            const modifier_binding_t *m = active_modifier();
+            const held_modifier_binding_t *hm = active_held_modifier();
+            if (hm) {
+                uint8_t step_1_to_16 =
+                    (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
+                ESP_LOGI(TAG, "%s + STEP%u",
+                         btn_id_str(hm->btn_id),
+                         (unsigned)step_1_to_16);
+                hm->on_step(step_1_to_16);
+                continue;
+            }
+            /* Press-bound: first match wins. */
+            const modifier_binding_t *m = NULL;
+            for (size_t i = 0; i < MODIFIER_COUNT; i++) {
+                if (buttons_is_pressed(s_modifiers[i].btn_id)) {
+                    m = &s_modifiers[i];
+                    break;
+                }
+            }
             if (m) {
                 uint8_t step_1_to_16 =
                     (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
@@ -239,7 +366,7 @@ void input_drain(void)
                          btn_id_str(m->btn_id),
                          (unsigned)step_1_to_16);
                 m->on_step(step_1_to_16);
-                continue;   /* do not fall through to default handler */
+                continue;
             }
             /* No modifier held + step pressed: PO-33 second-press
              * play-the-selected-sound. No-op if nothing is selected. */
@@ -300,8 +427,14 @@ void input_drain(void)
              * lives in the s_modifiers[] table above. */
             break;
 
+        case BTN_REC:
+            /* No-op as a bare button. REC's hold-+-step and release
+             * semantics live in the s_held_modifiers[] table +
+             * end-of-drain release polling. */
+            break;
+
         default:
-            /* REC / WRITE: handlers land in future commits. */
+            /* WRITE: handler lands in a future commit. */
             break;
         }
     }
@@ -335,4 +468,15 @@ void input_drain(void)
             }
         }
     }
+
+    /* Hold-bound modifier release (REC, etc.). Detect the true->false
+     * edge and fire on_release() once per release. The button event
+     * stream itself only emits press/long-press events for modifier
+     * buttons; the actual release is detected by polling the
+     * debounced state at the end of every drain. */
+    bool rec_now_held = buttons_is_pressed(BTN_REC);
+    if (s_rec_prev_held && !rec_now_held) {
+        rec_on_release();
+    }
+    s_rec_prev_held = rec_now_held;
 }
