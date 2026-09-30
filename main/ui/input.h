@@ -5,13 +5,6 @@
  * routes each event to the matching subsystem handler (transport,
  * pattern selection, BPM, REC, FX, WRITE, step toggles, etc.).
  *
- * For now this is a single switch in input_dispatch() that prints each
- * event and dispatches the few transport-level actions that have an
- * existing sequencer_* / amy_bridge_* API to call. The full UI state
- * machine (write mode, sketch picker, tweak-mode UX) is queued for
- * follow-up commits; each handler that lands later will land as a new
- * case here.
- *
  * Designed to be called from button_scan_task at ~10 ms cadence. The
  * function drains *all* queued events per call so a button-burst
  * during a brief scan gap never loses input.
@@ -20,6 +13,7 @@
 #define PO33_INPUT_H
 
 #include "ui/buttons.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +21,45 @@ extern "C" {
 
 /* Drain every event currently in the button queue. No-op if empty. */
 void input_drain(void);
+
+/* Tweak-mode state machine (PO-33 F-015 / F-016/017/018). Cycle order:
+ * Tone -> Filter -> Trim -> Tone. Tweak mode is "always on" (no
+ * NONE state) per the PO-33 manual wording; the sequencer reads the
+ * current mode via tweak_get_mode() and applies knob-axis bindings
+ * (Knob A/B) when triggering notes.
+ *
+ * Trim has no per-step data field -- trim is per-slot. For Trim mode,
+ * the caller (play_active_slot) should call tweak_apply_slot()
+ * which routes Knob A/B into amy_bridge_set_trim() on the active
+ * slot. For in-pattern tweaking (sequencer on_step), Trim is a
+ * no-op because we can't per-step trim; the per-step voice will
+ * still play. */
+typedef enum {
+    TWEAK_TONE   = 0,
+    TWEAK_FILTER,
+    TWEAK_TRIM,
+    TWEAK_MODE_COUNT,
+} tweak_mode_t;
+
+tweak_mode_t tweak_get_mode(void);
+
+/* Apply the current tweak-mode binding (Tone or Filter) to a
+ * per-step note in place. No-op for Trim mode (which has no per-step
+ * representation). Knob A maps to: Tone -> note (MIDI 0..127),
+ * Filter -> filter_cutoff (0..255). Knob B maps to: Tone ->
+ * velocity (0..127), Filter -> resonance -- but resonance has no
+ * per-step field in step_t, so v1 leaves resonance as a no-op (the
+ * knob reading is logged but not applied). v2 adds a `resonance`
+ * field to step_t. */
+void tweak_apply_step(uint8_t *note, uint8_t *velocity,
+                      uint8_t *filter_cutoff);
+
+/* Apply the current tweak-mode binding (Trim) to the active slot.
+ * No-op for Tone and Filter modes (the caller can call this
+ * unconditionally; for Tone/Filter the function is a no-op).
+ * Knob A -> trim start, Knob B -> trim end. Calls
+ * amy_bridge_set_trim() with the new bounds. */
+void tweak_apply_slot(uint8_t slot);
 
 #ifdef __cplusplus
 }

@@ -174,7 +174,7 @@ An **effect** (called "FX" for short) is a modification applied to a sound. Effe
 
 ### 2.10 Tweak parameter
 
-A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware also uses two physical knobs — wired to GPIO 20 (Knob A) and GPIO 46 (Knob B), with the `ui/knobs.c` driver reading them every button-scan tick — but the full PO-33-style tweak-mode UX (cycle Tone / Filter / Trim with the FX button, then turn a knob to adjust) is queued for v2. In v1, the knob hardware is wired and read, and §3.4 features F-016/F-017/F-018 are flagged as "knobs wired, tweak binding pending".
+A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware uses two physical knobs — wired to GPIO 20 (Knob A) and GPIO 46 (Knob B), with the `ui/knobs.c` driver reading them every button-scan tick. `BTN_FX` tap cycles the mode (Tone → Filter → Trim → Tone); turning the knobs adjusts the playing step or active slot accordingly. See §3.4 (F-015 through F-018) for the per-mode knob bindings.
 
 ### 2.11 Punch-in
 
@@ -375,8 +375,8 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
   - **Tap** = cycle tweak parameter (Tone → Filter → Trim → wrap).
   - **Held + step 1–15** = select a punch-in effect (F-019).
   - **Held + step 16** = "no effect" (clears active FX; the full "clear effect in pattern" combo lands in write mode, queued).
-- **Code location:** Needs a `tweak_mode_t {TWEAK_TONE, TWEAK_FILTER, TWEAK_TRIM}` state machine in `main/ui/display.c` plus handlers that bind the knob axes (Knob A = pitch/filter-cutoff/start, Knob B = volume/resonance/length) per F-016/F-017/F-018. The dispatcher needs to route `BTN_FX tap` here separately from the existing `s_modifiers[]` hold-+-number path — `input_drain()`'s `BTN_FX` switch case will grow a no-op-when-held + tweak-cycle-when-tapped branch.
-- **Status:** ❌ missing (the FX tap currently no-ops; the held-+-step path from F-019 is wired but the tap path isn't routed to a tweak-mode state machine).
+- **Code location:** `main/ui/input.h` → `tweak_mode_t` enum + `tweak_get_mode()`. `main/ui/input.c` → `s_tweak_mode` state + `tweak_mode_cycle()` (called from the `BTN_FX` tap dispatch) + `tweak_apply_step()` / `tweak_apply_slot()` (called from the sequencer `on_step` and `play_active_slot` respectively). The cycle is Tone → Filter → Trim → Tone, never NONE.
+- **Status:** ✅ done. `BTN_FX tap` cycles the mode; long-press is a no-op (the held-+-step punch-in path from F-019 fires on step events before reaching the per-btn switch). The TFT currently shows no tweak-mode label — `display.c` doesn't render the mode — so the state lives in `s_tweak_mode` but isn't surfaced yet. This is a v2 display addition, not a logic gap.
 
 #### F-016 — Tweak Tone (Knob A = pitch, Knob B = volume)
 
@@ -385,7 +385,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **PO-33 button combo:** Turn knob A / B.
 - **Our hardware combo:** Knob A → GPIO 20 (ADC1_CH9); Knob B → GPIO 46 (ADC1_CH5). The knob driver (`ui/knobs.c`) reads them on every button-scan tick. Wiring through to per-step pitch/volume is v2 work; the data model (`step_t.note`, `step_t.velocity`) already supports it.
 - **Code location:** `step_t.note` (pitch), `step_t.velocity` (volume); `ui/knobs.c` reads; `main/audio/amy_bridge.c` writes into `amy_event.midi_note` / `amy_event.velocity`.
-- **Status:** ⚠️ partial. Knobs wired and read; tweak-mode UI binding queued for v2.
+- **Status:** ✅ done while `s_tweak_mode == TWEAK_TONE`. `tweak_apply_step()` reads `knobs_get_a()` → MIDI note (0..255 → 36..97, mapping C2..C7) and `knobs_get_b()` → velocity (0..255 → 0..127). The sequencer's `on_step()` and `play_active_slot()` call `tweak_apply_step()` before `amy_bridge_play_note()`. v1 lacks `resonance` as a per-step field (F-017 below); the knob B reading in Filter mode is logged but not stored.
 
 #### F-017 — Tweak Filter (Knob A = LP/HP, Knob B = resonance)
 
@@ -393,8 +393,8 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Layman:** With Tweak = Filter, **Knob A** picks the cutoff frequency (low-pass or high-pass); **Knob B** picks how strong the filter is (resonance).
 - **PO-33 button combo:** Turn knobs.
 - **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). The filter data field is `step_t.filter_cutoff` (0–255); v1 firmware maps a low-pass sweep into `amy_event.filter_freq` via the existing `PO33_FX_FILTER_SWEEP` effect.
-- **Code location:** `step_t.filter_cutoff`; `main/audio/amy_bridge.c` → `apply_fx()` → `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`.
-- **Status:** ⚠️ partial. Filter sweep works as an effect; knob → filter binding queued for v2.
+- **Code location:** `step_t.filter_cutoff`; `main/audio/amy_bridge.c` → `apply_fx()` → `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`. `main/ui/input.c` → `tweak_apply_step()` in `TWEAK_FILTER` mode reads `knobs_get_a()` → `filter_cutoff` (0..255). Resonance knob is logged but no per-step field exists yet; v2 adds a `resonance` field to `step_t`.
+- **Status:** ✅ done for cutoff (knob A). Resonance (knob B) queued for v2.
 
 #### F-018 — Tweak Trim (Knob A = start point, Knob B = length)
 
@@ -403,7 +403,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **PO-33 button combo:** Turn knob A = start, B = length.
 - **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). Per-slot trim is already stored in `s_slots[slot].start` / `.end` and exposed via `amy_bridge_set_trim()` (UART). Knob → trim binding queued for v2.
 - **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_set_trim(slot, start, end)`. `s_slots[slot].start` / `.end` are stored.
-- **Status:** ⚠️ partial. Function exists; knob → trim binding queued for v2.
+- **Status:** ✅ done while `s_tweak_mode == TWEAK_TRIM`. `tweak_apply_slot(slot)` reads `knobs_get_a()`/`b()` → trim start/end (mapped to sample indices 0..slot_len-1 via `amy_bridge_slot_ptr()` + `amy_bridge_slot_len_samples()`) and calls `amy_bridge_set_trim()`. Triggered from `play_active_slot()`; the per-step sequencer path doesn't apply trim (no per-step trim field, and the user is expected to trim the active slot, not individual pattern steps).
 
 ### 3.5 Section 5 — Effects (the 16 punch-ins)
 
@@ -1146,7 +1146,7 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Erase pattern | H+REC + PATTERN | not yet |
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
-| Tweak tone/filter/trim | FX cycles; knobs A/B adjust | Knob A/B wired (ADC); tweak-mode binding queued for v2 |
+| Tweak tone/filter/trim | FX tap cycles; knobs A/B adjust | FX tap cycles Tone → Filter → Trim → Tone; knobs bind to per-step data (Tone/Filter) or slot trim (Trim) |
 | Change swing | H+BPM + knob A | H+BPM + Knob A → 8 discrete levels (0=no swing, 7=max); release keeps the level |
 | Fine BPM | H+BPM + knob B | H+BPM + Knob B → continuous 60–240 BPM; release keeps the BPM |
 | Sync out | always on | always on |

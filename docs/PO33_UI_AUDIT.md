@@ -15,8 +15,8 @@ Source of truth: [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-3
 | 7 | [write mode] press sound#, press step#s → fill pattern                  | F-009/F-010: queued for v2                                   | no write mode                             | ❌ MISSING |
 | 8 | [select pattern] press play (>) → play pattern                         | (F-022 documents PLAY = tap toggle)                          | PLAY tap → sequencer_play/stop toggle    | ✅ DONE (matches PO-33) |
 | 9 | hold pattern (⠛) + number(s) → change patterns (chain)                | F-013: chain build (partial); F-014: reorder (missing)        | pattern_on_step replaces, not appends    | ⚠️ WRONG semantics (we replace; PO-33 appends) |
-|10 | press fx (FX) → toggle tweak parameter (Tone/Filter/Trim)             | F-015: ❌ missing; "We'd need a separate Tweak button" (WRONG) | BTN_FX tap: no-op                       | ❌ MISSING + DOC LIE (FX IS the tweak button!) |
-|11 | [select tweak] turn knob A/B → tweak parameter                          | F-016/F-017/F-018: knobs wire, binding pending                | knobs read but not bound                  | ❌ MISSING |
+|10 | press fx (FX) → toggle tweak parameter (Tone/Filter/Trim)             | F-015: FX tap cycles s_tweak_mode TONE → FILTER → TRIM → TONE | tweak_mode_cycle() called from BTN_FX tap dispatch | ✅ done (tweak-mode commit) |
+|11 | [select tweak] turn knob A/B → tweak parameter                          | F-016/F-017/F-018: knob bindings wired via tweak_apply_step / tweak_apply_slot | TONE: Knob A -> MIDI note, Knob B -> velocity; FILTER: Knob A -> filter_cutoff (resonance TODO); TRIM: Knob A/B -> amy_bridge_set_trim on active slot | ✅ done (knob A in all 3 modes; knob B in TONE only; knob B in FILTER is logged TODO; knob B in TRIM sets trim end). Caveat: PO-33 has dedicated tweak-target buttons (S+1, S+2, ...) we lack. |
 |12 | [play pattern] hold fx + number (1-15) → add effect                    | F-019: FX + step 1-15 sets active_fx (carried to next note)  | FX + step 1-15 → sequencer_set_active_fx | ✅ done (b4fce86); but **does NOT save into pattern** — this is the "add effect" semantics, not "add+save in pattern" |
 |13 | [write mode] [play] hold fx + number (1-15) → add+save effect in pattern | F-019: "save in pattern queued"                              | not implemented                           | ❌ MISSING (depends on write mode, #6) |
 |14 | [write mode] [play] hold fx + 16 → clear effect in pattern             | F-019: step 16 = PO33_FX_NONE ("no effect")                   | step 16 sets PO33_FX_NONE                | ✅ done (badaa4f). The PO-33 "clear in pattern" half lands in write mode (F-009, queued). |
@@ -79,6 +79,8 @@ F-001 status says "✅ done" because the code has `amy_bridge_start_record()`. B
 | BPM held + Knob B → fine BPM | Matches PO-33 "change tempo (fine tuned)" |
 | FX held + step 1–15 → set active FX | Matches PO-33 "hold fx (FX) + number (1-15)" |
 | FX held + step 16 → PO33_FX_NONE ("no effect") | Matches PO-33 manual effects table entry 16 |
+| FX tap → cycle tweak parameter (Tone → Filter → Trim → Tone) | Matches PO-33 "press fx (FX) to toggle between different parameters" |
+| In tweak mode, knob A/B adjust the active parameter | Matches PO-33 "[select tweak parameter] turn knob A/B" |
 
 ## What's queued vs what's a lie
 
@@ -86,21 +88,24 @@ Items 1, 9, 14, 15, 16 in the table above were previously marked MISSING/WRONG; 
 
 What's still queued (and not "lie"-grade — just deferred):
 - F-009/F-010 write mode + fill pattern (audit items 6, 7, 13)
-- F-015 FX tap = tweak-mode cycle (audit item 10)
-- F-016/F-017/F-018 tweak-mode knob bindings (audit item 11)
 - F-022 volume level + battery status (audit items 18, 25, 26)
 - F-023/F-024/F-025/F-026/F-027 copy/delete (audit items 19-23)
 - F-037 factory reset (audit item 24)
 - F-038 active sounds/patterns display (audit item 27)
-
-The remaining lie (F-015 said "needs separate Tweak button"; correct is FX tap cycles tweak) is a docs-only lie fixed by the REC+chain commit.
+- TFT surfacing of the tweak mode label (v2 display work; the
+  state is correctly tracked in `s_tweak_mode` but `display.c`
+  doesn't render it).
+- PO-33's dedicated tweak-target buttons (S+1, S+2, etc.) which
+  set which *slot* is being tweaked. We don't have those; tweak
+  mode affects whichever slot just played. PO-33-grade behaviour
+  would queue for v2.
 
 ## Recommended fixes (in priority order, after this commit)
 
-1. **FX tap = tweak-mode cycle** — same `BTN_FX` button, two roles. Add a `tweak_mode_t {TWEAK_TONE, TWEAK_FILTER, TWEAK_TRIM}` state machine; `BTN_FX` tap cycles, held-+-step routes to FX selection as today.
-2. **Tweak-mode knob bindings** — once tweak mode is in place, bind Knob A/B per F-016/F-017/F-018 (pitch/cutoff/start, volume/resonance/length).
-3. **BPM held + step 1–5 = volume level** (F-022) — extend the BPM held mode to also accept step 1–5 presses.
-4. **Multi-modifier combos** (F-023/F-024/F-025/F-026/F-027) — would require a multi-modifier framework entry.
-5. **Audit `po33_fx_t` enum ordering** vs PO-33 manual effects list. Flash-format-breaking; needs its own discussion.
-6. **WRITE enter/exit write mode** (F-009) — biggest remaining piece; needed for F-010, F-013's "save in pattern", F-023, F-025.
+1. **BPM held + step 1–5 = volume level** (F-022) — extend the BPM held mode to also accept step 1–5 presses.
+2. **Multi-modifier combos** (F-023/F-024/F-025/F-026/F-027) — would require a multi-modifier framework entry.
+3. **Audit `po33_fx_t` enum ordering** vs PO-33 manual effects list. Flash-format-breaking; needs its own discussion.
+4. **WRITE enter/exit write mode** (F-009) — biggest remaining piece; needed for F-010, F-013's "save in pattern", F-023, F-025.
+5. **Tweak-mode label on TFT** — render `s_tweak_mode` in `display.c` so the user can see which mode is active.
+6. **Add `step_t.resonance` field** — currently knob B in Filter mode is logged but not stored (no per-step resonance data).
 

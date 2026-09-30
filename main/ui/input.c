@@ -75,6 +75,19 @@ static void pattern_on_step(uint8_t step_1_to_16);
 static void rec_on_step(uint8_t step_1_to_16);
 static void rec_on_release(void);
 
+/* Forward declarations for tweak-mode. The tweak machinery is defined
+ * later in the file (after play_active_slot, which uses it); these
+ * forward decls let us call tweak_apply_step / tweak_apply_slot /
+ * tweak_mode_cycle from play_active_slot and the per-btn switch
+ * without an order dependency. */
+typedef enum {
+    TWEAK_TONE   = 0,
+    TWEAK_FILTER,
+    TWEAK_TRIM,
+    TWEAK_MODE_COUNT,
+} tweak_mode_t;
+static void tweak_mode_cycle(void);
+
 static const modifier_binding_t s_modifiers[] = {
     /* PO-33 ground truth (https://github.com/lode/PO-33 README):
      *   "select pattern — hold pattern (⠛) + number"
@@ -272,15 +285,112 @@ static void fx_on_step(uint8_t step_1_to_16)
     }
 }
 
+/* ─── Tweak-mode state machine ────────────────────────────────── */
+
+/* The PO-33 has three tweak parameters (Tone / Filter / Trim). Per the
+ * manual: "press fx (FX) to toggle between different parameters". The
+ * cycle is Tone -> Filter -> Trim -> Tone (4-state loop, never NONE).
+ * When tweak mode is active, the knob axes bind differently per
+ * mode (see tweak_apply() in on_step's caller path).
+ *
+ * `tweak_mode_cycle()` is called from the BTN_FX tap dispatch.
+ * `tweak_get_mode()` is called by the sequencer's on_step() to
+ * apply the knob axes to the current step. The tweak_mode_t enum is
+ * forward-declared near the top of the file. */
+
+static tweak_mode_t s_tweak_mode = TWEAK_TONE;
+static uint8_t      s_tweak_knob_a_last = 0;   /* delta detection */
+static uint8_t      s_tweak_knob_b_last = 0;
+
+static void tweak_mode_cycle(void)
+{
+    s_tweak_mode = (tweak_mode_t)((s_tweak_mode + 1) % TWEAK_MODE_COUNT);
+    /* Reset knob "last" snapshots so the new mode's first read
+     * doesn't trip a phantom delta on stale state. */
+    s_tweak_knob_a_last = knobs_get_a();
+    s_tweak_knob_b_last = knobs_get_b();
+    ESP_LOGI(TAG, "tweak mode -> %s",
+             s_tweak_mode == TWEAK_TONE   ? "TONE"  :
+             s_tweak_mode == TWEAK_FILTER ? "FILTER" :
+             s_tweak_mode == TWEAK_TRIM   ? "TRIM"  : "?");
+}
+
+tweak_mode_t tweak_get_mode(void) { return s_tweak_mode; }
+
+/* Map knob A 0..255 to MIDI note 36..96 (C2..C7). 61 notes span the
+ * range; knob granularity is 4-5 units per semitone which feels
+ * natural. The PO-33's own tweak range is "the full audible range",
+ * so C2..C7 covers both the bass (drum) and melody (melodic)
+ * sections without forcing the user to scroll. */
+static uint8_t knob_a_to_midi_note(uint8_t k) {
+    /* 36 + (61 * k + 127) / 255 -> [36..96] */
+    return (uint8_t)(36 + ((61u * (uint32_t)k + 127) / 255));
+}
+
+void tweak_apply_step(uint8_t *note, uint8_t *velocity,
+                      uint8_t *filter_cutoff)
+{
+    switch (s_tweak_mode) {
+    case TWEAK_TONE:
+        /* Knob A -> pitch (MIDI note). Knob B -> velocity. */
+        *note        = knob_a_to_midi_note(knobs_get_a());
+        *velocity    = (uint8_t)((uint32_t)knobs_get_b() * 127 / 255);
+        break;
+    case TWEAK_FILTER:
+        /* Knob A -> filter cutoff. Knob B -> resonance (no per-step
+         * field in step_t; logged for visibility, v2 adds the field). */
+        *filter_cutoff = knobs_get_a();
+        ESP_LOGI(TAG, "tweak FILTER: cutoff=%u resonance=%u (resonance TODO)",
+                 knobs_get_a(), knobs_get_b());
+        break;
+    case TWEAK_TRIM:
+        /* No-op for in-pattern tweaking (no per-step trim data). */
+        break;
+    case TWEAK_MODE_COUNT:
+    default:
+        break;
+    }
+}
+
+void tweak_apply_slot(uint8_t slot)
+{
+    if (s_tweak_mode != TWEAK_TRIM) return;
+    /* Map knob A/B to trim bounds in samples. We don't know the
+     * slot length here, so we ask amy_bridge for the slot ptr + len
+     * and clamp. Knob A = trim start fraction (0..255 -> 0..len-1).
+     * Knob B = trim end fraction (0..255 -> 0..len-1). Force
+     * start < end to avoid amy_bridge_set_trim refusing. */
+    const int16_t *p   = amy_bridge_slot_ptr(slot);
+    size_t        len = amy_bridge_slot_len_samples(slot);
+    if (!p || len == 0) return;
+    uint32_t start = (uint32_t)((uint64_t)knobs_get_a() * (len - 1) / 255);
+    uint32_t end   = (uint32_t)((uint64_t)knobs_get_b() * (len - 1) / 255);
+    if (end <= start) end = start + 1;
+    if (end >= len)  end = len - 1;
+    amy_bridge_set_trim(slot, start, end);
+}
+
 /* Trigger the currently selected slot. Called from input_drain() when
  * a step event arrives with no modifier held. If no slot is selected
  * yet (0xFF), this is a no-op. Uses midi_note = 60 (middle C) and
- * velocity = 100 — same defaults sequencer_set_step_slot() uses. */
+ * velocity = 100 — same defaults sequencer_set_step_slot() uses.
+ *
+ * Trim-mode tweak: when in TWEAK_TRIM, the knob axes set the slot's
+ * trim bounds (start, end) instead of triggering a note. This is the
+ * PO-33 behaviour: in trim mode, the slot's trim is what gets
+ * adjusted, not its playback parameters. */
 static void play_active_slot(void)
 {
     uint8_t slot = sequencer_get_active_slot();
     if (slot == 0xFF) return;
-    amy_bridge_play_note(slot, 60, 100,
+    if (s_tweak_mode == TWEAK_TRIM) {
+        tweak_apply_slot(slot);
+        return;
+    }
+    uint8_t note = 60, velocity = 100, filter_cutoff = 0;
+    tweak_apply_step(&note, &velocity, &filter_cutoff);
+    (void)filter_cutoff;  /* play_note API doesn't take filter_cutoff yet */
+    amy_bridge_play_note(slot, note, velocity,
                          (po33_fx_t)sequencer_get_active_fx(), 0, 0);
 }
 
@@ -422,9 +532,26 @@ void input_drain(void)
             break;
 
         case BTN_SOUND:
+            /* No-op as a bare button. Hold-+-NUMBER dispatch lives in
+             * the s_modifiers[] table above. */
+            break;
+
         case BTN_FX:
-            /* No-op as a bare button. Their hold-+-NUMBER dispatch
-             * lives in the s_modifiers[] table above. */
+            /* FX has two roles (per PO-33 manual):
+             *   - Tap (no long-press): cycle tweak parameter
+             *     Tone -> Filter -> Trim -> Tone.
+             *   - Held + step N: select a punch-in effect (s_modifiers[]
+             *     fx_on_step path; runs on the press event before this
+             *     switch, so we don't reach here for held-+-step).
+             *
+             * The dispatch only reaches here on a *tap* (or long-press
+             * without a step in flight, which the PO-33 doesn't
+             * define; long-press of FX is a no-op). We treat all
+             * non-long-press events as "tap" -- including the very
+             * first event after the debounce threshold for a
+             * non-held press. That matches the PO-33 mental model
+             * where FX tap = cycle tweak mode. */
+            if (!ev.long_press) tweak_mode_cycle();
             break;
 
         case BTN_REC:

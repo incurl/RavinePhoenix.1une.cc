@@ -9,6 +9,7 @@
 #include "pattern.h"
 #include "audio/amy_bridge.h"
 #include "config.h"
+#include "ui/input.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <stdio.h>
@@ -226,6 +227,16 @@ static void on_step(void *arg)
      * do NOT play it now. The timer callback plays it later. */
     bool is_offbeat = (s_step % 2) == 1;
     bool defer       = is_offbeat && (s_swing > 0) && (slot != 0xFF);
+
+    /* Tweak-mode override: in Tone or Filter mode, the per-step note /
+     * velocity / filter_cutoff are replaced by the current knob
+     * readings. This is the PO-33 "select tweak parameter, turn
+     * knobs" idiom (F-016 / F-017). Trim mode is per-slot (handled
+     * by tweak_apply_slot() in play_active_slot), not per-step, so
+     * we don't apply it here. */
+    if (slot != 0xFF) {
+        tweak_apply_step(&s.note, &s.velocity, &s.filter_cutoff);
+    }
 
     if (!defer) {
         if (slot != 0xFF) {
