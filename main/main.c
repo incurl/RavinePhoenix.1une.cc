@@ -23,6 +23,7 @@
 #include "ui/display.h"
 #include "ui/knobs.h"
 #include "ui/leds.h"
+#include "ui/input.h"
 #include "storage/storage.h"
 #include "system/power_mgmt.h"
 #include "system/clock.h"
@@ -102,6 +103,7 @@ static void button_scan_task(void *arg)
 
     while (1) {
         buttons_tick();
+        input_drain();
         knobs_tick();
         amy_bridge_pump_capture();
         vTaskDelayUntil(&last, period);
