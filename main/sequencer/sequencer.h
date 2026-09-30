@@ -16,6 +16,7 @@ esp_err_t sequencer_init(void);
 /* Transport */
 void sequencer_play(void);
 void sequencer_stop(void);
+bool sequencer_is_playing(void);
 void sequencer_set_bpm(uint16_t bpm);
 void sequencer_set_pattern(uint8_t pattern);
 uint16_t sequencer_get_bpm(void);

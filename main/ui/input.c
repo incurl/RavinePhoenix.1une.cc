@@ -5,14 +5,12 @@
  * decision of what *each press* means lives in the case body, not in
  * a giant table. We expect this file to grow as v2 UI features land
  * (write mode, sketch picker, tweak mode, effect picker, etc.).
- *
- * Currently only logs each event. The transport-level wiring (PLAY,
- * BPM, PATTERN) lands in a follow-up commit so this commit can stay
- * focused on "stop silently filling the queue".
  */
 #include "input.h"
 #include "config.h"
 #include "esp_log.h"
+#include "sequencer/sequencer.h"
+#include "ui/leds.h"
 
 static const char *TAG = "input";
 
@@ -48,9 +46,52 @@ void input_drain(void)
     for (;;) {
         button_event_t ev = buttons_pop();
         if (ev.btn_id == 0xFF) break;   /* queue empty sentinel */
+
         ESP_LOGI(TAG, "btn %s%s",
                  btn_id_str(ev.btn_id),
                  ev.long_press ? " (long)" : "");
-        /* Real handler routing lands in the next commit. */
+
+        switch (ev.btn_id) {
+        case BTN_PLAY:
+            /* Tap to toggle transport. The PO-33's PLAY key is also
+             * a tap-to-toggle; the PLAY LED mirrors the new state. */
+            if (ev.long_press) break;  /* no long-press action */
+            if (sequencer_is_playing()) {
+                sequencer_stop();
+                leds_set_play(false);
+            } else {
+                sequencer_play();
+                leds_set_play(true);
+            }
+            break;
+
+        case BTN_BPM:
+            /* Tap = +1 BPM, long-press = -1 BPM. The set_bpm() call
+             * clamps to [MIN_BPM, MAX_BPM] so we don't have to. */
+            if (ev.long_press) {
+                sequencer_set_bpm((uint16_t)(sequencer_get_bpm() - 1));
+            } else {
+                sequencer_set_bpm((uint16_t)(sequencer_get_bpm() + 1));
+            }
+            break;
+
+        case BTN_PATTERN:
+            /* Tap = next pattern, long-press = previous pattern.
+             * Modulo PATTERN_COUNT so wrap-around is the user's job
+             * (matches the PO-33, where the chain is the only way to
+             * jump past 15 without scrolling). */
+            if (ev.long_press) {
+                uint8_t cur = sequencer_get_current_pattern();
+                sequencer_set_pattern((uint8_t)((cur ? cur : PATTERN_COUNT) - 1));
+            } else {
+                uint8_t cur = sequencer_get_current_pattern();
+                sequencer_set_pattern((uint8_t)((cur + 1) % PATTERN_COUNT));
+            }
+            break;
+
+        default:
+            /* SOUND / REC / FX / WRITE / steps: handler lands later. */
+            break;
+        }
     }
 }

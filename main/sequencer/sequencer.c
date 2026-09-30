@@ -142,6 +142,8 @@ void sequencer_stop(void)
     ESP_LOGI(TAG, "Stop.");
 }
 
+bool sequencer_is_playing(void) { return s_playing; }
+
 void sequencer_tick(void)
 {
     /* Called every render block. For now we let the timer fire on_step(). */
