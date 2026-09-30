@@ -236,8 +236,8 @@ Each is a momentary tactile switch between the GPIO and GND (no matrix, no exter
 | Button | GPIO | What it does (PO-33 mode) | What it does (our firmware) |
 |---|---|---|---|
 | `SOUND`   | **GPIO 11** | hold S + number 1–16 plays / selects that slot | hold + step 1–16 = select / play a sample slot |
-| `PATTERN` | **GPIO 44** | hold + number 1–16 picks a pattern | tap = next pattern, long press = previous |
-| `BPM`     | **GPIO 13** | press cycles 80 / 120 / 140; hold + knob A = fine tempo | tap = +1 BPM, long press = −1 BPM |
+| `PATTERN` | **GPIO 44** | hold + number 1–16 picks a pattern | no-op alone (tap / long-press); hold + step 1–16 = load that pattern |
+| `BPM`     | **GPIO 13** | press cycles 80 / 120 / 140; hold + knob A = fine tempo | tap = cycle preset (Hip Hop → Disco → Techno → wrap); long-press + Knob A = fine adjust (60–240) |
 | `REC`     | **GPIO 41** | record (hold + number records into that slot) | start / stop recording |
 | `FX`      | **GPIO 12** | hold + number 1–16 applies that effect | enter FX-select mode |
 | `PLAY`    | **GPIO 42** | play / stop pattern | start / stop sequencer |
@@ -425,7 +425,7 @@ The PO-33 uses knobs for fine continuous control and modifier buttons (SOUND, PA
 - Use **knobs** when you want a smooth, continuous value (tempo, filter cutoff, pitch).
 - Use **modifier buttons** when you want a discrete action (start recording, switch pattern).
 
-The `PATTERN` and `BPM` buttons step through in whole units; the knobs would let you dial in a tempo precisely.
+The `BPM` button steps through whole-unit preset values when tapped (Hip Hop / Disco / Techno); the `PATTERN` button is for direct-pattern selection (`PATTERN` held + a number 1–16). Knobs let you dial in a tempo precisely while `BPM` is held.
 
 ---
 

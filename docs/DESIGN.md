@@ -97,7 +97,7 @@ There are **23 physical buttons** in total:
 - **7 dedicated modifier buttons** wired to individual GPIOs (no matrix), laid
   out exactly like the PO-33's modifier row and column:
   - `SOUND` — hold + step 1–16 plays / selects a sample slot (the PO-33's "S" key)
-  - `PATTERN` — hold + step 1–16 selects a pattern; tap to advance, long-press to go back
+  - `PATTERN` — hold + step 1–16 selects a pattern (the PO-33's "⠛" key); tap and long-press alone are no-ops
   - `BPM` — tap to raise the tempo, long-press to lower it; hold + Knob A for fine tempo
   - `REC` — start/stop recording
   - `FX` — enter effect-select mode
@@ -281,9 +281,9 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §2 (PO-33 manual "patterns")
 - **Layman:** You can store 16 different patterns on the device, numbered 1–16. Each pattern is a complete beat on its own. You switch between them with the bottom-right button group.
 - **PO-33 button combo:** Hold **PATTERN** (⠛) + 1–16 to pick one.
-- **Our hardware combo:** We have a single `PATTERN` button (`BTN_PATTERN`, GPIO 44 — middle of the top row), just like the real PO-33, rather than a 1–16 selector. Tapping it advances 0→1→…→15→0→…; a long press steps backward. UART: `pattern 5`.
-- **Code location:** `main/sequencer/sequencer.h` → `PATTERN_COUNT 16`, `sequencer_set_pattern(uint8_t)`. `main/config.h` → `BTN_PATTERN`, `BTN_PATTERN_GPIO`.
-- **Status:** ✅ done.
+- **Our hardware combo:** Single `PATTERN` button (`BTN_PATTERN`, GPIO 44 — middle of the top row), exactly like the real PO-33. **Hold `PATTERN` + press step 1–16** to load that pattern. **Tap and long-press of `PATTERN` alone are no-ops** — there is no tap-to-step or ±1 mod-16 behaviour, because that doesn't exist on the real PO-33 (verified against the [lode/PO-33](https://github.com/lode/PO-33) verbatim mirror of the operator manual: the only PATTERN behaviours are "select pattern — hold + number" and "change patterns — hold + number(s)"). UART: `pattern 5` (sets an arbitrary integer pattern directly; does not use the hold-+-number machinery).
+- **Code location:** `main/sequencer/sequencer.h` → `PATTERN_COUNT 16`, `sequencer_set_pattern(uint8_t)`. `main/ui/input.c` → `s_modifiers[]` table with `{BTN_PATTERN, pattern_on_step}`; `pattern_on_step(step_1_to_16)` calls `sequencer_set_pattern(step - 1)`. `main/config.h` → `BTN_PATTERN`, `BTN_PATTERN_GPIO`.
+- **Status:** ✅ done. Strict PO-33 ground truth (the matrix step routed while the modifier is held).
 
 #### F-008 — 16 steps per pattern
 
@@ -1101,8 +1101,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Stop recording | REC | same, or `stoprec` |
 | Play pattern | PLAY | same |
 | Stop pattern | PLAY | same |
-| Change pattern | H+PATTERN + number | `PATTERN` tap = next, long press = previous, or `pattern N` |
-| Change BPM | H+BPM + knob A | `BPM` tap = +1, long press = −1, or `bpm N` |
+| Change pattern | H+PATTERN + number | H+`PATTERN` + step 1–16, or `pattern N` |
+| Change BPM | H+BPM + knob A | `BPM` tap cycles preset (Hip Hop / Disco / Techno), long-press + Knob A = fine adjust, or `bpm N` |
 | Apply effect | H+FX + number | H+FX + number (1–15 = effect, 16 = swing) |
 | Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); handler queued for v2 |
 | Select a sample slot | H+SOUND + number | H+SOUND + number (16 slots) |
@@ -1113,7 +1113,7 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
 | Tweak tone/filter/trim | FX cycles; knobs A/B adjust | Knob A/B wired (ADC); tweak-mode binding queued for v2 |
-| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM + knob A (not yet bound) — for now tap / long-press `BPM` |
+| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM + knob A maps [60..240] to knob range; release keeps the new BPM |
 | Sync out | always on | always on |
 | Sync in | H+REC + BPM cycles mode | partial |
 | Show battery | SOUND + BPM | not yet (TFT will show) |
