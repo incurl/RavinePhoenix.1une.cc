@@ -22,6 +22,7 @@
 #include "input.h"
 #include "config.h"
 #include "esp_log.h"
+#include "audio/amy_bridge.h"
 #include "sequencer/sequencer.h"
 #include "ui/buttons.h"
 #include "ui/knobs.h"
@@ -56,6 +57,18 @@ static const modifier_binding_t s_modifiers[] = {
      * behaviour is "hold + number". The chain-build variant lands
      * alongside F-013 (still ❌ missing). */
     { BTN_PATTERN, pattern_on_step },
+
+    /* PO-33: "select sound — hold sound (S) + number"
+     *        "play a sound — [select sound] press number"
+     * SOUND + step sets the active slot. The PLAY half fires in the
+     * no-modifier branch of input_drain(). */
+    { BTN_SOUND, sound_on_step },
+
+    /* PO-33: "hold fx (FX) + number (1-15) — add & save effect in pattern"
+     *        "hold fx (FX) + 16            — change swing"
+     * Step 1..15 maps to PO33_FX_LOOP_16..FILTER_SWEEP; step 16 = swing
+     * (not yet implemented, see fx_on_step()). */
+    { BTN_FX, fx_on_step },
 };
 
 #define MODIFIER_COUNT (sizeof(s_modifiers) / sizeof(s_modifiers[0]))
@@ -101,6 +114,61 @@ static void pattern_on_step(uint8_t step_1_to_16)
     sequencer_set_pattern((uint8_t)(step_1_to_16 - 1));
 }
 
+static void sound_on_step(uint8_t step_1_to_16)
+{
+    /* PO-33 strict two-step flow (lode/PO-33 manual):
+     *   "select sound — hold sound (S) + number"
+     *   "play a sound — [select sound] press number"
+     * We only implement the SELECT step here. The PLAY step fires
+     * below in input_drain() when a step press arrives WITHOUT any
+     * modifier held and the active slot is non-0xFF.
+     *
+     * Note: docs/DESIGN.md F-006 'Layman' line ("and that slot's sound
+     * plays once") reads as one-press ergonomics, but the PO-33 manual
+     * is unambiguous about two presses. We honour the manual. */
+    sequencer_set_active_slot((uint8_t)(step_1_to_16 - 1));
+}
+
+static void fx_on_step(uint8_t step_1_to_16)
+{
+    /* PO-33 (lode/PO-33 manual):
+     *   "hold fx (FX) + number (1-15) — add & save effect in pattern"
+     *   "hold fx (FX) + 16            — change swing"
+     *
+     * Step 1..15 maps to PO33_FX_LOOP_16 .. PO33_FX_FILTER_SWEEP
+     * (the first 15 enum values, in order). Step 16 is a no-op stub
+     * — swing isn't implemented yet (see F-019 + the v2 §7 effect
+     * alignment plan). Per the docs/cheatsheet, step 16 should land
+     * here when swing ships.
+     *
+     * The stored FX is then consumed by sequencer_on_step() (via
+     * s_active_fx) for every note triggered until something else
+     * overwrites it. Selecting a new FX replaces, not stacks.
+     *
+     * 'Save effect in pattern' (the PO-33 write-mode semantics) is
+     * still queued; that requires write mode to land. For v1 we just
+     * set the active FX. */
+    if (step_1_to_16 >= 1 && step_1_to_16 <= 15) {
+        uint8_t fx = (uint8_t)(PO33_FX_LOOP_16 + (step_1_to_16 - 1));
+        sequencer_set_active_fx(fx);
+    } else {
+        /* step 16 = swing stub. Log only; no state change. */
+        ESP_LOGI(TAG, "FX + STEP16 = swing (not yet implemented, see docs/DESIGN.md F-019)");
+    }
+}
+
+/* Trigger the currently selected slot. Called from input_drain() when
+ * a step event arrives with no modifier held. If no slot is selected
+ * yet (0xFF), this is a no-op. Uses midi_note = 60 (middle C) and
+ * velocity = 100 — same defaults sequencer_set_step_slot() uses. */
+static void play_active_slot(void)
+{
+    uint8_t slot = sequencer_get_active_slot();
+    if (slot == 0xFF) return;
+    amy_bridge_play_note(slot, 60, 100,
+                         (po33_fx_t)sequencer_get_active_fx(), 0, 0);
+}
+
 /* Find the first modifier currently being held, if any. Returns NULL
  * when no modifier is held. */
 static const modifier_binding_t *active_modifier(void)
@@ -130,10 +198,7 @@ void input_drain(void)
         /* Modifier + step routing (PO-33 "hold + number" idiom).
          * Runs *before* the per-btn switch because we want step
          * presses to be routed even when their default step handler
-         * would also fire. Currently no step handler exists, but the
-         * ordering keeps the door open for future "step tap in
-         * play-mode" handlers to live downstream and inspect
-         * active_modifier() themselves if they need to. */
+         * would also fire. */
         if (BTN_IS_STEP(ev.btn_id) && !ev.long_press) {
             const modifier_binding_t *m = active_modifier();
             if (m) {
@@ -145,6 +210,10 @@ void input_drain(void)
                 m->on_step(step_1_to_16);
                 continue;   /* do not fall through to default handler */
             }
+            /* No modifier held + step pressed: PO-33 second-press
+             * play-the-selected-sound. No-op if nothing is selected. */
+            play_active_slot();
+            continue;
         }
 
         switch (ev.btn_id) {
@@ -188,10 +257,14 @@ void input_drain(void)
              * of mine, removed in this commit. */
             break;
 
+        case BTN_SOUND:
+        case BTN_FX:
+            /* No-op as a bare button. Their hold-+-NUMBER dispatch
+             * lives in the s_modifiers[] table above. */
+            break;
+
         default:
-            /* SOUND / REC / FX / WRITE: handlers land in future
-             * commits. Step buttons fall through here unless a
-             * modifier was held (handled above). */
+            /* REC / WRITE: handlers land in future commits. */
             break;
         }
     }

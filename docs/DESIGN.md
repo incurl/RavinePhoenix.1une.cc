@@ -96,13 +96,13 @@ There are **23 physical buttons** in total:
   - with **FX** held: effect 1–15 (16 = swing)
 - **7 dedicated modifier buttons** wired to individual GPIOs (no matrix), laid
   out exactly like the PO-33's modifier row and column:
-  - `SOUND` — hold + step 1–16 plays / selects a sample slot (the PO-33's "S" key)
+  - `SOUND` — hold + step 1–16 **selects** a sample slot (the PO-33's "S" key); press the same step with `SOUND` released to play it (strict two-step flow); tap and long-press alone are no-ops
   - `PATTERN` — hold + step 1–16 selects a pattern (the PO-33's "⠛" key); tap and long-press alone are no-ops
-  - `BPM` — tap to raise the tempo, long-press to lower it; hold + Knob A for fine tempo
-  - `REC` — start/stop recording
-  - `FX` — enter effect-select mode
+  - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press + Knob A = fine adjust (60–240); release keeps the new BPM
+  - `REC` — start/stop recording (handler queued)
+  - `FX` — hold + step 1–15 selects a punch-in effect (carried into the next note); step 16 = swing stub (not yet implemented)
   - `PLAY` — start/stop sequencer
-  - `WRITE` — enter / exit write mode (the PO-33's "·" key)
+  - `WRITE` — enter / exit write mode (the PO-33's "·" key, handler queued)
 
 There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control: depending on the active tweak mode, knob A controls pitch / filter cutoff / sample start / fine tempo, and knob B controls volume / resonance / sample length / tempo level cycling. In v1 firmware the data model supports all of these — only the BPM-row binding (knobs nudge tempo when `BPM` is held) is wired through the knobs; the tweak-mode rows are queued for v2. See `hardware/HARDWARE.md` §4.11 for wiring, and the cheat sheet (§8 below) for what works today.
 
@@ -271,10 +271,19 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 
 - **Manual ref:** §1.3
 - **Layman:** Hold **SOUND** (S) and press the slot number 1–16, and that slot's sound plays once.
-- **PO-33 button combo:** Hold S + number.
-- **Our hardware combo:** The `SOUND` button now exists (`BTN_SOUND`, GPIO 11 — leftmost of the top row), so the physical "hold S + number" gesture is wired. The handler behind it is not written yet, so for now use the UART shell: `rec 5` to record, then trigger the slot from the sequencer.
-- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_play_note(slot, midi_note, velocity, ...)`.
-- **Status:** ⚠️ partial. The `SOUND` button exists and is scanned, and sound trigger works internally (the sequencer calls it), but the hold-S + number handler is not wired yet.
+- **PO-33 button combo:** **Two presses.** Per the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual:
+  1. **select sound** — hold S + number (1–16) → selects that slot.
+  2. **play a sound** — *with S released*, press the same number → the selected slot plays once.
+
+  The layman line above is a simplification — it implies one press, but the real PO-33 is a strict two-step flow.
+- **Our hardware combo:** Strict two-step.
+  - `SOUND` (`BTN_SOUND`, GPIO 11 — leftmost of the top row) held + step 1–16 → calls `sequencer_set_active_slot(step - 1)`.
+  - Step 1–16 pressed with **no modifier held** + `active_slot != 0xFF` → `amy_bridge_play_note(slot, 60, 100, active_fx, 0, 0)`. `midi_note = 60` (middle C) and `velocity = 100` are v1 defaults; the PO-33 itself doesn't expose these for slot-play mode.
+  - Tap or long-press of `SOUND` alone is a no-op (no PO-33 behaviour attached to it; the only PO-33 SOUND verbs are "select sound" and "record" — F-001 — both of which require holding + a number).
+- **Code location:** `main/ui/input.c` → `s_modifiers[]` entry `{BTN_SOUND, sound_on_step}`; `sound_on_step()` calls `sequencer_set_active_slot(step - 1)`. The "step press without modifier" branch in `input_drain()` calls `play_active_slot()` which invokes `amy_bridge_play_note()`. `main/sequencer/sequencer.c` → `sequencer_set_active_slot()`, `sequencer_get_active_slot()`.
+- **Status:** ✅ done (strict PO-33 ground truth; see trade-off below).
+
+  **Trade-off.** F-006's *Layman* line implies a one-press ergonomics (hold + number = plays once). The PO-33 manual is unambiguous about two presses. We honour the manual. If the layman flow is preferred, the change is a one-liner in `sound_on_step()`: instead of `sequencer_set_active_slot(...)`, call `amy_bridge_play_note(...)` directly.
 
 #### F-007 — 16 patterns
 
@@ -395,10 +404,16 @@ See §4 below for the per-effect deep dive.
 
 - **Manual ref:** §5
 - **Layman:** Press **FX** to enter effect-pick mode, then press a number 1–16 to select one of the 16 effects. The effect applies to whatever you play next.
-- **PO-33 button combo:** FX + 1–16.
-- **Our hardware combo:** The FX button is wired (`BTN_FX` in `main/ui/buttons.h`). Currently FX selects an effect when combined with step buttons 1–16. The mapping lives in `main/sequencer/sequencer.c` and `main/audio/amy_bridge.c`.
-- **Code location:** `main/audio/amy_bridge.h` → `po33_fx_t` enum. `main/audio/amy_bridge.c` → `apply_fx()`.
-- **Status:** ⚠️ partial. The list of effects is **wrong** — see §7 for the v2 alignment plan.
+- **PO-33 button combo:** Per the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual:
+  - Hold **FX** + number (1–15) — add & save effect in pattern.
+  - Hold **FX** + 16 — change swing.
+- **Our hardware combo:** Strict PO-33: `FX` (`BTN_FX`, GPIO 12 — top of the right column under Knob B) held + step 1–15 → calls `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`. Step 1–15 maps to enum values `PO33_FX_LOOP_16` … `PO33_FX_FILTER_SWEEP` (the first 15 of the 16 punch-ins in `po33_fx_t`). Step 16 is a no-op stub (logs "swing not yet implemented") because our `po33_fx_t` has 16 effects but no swing entry; the v2 §7 effect alignment plan will either add `PO33_FX_SWING` or shift the mapping.
+
+  The selected FX is then **carried into the next note** by `sequencer_on_step()` (reads `s_active_fx` if the step's `effect` field is `PO33_FX_NONE`). Per-step effects take precedence — the FX modifier sets a *fallback*, not an override.
+
+  Tap or long-press of `FX` alone is a no-op. The "save effect in pattern" half of the PO-33 combo still requires write mode (F-009), which is queued.
+- **Code location:** `main/ui/input.c` → `s_modifiers[]` entry `{BTN_FX, fx_on_step}`; `fx_on_step()` step 1..15 maps to `PO33_FX_LOOP_16 + (step - 1)`, step 16 is a stub. `main/sequencer/sequencer.{c,h}` → `sequencer_set_active_fx()`, `sequencer_get_active_fx()`, and `on_step()` reads `s_active_fx` as the fallback when the step's per-step effect is `PO33_FX_NONE`. `main/audio/amy_bridge.{c,h}` → `po33_fx_t`, `apply_fx()`.
+- **Status:** ✅ done (step 1..15). Step 16 swing stub in place; full FX write-mode persistence queued for v2.
 
 ### 3.6 Section 6 — BPM and tempo
 
@@ -779,9 +794,9 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 ### 5.5 How do I apply an effect?
 
-**On a real PO-33:** Press **FX** + number 1–16. The effect applies to the next sound you play.
+**On a real PO-33:** Hold **FX** + number 1–15 (the 16 punch-ins; step 16 is "change swing", which is a separate feature). The effect applies to the next sound you play.
 
-**On our firmware:** Same combo (FX + step 1–16). The selected effect is shown on the TFT (proposed in §6).
+**On our firmware:** Same combo: hold `FX` (`BTN_FX`, GPIO 12) + step 1–15 → sets `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`, which the next triggered note (sequencer or "step press without modifier after a SOUND select") consumes. Step 16 is a stub (logs "swing not yet implemented") — see F-019 §3.5 for the v2 plan. The selected effect is shown on the TFT (proposed in §6).
 
 ### 5.6 How do I save my work?
 
@@ -1084,8 +1099,8 @@ This v2 enum is presented here as a **proposal**, not as a change to be merged. 
 If you only have time to ship three more features, do these:
 
 1. **Live recording into a playing pattern** (F-003). Without this, you cannot "jam" a new sound into an existing beat — a core PO-33 workflow.
-2. **The 16 punch-in effects actually working** (F-019 through F-031 in §3.5). Currently most are no-ops. AMY already supports most of the DSP; we just need to wire `apply_fx()` correctly.
-3. **Effect selection via FX button + step button** (UI binding for F-019). Currently the FX button does nothing visible on the TFT.
+2. **The 16 punch-in effects actually working** (F-019 through F-031 in §3.5). Selection works (FX + step 1–15 → `sequencer_set_active_fx`); many `apply_fx()` cases are still no-ops (LOOP_16, LOOP_12, STUTTER_*, SCRATCH_FAST, REVERSE, RETRIGGER_PATTERN, 68_QUANTIZE). AMY already supports most of the DSP; the remaining work is wiring `apply_fx()` correctly per case. Also pending: a v2-aligned `po33_fx_t` enum (see §7 below).
+3. **Effect selection via FX button + step button** (UI binding for F-019). Wired: FX + step 1–15 sets `sequencer_set_active_fx(...)`, which `on_step()` consumes as the fallback for triggered notes. The "save effect in pattern" half of the PO-33 combo still requires write mode (F-009), which is queued.
 
 Each of these is roughly half a day of work for an experienced developer.
 
@@ -1103,9 +1118,9 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Stop pattern | PLAY | same |
 | Change pattern | H+PATTERN + number | H+`PATTERN` + step 1–16, or `pattern N` |
 | Change BPM | H+BPM + knob A | `BPM` tap cycles preset (Hip Hop / Disco / Techno), long-press + Knob A = fine adjust, or `bpm N` |
-| Apply effect | H+FX + number | H+FX + number (1–15 = effect, 16 = swing) |
+| Apply effect | H+FX + number | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = swing stub |
 | Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); handler queued for v2 |
-| Select a sample slot | H+SOUND + number | H+SOUND + number (16 slots) |
+| Select a sample slot | H+SOUND + number | H+`SOUND` + step 1–16 → active slot; press same step with no modifier = plays once |
 | Save pattern | auto on power-off | `save` over UART |
 | Load on boot | auto | `load` over UART |
 | Erase sound | H+REC + slot number | not yet |

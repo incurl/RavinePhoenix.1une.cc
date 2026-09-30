@@ -235,11 +235,11 @@ Each is a momentary tactile switch between the GPIO and GND (no matrix, no exter
 
 | Button | GPIO | What it does (PO-33 mode) | What it does (our firmware) |
 |---|---|---|---|
-| `SOUND`   | **GPIO 11** | hold S + number 1–16 plays / selects that slot | hold + step 1–16 = select / play a sample slot |
+| `SOUND`   | **GPIO 11** | hold S + number selects a slot; press the same number to play | hold + step 1–16 = select slot; press same step with no modifier = plays once (strict PO-33 two-step) |
 | `PATTERN` | **GPIO 44** | hold + number 1–16 picks a pattern | no-op alone (tap / long-press); hold + step 1–16 = load that pattern |
 | `BPM`     | **GPIO 13** | press cycles 80 / 120 / 140; hold + knob A = fine tempo | tap = cycle preset (Hip Hop → Disco → Techno → wrap); long-press + Knob A = fine adjust (60–240) |
-| `REC`     | **GPIO 41** | record (hold + number records into that slot) | start / stop recording |
-| `FX`      | **GPIO 12** | hold + number 1–16 applies that effect | enter FX-select mode |
+| `REC`     | **GPIO 41** | record (hold + number records into that slot) | start / stop recording (handler queued) |
+| `FX`      | **GPIO 12** | hold + number 1–15 = effect; + 16 = swing | hold + step 1–15 = set active FX (carried into next note); step 16 = swing stub (not yet implemented) |
 | `PLAY`    | **GPIO 42** | play / stop pattern | start / stop sequencer |
 | `WRITE`   | **GPIO 43** | enter write mode (·) | enter / exit write mode |
 

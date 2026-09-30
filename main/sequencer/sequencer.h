@@ -20,6 +20,16 @@ bool sequencer_is_playing(void);
 void sequencer_set_bpm(uint16_t bpm);
 void sequencer_cycle_bpm_preset(void);
 void sequencer_set_pattern(uint8_t pattern);
+
+/* Active slot / active FX. Set by the SOUND / FX hold-+-number
+ * dispatcher in ui/input.c, consumed by on_step() so that subsequent
+ * triggers (sequencer or "press step without modifier after a SOUND
+ * select") pick up the user's selection. Initial state is
+ * "no slot selected" (0xFF) and "no effect" (PO33_FX_NONE). */
+void     sequencer_set_active_slot(uint8_t slot);      /* 0..15 or 0xFF = none */
+uint8_t  sequencer_get_active_slot(void);
+void     sequencer_set_active_fx(uint8_t fx);          /* po33_fx_t value */
+uint8_t  sequencer_get_active_fx(void);
 uint16_t sequencer_get_bpm(void);
 uint8_t  sequencer_get_current_step(void);
 uint8_t  sequencer_get_current_pattern(void);

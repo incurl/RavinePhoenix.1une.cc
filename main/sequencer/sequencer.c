@@ -20,6 +20,15 @@ static volatile uint8_t s_step   = 0;
 static volatile uint8_t s_pattern = 0;
 static volatile uint16_t s_bpm   = DEFAULT_BPM;
 
+/* "Active" state set by the SOUND / FX hold-+-number dispatcher in
+ * ui/input.c. Consumed by on_step() and by step-tap-with-no-modifier
+ * in the dispatcher. Volatile because they're written from the input
+ * task (button_scan_task) and read from the audio task (sequencer
+ * timer / render-task). On the ESP32-S3 these are aligned single
+ * bytes, so atomic loads/stores are guaranteed. */
+static volatile uint8_t s_active_slot = 0xFF;   /* 0xFF = none selected */
+static volatile uint8_t s_active_fx   = PO33_FX_NONE;
+
 static esp_timer_handle_t s_step_timer = NULL;
 
 esp_err_t sequencer_init(void)
@@ -101,10 +110,21 @@ static void on_step(void *arg)
     (void)arg;
     step_t s;
     pattern_get_step(s_pattern, s_step, &s);
-    if (s.slot_id != 0xFF) {
-        amy_bridge_play_note(s.slot_id, s.note, s.velocity,
-                             (po33_fx_t)s.effect,
-                             s.effect_p1, s.effect_p2);
+
+    /* Slot resolution: the per-step slot wins if set, otherwise fall
+     * back to whatever SOUND-hold-+-number most recently selected.
+     * Either way, 0xFF means "no slot" -> silent step. */
+    uint8_t slot = (s.slot_id != 0xFF) ? s.slot_id : s_active_slot;
+
+    /* Effect resolution: per-step wins if non-NONE, else fall back to
+     * the FX-hold-+-number selection. PO33_FX_NONE = no effect. */
+    po33_fx_t fx = (s.effect != PO33_FX_NONE)
+                       ? (po33_fx_t)s.effect
+                       : (po33_fx_t)s_active_fx;
+
+    if (slot != 0xFF) {
+        amy_bridge_play_note(slot, s.note, s.velocity,
+                             fx, s.effect_p1, s.effect_p2);
     }
     s_step++;
     if (s_step >= STEPS_PER_PATTERN) {
@@ -161,6 +181,28 @@ void sequencer_stop(void)
 }
 
 bool sequencer_is_playing(void) { return s_playing; }
+
+void sequencer_set_active_slot(uint8_t slot)
+{
+    /* Out-of-range inputs are coerced to "none" rather than rejected.
+     * The dispatcher always passes 0..15 (from a step press); UART or
+     * future callers could pass 0xFF to mean "clear selection". */
+    if (slot >= SLOT_COUNT && slot != 0xFF) slot = 0xFF;
+    s_active_slot = slot;
+}
+
+uint8_t sequencer_get_active_slot(void) { return s_active_slot; }
+
+void sequencer_set_active_fx(uint8_t fx)
+{
+    /* Clamp into the enum range. Anything outside PO33_FX_COUNT (incl.
+     * the future swing slot) is coerced to PO33_FX_NONE so a stale
+     * caller can't poison on_step(). */
+    if (fx >= PO33_FX_COUNT) fx = PO33_FX_NONE;
+    s_active_fx = (uint8_t)fx;
+}
+
+uint8_t sequencer_get_active_fx(void) { return s_active_fx; }
 
 void sequencer_tick(void)
 {
