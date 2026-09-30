@@ -98,13 +98,16 @@ There are **23 physical buttons** in total:
   out exactly like the PO-33's modifier row and column:
   - `SOUND` — hold + step 1–16 **selects** a sample slot (the PO-33's "S" key); press the same step with `SOUND` released to play it (strict two-step flow); tap and long-press alone are no-ops
   - `PATTERN` — hold + step 1–16 selects a pattern (the PO-33's "⠛" key); tap and long-press alone are no-ops
-  - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press + Knob A = fine adjust (60–240); release keeps the new BPM
-  - `REC` — start/stop recording (handler queued)
-  - `FX` — hold + step 1–15 selects a punch-in effect (carried into the next note); step 16 = swing stub (not yet implemented)
+  - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press held: **Knob A = swing** (8 levels), **Knob B = fine BPM** (60–240)
+  - `REC` — start/stop recording (handler queued — see F-001 status note)
+  - `FX` — **tap = tweak-mode cycle** (Tone / Filter / Trim, F-015); hold + step 1–15 = punch-in effect; step 16 = "no effect"
   - `PLAY` — start/stop sequencer
   - `WRITE` — enter / exit write mode (the PO-33's "·" key, handler queued)
 
-There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control: depending on the active tweak mode, knob A controls pitch / filter cutoff / sample start / fine tempo, and knob B controls volume / resonance / sample length / tempo level cycling. In v1 firmware the data model supports all of these — only the BPM-row binding (knobs nudge tempo when `BPM` is held) is wired through the knobs; the tweak-mode rows are queued for v2. See `hardware/HARDWARE.md` §4.11 for wiring, and the cheat sheet (§8 below) for what works today.
+There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control. The actual mapping (verified against the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual):
+- **BPM row:** knob A = swing (8 discrete levels), knob B = fine tempo (continuous 60–240). Both wired in this commit.
+- **Tweak-mode (FX tapped to select):** knob A = pitch / filter cutoff / sample start (Tone / Filter / Trim), knob B = volume / resonance / sample length. Queued for v2.
+- (No "tempo level cycling" knob mapping — that was a confusion in earlier docs; tempo levels are BPM tap only.)
 
 ### 1.5 Where to go from here
 
@@ -226,8 +229,8 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Layman:** You press a button, the device starts listening through its microphone, you make a sound, you press the button again, and now the device has that sound stored in one of its 16 slots.
 - **PO-33 button combo:** Hold **REC** (star), then press the number of the slot (1–16) where you want to store the sound. Press **REC** again to stop.
 - **Our hardware combo:** Hold button "REC", then press a step button 1–16. Hold "REC" again to stop. (Identical button mapping.) Or via UART shell: `rec <slot>` then `stoprec`.
-- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_start_record(uint8_t slot)`, `amy_bridge_stop_record()`, `amy_bridge_pump_capture()`.
-- **Status:** ✅ done.
+- **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_start_record(uint8_t slot)`, `amy_bridge_stop_record()`, `amy_bridge_pump_capture()`. The underlying recording API works (UART: `rec <slot>` + `stoprec`).
+- **Status:** ⚠️ partial. The recording API exists and works via UART. **The `BTN_REC` button has no input binding** (the `case BTN_REC` arm of `input_drain()`'s switch is a no-op), so the "hold REC + step N" gesture is not yet wired. The s_modifiers[] table has no entry for BTN_REC. Once added it would mirror PATTERN/SOUND/FX: `REC + step N` → `amy_bridge_start_record(N)`, release REC → `amy_bridge_stop_record()`. The latter needs release detection, which requires a separate path from PATTERN/SOUND/FX (those are *press*-bound, REC is *hold*-bound).
 
 #### F-002 — Record from line-in
 
@@ -365,9 +368,12 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4
 - **Layman:** You cycle between three tweak modes by pressing **FX** repeatedly: Tone, Filter, Trim. Each one has two knobs (A and B) that change different aspects.
 - **PO-33 button combo:** Press FX to cycle: Tone → Filter → Trim → Tone.
-- **Our hardware combo:** Not yet. The FX button is reserved for effects. We'd need a separate "Tweak" mode button (perhaps SOUND + FX).
-- **Code location:** Needs a new `tweak_mode_t` state machine in `main/ui/display.c` plus handlers.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Same `FX` button (`BTN_FX`, GPIO 12 — top of the right column under Knob B) has two roles, just like the real PO-33:
+  - **Tap** = cycle tweak parameter (Tone → Filter → Trim → wrap).
+  - **Held + step 1–15** = select a punch-in effect (F-019).
+  - **Held + step 16** = "no effect" (clears active FX; the full "clear effect in pattern" combo lands in write mode, queued).
+- **Code location:** Needs a `tweak_mode_t {TWEAK_TONE, TWEAK_FILTER, TWEAK_TRIM}` state machine in `main/ui/display.c` plus handlers that bind the knob axes (Knob A = pitch/filter-cutoff/start, Knob B = volume/resonance/length) per F-016/F-017/F-018. The dispatcher needs to route `BTN_FX tap` here separately from the existing `s_modifiers[]` hold-+-number path — `input_drain()`'s `BTN_FX` switch case will grow a no-op-when-held + tweak-cycle-when-tapped branch.
+- **Status:** ❌ missing (the FX tap currently no-ops; the held-+-step path from F-019 is wired but the tap path isn't routed to a tweak-mode state machine).
 
 #### F-016 — Tweak Tone (Knob A = pitch, Knob B = volume)
 
@@ -406,14 +412,16 @@ See §4 below for the per-effect deep dive.
 - **Layman:** Press **FX** to enter effect-pick mode, then press a number 1–16 to select one of the 16 effects. The effect applies to whatever you play next.
 - **PO-33 button combo:** Per the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual:
   - Hold **FX** + number (1–15) — add & save effect in pattern.
-  - Hold **FX** + 16 — change swing.
-- **Our hardware combo:** Strict PO-33: `FX` (`BTN_FX`, GPIO 12 — top of the right column under Knob B) held + step 1–15 → calls `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`. Step 1–15 maps to enum values `PO33_FX_LOOP_16` … `PO33_FX_FILTER_SWEEP` (the first 15 of the 16 punch-ins in `po33_fx_t`). Step 16 is a no-op stub (logs "swing not yet implemented") because our `po33_fx_t` has 16 effects but no swing entry; the v2 §7 effect alignment plan will either add `PO33_FX_SWING` or shift the mapping.
+  - **Step 16** in the PO-33 manual's effects table is "**no effect**" (the 16th row reads "16. no effect"). The combo "[write mode] [play] hold fx (FX) + 16" is "clear effect in pattern" — a separate write-mode-dependent action, NOT swing. Earlier commits mislabelled step 16 as a "swing stub"; that was a fabrication.
+- **Our hardware combo:** Strict PO-33: `FX` (`BTN_FX`, GPIO 12 — top of the right column under Knob B) held + step 1–15 → calls `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`. Step 1–15 maps to enum values `PO33_FX_LOOP_16` … `PO33_FX_FILTER_SWEEP`. Step 16 → `sequencer_set_active_fx(PO33_FX_NONE)` (the manual's "no effect" entry; the PO-33's "clear effect in pattern" half of the combo lands in write mode, queued).
 
   The selected FX is then **carried into the next note** by `sequencer_on_step()` (reads `s_active_fx` if the step's `effect` field is `PO33_FX_NONE`). Per-step effects take precedence — the FX modifier sets a *fallback*, not an override.
 
-  Tap or long-press of `FX` alone is a no-op. The "save effect in pattern" half of the PO-33 combo still requires write mode (F-009), which is queued.
-- **Code location:** `main/ui/input.c` → `s_modifiers[]` entry `{BTN_FX, fx_on_step}`; `fx_on_step()` step 1..15 maps to `PO33_FX_LOOP_16 + (step - 1)`, step 16 is a stub. `main/sequencer/sequencer.{c,h}` → `sequencer_set_active_fx()`, `sequencer_get_active_fx()`, and `on_step()` reads `s_active_fx` as the fallback when the step's per-step effect is `PO33_FX_NONE`. `main/audio/amy_bridge.{c,h}` → `po33_fx_t`, `apply_fx()`.
-- **Status:** ✅ done (step 1..15). Step 16 swing stub in place; full FX write-mode persistence queued for v2.
+  **Tap** of `FX` alone is the **tweak-mode cycle** (Tone → Filter → Trim → Tone) — see F-015. Long-press is a no-op.
+
+  **Where swing actually lives:** BPM-held + Knob A. Not a step press at all. See F-020.
+- **Code location:** `main/ui/input.c` → `s_modifiers[]` entry `{BTN_FX, fx_on_step}`; `fx_on_step()` step 1..15 maps to `PO33_FX_LOOP_16 + (step - 1)`, step 16 sets `PO33_FX_NONE`. `main/sequencer/sequencer.{c,h}` → `sequencer_set_active_fx()`, `sequencer_get_active_fx()`, and `on_step()` reads `s_active_fx` as the fallback when the step's per-step effect is `PO33_FX_NONE`. `main/audio/amy_bridge.{c,h}` → `po33_fx_t`, `apply_fx()`.
+- **Status:** ✅ done. Step 1..15 selects punch-ins; step 16 = "no effect" (no swing).
 
 ### 3.6 Section 6 — BPM and tempo
 
@@ -421,20 +429,25 @@ See §4 below for the per-effect deep dive.
 
 - **Manual ref:** §6
 - **Layman:** Hold **BPM** and turn Knob A to fine-tune the tempo, or press BPM repeatedly to cycle between three preset levels: Hip Hop (80), Disco (120), Techno (140).
-- **PO-33 button combo:** Hold BPM + knob A, or press BPM.
-- **Our hardware combo:** `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row) has two behaviours:
+- **PO-33 button combo:** Per the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual, the BPM row has *three* distinct combos (each one was previously confused with the others in our docs; corrected in this commit):
+  - `change tempo (pre-defined modes)` — **press BPM** to toggle between levels.
+  - `change swing` — **hold BPM + turn Knob A** (8 discrete levels, 0=no swing, 7=max).
+  - `change tempo (fine tuned)` — **hold BPM + turn Knob B** (continuous, 60–240 BPM).
+  - (`change volume` — hold BPM + number 1–5; see F-022. Different axis again.)
+- **Our hardware combo:** `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row) has the following behaviours:
   - **Tap** advances to the next preset level (Hip Hop → Disco → Techno → wrap). See F-021 for the table.
-  - **Long-press (held)** enters BPM-adjust mode: while the button stays held, **Knob A** scans the BPM range `[MIN_BPM=60, MAX_BPM=240]`. On release, the new BPM is kept (no separate commit step).
+  - **Long-press (held)** enters BPM-mode: while held, **Knob A adjusts swing** (8 levels) and **Knob B fine-tunes BPM** (continuous, [60..240]). Each axis has its own deadzone + last-reading for delta detection; both fire on knob movement past the deadzone. On release, both values are kept (no separate commit step).
+  - **Held + step 1–5**: future — would set volume level (F-022, queued).
   - UART: `bpm 140` (sets an arbitrary integer BPM; does not use the preset machinery).
-- **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`, `sequencer_cycle_bpm_preset()`. `main/ui/input.c` → `BTN_BPM` case (tap/long-press split), `knob_a_to_bpm()` mapper, `s_bpm_held` mode. `main/ui/buttons.{c,h}` → `buttons_is_pressed(uint8_t)` (held-state poll for mode logic). `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`, `BPM_PRESETS`.
-- **Status:** ✅ done. Both continuous (knob adjust) and preset-level (tap cycle) paths are implemented and tested.
+- **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`, `sequencer_cycle_bpm_preset()`, `sequencer_set_swing(uint8_t)`, the `on_step()` swing-delay path, `on_swing_fire()` timer callback. `main/ui/input.c` → `BTN_BPM` case (tap/long-press split), `knob_a_to_swing()` mapper, `knob_b_to_bpm()` mapper, `s_bpm_held` mode + held-mode polling. `main/ui/buttons.{c,h}` → `buttons_is_pressed(uint8_t)` (held-state poll). `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`, `BPM_PRESETS`, `SWING_LEVELS 8`, `SWING_MAX_PERCENT 50`.
+- **Status:** ✅ done. Tap cycles presets (F-021); long-press + Knob A sets swing; long-press + Knob B fine-tunes BPM. Volume level (hold BPM + 1–5) queued for v2 alongside F-022.
 
 #### F-021 — Three preset BPM levels (Hip Hop / Disco / Techno)
 
 - **Manual ref:** §6
 - **Layman:** The PO-33 has three named BPM levels you can cycle through. The PO-33 calls these "levels" because BPM is shown as a numeric value but it remembers the level name.
 - **PO-33 button combo:** Press BPM repeatedly.
-- **Our hardware combo:** Same as F-020: each tap of `BTN_BPM` advances `s_preset_idx` (modulo 3) and calls `sequencer_set_bpm(presets[idx])`. The cycle starts at **Disco** (the `DEFAULT_BPM` 120), so the first tap lands on **Techno**, the next on **Hip Hop**, then back to Disco. Off-preset values (set by Knob A under long-press) are *not* snapped to the nearest preset on the next tap — the cycle advances slot-by-slot from whatever the last preset delivered.
+- **Our hardware combo:** Each tap of `BTN_BPM` advances `s_preset_idx` (modulo 3) and calls `sequencer_set_bpm(presets[idx])`. The cycle starts at **Disco** (the `DEFAULT_BPM` 120), so the first tap lands on **Techno**, the next on **Hip Hop**, then back to Disco. Off-preset values (set by Knob B under long-press) are *not* snapped to the nearest preset on the next tap — the cycle advances slot-by-slot from whatever the last preset delivered.
 - **Code location:** `main/config.h` → `BPM_PRESETS` (macro) + `BPM_PRESET_COUNT 3`. `main/sequencer/sequencer.c` → `sequencer_cycle_bpm_preset()`. The static `s_preset_idx` lives inside that function (initial value 1 = Disco).
 - **Status:** ✅ done.
 
@@ -782,9 +795,12 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 ### 5.3 How do I change the tempo?
 
-**On a real PO-33:** Hold **BPM** and turn knob A to fine-tune, or press BPM to cycle through 80 / 120 / 140.
+**On a real PO-33:** Three distinct combos (per the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual):
+- Press **BPM** to cycle through 80 / 120 / 140 (the preset "levels").
+- Hold **BPM** + turn knob A to set the swing (8 discrete levels).
+- Hold **BPM** + turn knob B to fine-tune the tempo (continuous, 60–240).
 
-**On our firmware:** Press **BPM** (rightmost of the top row) — a tap raises the tempo, a long press lowers it. Or over the UART shell: `bpm 140`.
+**On our firmware:** All three behaviours wired as of this commit. Tap `BPM` (rightmost of the top row) cycles presets. Long-press + twist Knob A → swing. Long-press + twist Knob B → fine tempo. Or over the UART shell: `bpm 140`.
 
 ### 5.4 How do I switch to another pattern?
 
@@ -794,9 +810,9 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 ### 5.5 How do I apply an effect?
 
-**On a real PO-33:** Hold **FX** + number 1–15 (the 16 punch-ins; step 16 is "change swing", which is a separate feature). The effect applies to the next sound you play.
+**On a real PO-33:** Hold **FX** + number 1–15 (the 15 punch-ins; the manual's effects table lists entry 16 as "no effect", not swing). The effect applies to the next sound you play. **Swing** is not a step-press at all — see §5.3 for the BPM + knob A combo.
 
-**On our firmware:** Same combo: hold `FX` (`BTN_FX`, GPIO 12) + step 1–15 → sets `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`, which the next triggered note (sequencer or "step press without modifier after a SOUND select") consumes. Step 16 is a stub (logs "swing not yet implemented") — see F-019 §3.5 for the v2 plan. The selected effect is shown on the TFT (proposed in §6).
+**On our firmware:** Same combo: hold `FX` (`BTN_FX`, GPIO 12) + step 1–15 → sets `sequencer_set_active_fx(PO33_FX_LOOP_16 + (step - 1))`, which the next triggered note (sequencer or "step press without modifier after a SOUND select") consumes. Step 16 → `PO33_FX_NONE` (the manual's "no effect" entry). See F-019 for the full mapping. The selected effect is shown on the TFT (proposed in §6).
 
 ### 5.6 How do I save my work?
 
@@ -1117,8 +1133,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Play pattern | PLAY | same |
 | Stop pattern | PLAY | same |
 | Change pattern | H+PATTERN + number | H+`PATTERN` + step 1–16, or `pattern N` |
-| Change BPM | H+BPM + knob A | `BPM` tap cycles preset (Hip Hop / Disco / Techno), long-press + Knob A = fine adjust, or `bpm N` |
-| Apply effect | H+FX + number | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = swing stub |
+| Change BPM (preset) | press BPM (cycle) | `BPM` tap cycles preset (Hip Hop → Disco → Techno → wrap), or `bpm N` |
+| Apply effect | H+FX + number (1–15) | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = "no effect" (PO33_FX_NONE). NOT a step-press: swing is BPM + Knob A. |
 | Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); handler queued for v2 |
 | Select a sample slot | H+SOUND + number | H+`SOUND` + step 1–16 → active slot; press same step with no modifier = plays once |
 | Save pattern | auto on power-off | `save` over UART |
@@ -1128,7 +1144,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
 | Tweak tone/filter/trim | FX cycles; knobs A/B adjust | Knob A/B wired (ADC); tweak-mode binding queued for v2 |
-| Fine tempo (BPM ±1 per tick) | H+BPM + knob A | H+BPM + knob A maps [60..240] to knob range; release keeps the new BPM |
+| Change swing | H+BPM + knob A | H+BPM + Knob A → 8 discrete levels (0=no swing, 7=max); release keeps the level |
+| Fine BPM | H+BPM + knob B | H+BPM + Knob B → continuous 60–240 BPM; release keeps the BPM |
 | Sync out | always on | always on |
 | Sync in | H+REC + BPM cycles mode | partial |
 | Show battery | SOUND + BPM | not yet (TFT will show) |

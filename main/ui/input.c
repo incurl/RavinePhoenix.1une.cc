@@ -8,16 +8,22 @@
  *
  * Two held-mode mechanisms live here:
  *
- *   (1) `s_bpm_held` — set by BTN_BPM long-press. While held, Knob A
- *       scans BPM. Exits when the button is released. Implemented as
- *       end-of-drain polling against buttons_is_pressed().
+ *   (1) `s_bpm_held` — set by BTN_BPM long-press. While held, the BPM
+ *       row maps:
+ *           Knob A  -> swing    (8 discrete levels, 0..7)
+ *           Knob B  -> fine BPM (continuous, [MIN_BPM..MAX_BPM])
+ *       Per PO-33 ground truth (lode/PO-33 README): "change swing" is
+ *       BPM + Knob A; "change tempo (fine tuned)" is BPM + Knob B.
+ *       Both knobs are polled at the end of every drain; changes
+ *       past KNOB_DEADZONE apply immediately. Exits when the button
+ *       is released.
  *
  *   (2) The `s_modifiers[]` table — a list of "modifier + number" pairs
  *       modelled on the PO-33's hold-modifier-and-press-a-number idiom.
  *       When a step event arrives while any registered modifier is held,
  *       the corresponding callback fires with the 1..16 step number.
- *       Currently PATTERN is registered; SOUND and FX land as separate
- *       commits in the same shape (see F-006 / F-019 in docs/DESIGN.md).
+ *       Currently PATTERN, SOUND, FX are registered (see F-007 / F-006
+ *       / F-019 in docs/DESIGN.md).
  */
 #include "input.h"
 #include "config.h"
@@ -32,9 +38,14 @@ static const char *TAG = "input";
 
 /* ─── Held-mode state ──────────────────────────────────────────── */
 
-/* (1) BPM-adjust mode — see F-020 / F-021. */
-static bool s_bpm_held = false;
-static uint8_t s_bpm_knob_last = 0;   /* last knob A reading, for delta detection */
+/* (1) BPM-adjust mode — see F-020 / F-021.
+ *
+ * Knob A adjusts swing (discrete 0..7); Knob B fine-tunes BPM
+ * continuously. Each knob has its own "last reading" so delta
+ * detection doesn't conflate the two axes. */
+static bool     s_bpm_held         = false;
+static uint8_t  s_bpm_knob_a_last  = 0;
+static uint8_t  s_bpm_knob_b_last  = 0;
 
 /* (2) Modifier + step dispatcher. Each entry says: "while btn_id is
  * held, route matrix step 1..16 presses to on_step(step_1_to_16)".
@@ -65,9 +76,13 @@ static const modifier_binding_t s_modifiers[] = {
     { BTN_SOUND, sound_on_step },
 
     /* PO-33: "hold fx (FX) + number (1-15) — add & save effect in pattern"
-     *        "hold fx (FX) + 16            — change swing"
-     * Step 1..15 maps to PO33_FX_LOOP_16..FILTER_SWEEP; step 16 = swing
-     * (not yet implemented, see fx_on_step()). */
+     *        "[write mode] [play] hold fx (FX) + 16 — clear effect in pattern"
+     *
+     * Step 1..15 maps to PO33_FX_LOOP_16..PO33_FX_FILTER_SWEEP. Step 16
+     * is PO-33 entry "no effect" (PO33_FX_NONE); the "clear effect in
+     * pattern" combo behind it lives in write mode which is queued.
+     * Swing is NOT a step press — it's BPM-held + Knob A (see the
+     * s_bpm_held polling below). */
     { BTN_FX, fx_on_step },
 };
 
@@ -98,8 +113,22 @@ static const char *btn_id_str(uint8_t id)
     }
 }
 
-/* Map Knob A's 0..255 reading to a BPM in [MIN_BPM, MAX_BPM]. */
-static uint16_t knob_a_to_bpm(uint8_t knob_v)
+/* Map Knob A's 0..255 reading to a discrete swing level in
+ * [0..SWING_LEVELS-1]. We bucket the knob range into SWING_LEVELS
+ * equal slices (32 knob-units per level at SWING_LEVELS=8).
+ * The PO-33 community uses 8 swing levels (0=no swing, 7=max). */
+static uint8_t knob_a_to_swing(uint8_t knob_v)
+{
+    /* (knob_v * SWING_LEVELS + 128) / 256 would also work and would
+     * be more precise for the midpoint, but a simple slice is what
+     * the PO-33's own detented knob feels like. */
+    return (uint8_t)((uint32_t)knob_v * SWING_LEVELS / 256);
+}
+
+/* Map Knob B's 0..255 reading to a continuous BPM in [MIN_BPM,
+ * MAX_BPM]. Same rounding trick used by the previous knob_a_to_bpm
+ * helper so 0 -> MIN_BPM and 255 -> MAX_BPM land exactly. */
+static uint16_t knob_b_to_bpm(uint8_t knob_v)
 {
     return (uint16_t)(MIN_BPM +
                      ((MAX_BPM - MIN_BPM) * (uint32_t)knob_v + 127) / 255);
@@ -133,27 +162,29 @@ static void fx_on_step(uint8_t step_1_to_16)
 {
     /* PO-33 (lode/PO-33 manual):
      *   "hold fx (FX) + number (1-15) — add & save effect in pattern"
-     *   "hold fx (FX) + 16            — change swing"
+     *   "[write mode] [play] hold fx (FX) + 16 — clear effect in pattern"
      *
-     * Step 1..15 maps to PO33_FX_LOOP_16 .. PO33_FX_FILTER_SWEEP
-     * (the first 15 enum values, in order). Step 16 is a no-op stub
-     * — swing isn't implemented yet (see F-019 + the v2 §7 effect
-     * alignment plan). Per the docs/cheatsheet, step 16 should land
-     * here when swing ships.
+     * Step 1..15 maps to PO33_FX_LOOP_16 .. PO33_FX_FILTER_SWEEP (the
+     * first 15 enum values, in order). Step 16 is the PO-33 manual's
+     * entry "no effect" (PO33_FX_NONE) — the 16th row of the manual's
+     * effects list reads "16. no effect". We set PO33_FX_NONE on the
+     * active FX; the PO-33 hardware treats this as "clear the punch-in
+     * for the next note" (the write-mode half of the combo lands later).
      *
-     * The stored FX is then consumed by sequencer_on_step() (via
-     * s_active_fx) for every note triggered until something else
-     * overwrites it. Selecting a new FX replaces, not stacks.
+     * Selecting a new FX replaces, not stacks. The stored value is then
+     * consumed by sequencer_on_step() (via s_active_fx) for every note
+     * triggered until something else overwrites it.
      *
-     * 'Save effect in pattern' (the PO-33 write-mode semantics) is
-     * still queued; that requires write mode to land. For v1 we just
-     * set the active FX. */
+     * Note: swing is *not* this combo. Per the PO-33 manual, "change
+     * swing" is BPM-held + Knob A, handled by the s_bpm_held polling
+     * below. Earlier commits mapped FX + step 16 to swing; that was a
+     * fabrication — the manual is clear that swing is a knob-twist. */
     if (step_1_to_16 >= 1 && step_1_to_16 <= 15) {
         uint8_t fx = (uint8_t)(PO33_FX_LOOP_16 + (step_1_to_16 - 1));
         sequencer_set_active_fx(fx);
     } else {
-        /* step 16 = swing stub. Log only; no state change. */
-        ESP_LOGI(TAG, "FX + STEP16 = swing (not yet implemented, see docs/DESIGN.md F-019)");
+        /* step 16 = "no effect". Clear active FX. */
+        sequencer_set_active_fx((uint8_t)PO33_FX_NONE);
     }
 }
 
@@ -238,8 +269,14 @@ void input_drain(void)
                  * so the user gets immediate feedback, then continues
                  * to track on each subsequent knob-tick. */
                 s_bpm_held = true;
-                s_bpm_knob_last = knobs_get_a();
-                sequencer_set_bpm(knob_a_to_bpm(s_bpm_knob_last));
+                s_bpm_knob_a_last = knobs_get_a();
+                s_bpm_knob_b_last = knobs_get_b();
+                /* Snap both axes to the current knob positions for
+                 * immediate user feedback. Subsequent drain polls
+                 * update only on actual knob movement past the
+                 * deadzone. */
+                sequencer_set_swing(knob_a_to_swing(s_bpm_knob_a_last));
+                sequencer_set_bpm(knob_b_to_bpm(s_bpm_knob_b_last));
             } else {
                 /* Tap cycles to the next preset level (F-021):
                  * Hip Hop (80) -> Disco (120) -> Techno (140) -> wrap.
@@ -276,16 +313,25 @@ void input_drain(void)
     if (s_bpm_held) {
         if (!buttons_is_pressed(BTN_BPM)) {
             s_bpm_held = false;
-            ESP_LOGI(TAG, "BPM-adjust mode exit (BPM=%u)",
-                     sequencer_get_bpm());
+            ESP_LOGI(TAG, "BPM mode exit (BPM=%u swing=%u)",
+                     sequencer_get_bpm(), sequencer_get_swing());
         } else {
-            uint8_t k = knobs_get_a();
-            int delta = (int)k - (int)s_bpm_knob_last;
-            if (delta < 0) delta = -delta;
-            /* KNOB_DEADZONE from config.h avoids jitter from ADC noise. */
-            if (delta > KNOB_DEADZONE) {
-                sequencer_set_bpm(knob_a_to_bpm(k));
-                s_bpm_knob_last = k;
+            /* Knob A -> swing (8 discrete levels). Knob B -> BPM
+             * (continuous fine tempo). Each axis has its own deadzone
+             * + last-reading for delta detection. */
+            uint8_t ka = knobs_get_a();
+            int da = (int)ka - (int)s_bpm_knob_a_last;
+            if (da < 0) da = -da;
+            if (da > KNOB_DEADZONE) {
+                sequencer_set_swing(knob_a_to_swing(ka));
+                s_bpm_knob_a_last = ka;
+            }
+            uint8_t kb = knobs_get_b();
+            int db = (int)kb - (int)s_bpm_knob_b_last;
+            if (db < 0) db = -db;
+            if (db > KNOB_DEADZONE) {
+                sequencer_set_bpm(knob_b_to_bpm(kb));
+                s_bpm_knob_b_last = kb;
             }
         }
     }

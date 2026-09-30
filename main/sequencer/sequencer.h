@@ -30,6 +30,13 @@ void     sequencer_set_active_slot(uint8_t slot);      /* 0..15 or 0xFF = none *
 uint8_t  sequencer_get_active_slot(void);
 void     sequencer_set_active_fx(uint8_t fx);          /* po33_fx_t value */
 uint8_t  sequencer_get_active_fx(void);
+
+/* Swing level (0..SWING_LEVELS-1). Set by the BPM-held + Knob A
+ * dispatcher; consumed by on_step() to delay off-beat 16th notes.
+ * See config.h SWING_LEVELS for the level count and the SWING
+ * mapping formula in sequencer.c for the delay math. */
+void     sequencer_set_swing(uint8_t level);           /* 0..SWING_LEVELS-1 */
+uint8_t  sequencer_get_swing(void);
 uint16_t sequencer_get_bpm(void);
 uint8_t  sequencer_get_current_step(void);
 uint8_t  sequencer_get_current_pattern(void);

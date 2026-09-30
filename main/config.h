@@ -221,7 +221,7 @@ enum {
 
 /* PO-33 BPM preset levels (F-021). Tapping BTN_BPM repeatedly cycles
  * through them in this order; long-pressing BTN_BPM enters BPM-adjust
- * mode where Knob A maps to [MIN_BPM, MAX_BPM] while held. */
+ * mode where Knob A adjusts swing and Knob B fine-tunes BPM. */
 #define BPM_PRESET_HIP_HOP        80
 #define BPM_PRESET_DISCO          120
 #define BPM_PRESET_TECHNO         140
@@ -229,6 +229,13 @@ enum {
                                     BPM_PRESET_DISCO,    \
                                     BPM_PRESET_TECHNO }
 #define BPM_PRESET_COUNT          3
+
+/* Swing (PO-33 "change swing" combo: hold BPM + Knob A). 8 discrete
+ * levels (0=no swing, 7=max). SWING_MAX_PERCENT is the maximum
+ * percentage of a 16th-note duration that an off-beat step can be
+ * delayed by at swing level 7. */
+#define SWING_LEVELS              8
+#define SWING_MAX_PERCENT         50
 
 /* ─── Sketch (v2 multi-storage) naming convention ──────────────── */
 /*

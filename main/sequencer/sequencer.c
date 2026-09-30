@@ -29,7 +29,37 @@ static volatile uint16_t s_bpm   = DEFAULT_BPM;
 static volatile uint8_t s_active_slot = 0xFF;   /* 0xFF = none selected */
 static volatile uint8_t s_active_fx   = PO33_FX_NONE;
 
+/* Swing level (0..SWING_LEVELS-1). Set by BPM-held + Knob A; consumed
+ * by on_step() to delay off-beat 16th notes. */
+static volatile uint8_t s_swing = 0;
+
+/* One-shot esp_timer used to play off-beat steps late when swing != 0.
+ * NULL until sequencer_init() runs. */
+static esp_timer_handle_t s_swing_timer = NULL;
+
+/* The note we owe the swing timer. Set by on_step() before scheduling
+ * the timer; read by the timer callback. Same volatile / atomic
+ * argument as s_active_*. */
+typedef struct {
+    uint8_t     slot;
+    uint8_t     note;
+    uint8_t     velocity;
+    po33_fx_t   fx;
+} pending_note_t;
+static volatile pending_note_t s_pending_note = { 0xFF, 0, 0, PO33_FX_NONE };
+static volatile bool           s_pending      = false;
+
+/* Forward decls. The swing timer fires on_swing_fire() to play a
+ * pending note late. */
+static void on_swing_fire(void *arg);
+
 static esp_timer_handle_t s_step_timer = NULL;
+
+/* Current 16th-note period in microseconds, set by sequencer_play() and
+ * read by on_step() to compute swing delays. Volatile because the
+ * input task can call sequencer_set_bpm() while the sequencer timer
+ * is running. */
+static volatile uint32_t s_period_us = 0;
 
 esp_err_t sequencer_init(void)
 {
@@ -45,6 +75,18 @@ esp_err_t sequencer_init(void)
         .skip_unhandled_events = false,
     };
     esp_err_t err = esp_timer_create(&cfg, &s_step_timer);
+    if (err != ESP_OK) return err;
+
+    /* One-shot swing timer. Fires on_swing_fire() to play an off-beat
+     * note late when swing != 0. We allocate it once; sequencer_play
+     * arms it per-step, sequencer_stop() disarms. */
+    const esp_timer_create_args_t swing_cfg = {
+        .name    = "seq_swing",
+        .callback = on_swing_fire,
+        .arg     = NULL,
+        .skip_unhandled_events = false,
+    };
+    err = esp_timer_create(&swing_cfg, &s_swing_timer);
     if (err != ESP_OK) return err;
 
     /* default demo pattern: kick on every quarter */
@@ -63,6 +105,12 @@ void sequencer_set_bpm(uint16_t bpm)
     if (s_playing) {
         /* restart timer at new rate */
         sequencer_play();
+    } else {
+        /* Keep s_period_us in sync even when stopped, so a subsequent
+         * sequencer_play() doesn't compute from a stale value. */
+        uint32_t p = (1000000U * 15U) / s_bpm;
+        if (p < 1000) p = 1000;
+        s_period_us = p;
     }
 }
 
@@ -105,6 +153,27 @@ void sequencer_set_step_slot(uint8_t pattern, uint8_t step,
     g_patterns[pattern].steps[step].plock_active = true;
 }
 
+/* Swing timer callback. Fires `swing_delay_us` after on_step() armed
+ * it; plays the pending note that on_step() stashed. If the pending
+ * flag is false (e.g. sequencer_stop() ran between arm and fire) we
+ * no-op. */
+static void on_swing_fire(void *arg)
+{
+    (void)arg;
+    if (!s_pending) return;
+    pending_note_t n;
+    /* Read volatile struct once, then clear pending. Atomic on the
+     * ESP32-S3 for a 4-byte aligned read. */
+    n.slot     = s_pending_note.slot;
+    n.note     = s_pending_note.note;
+    n.velocity = s_pending_note.velocity;
+    n.fx       = s_pending_note.fx;
+    s_pending  = false;
+    if (n.slot != 0xFF) {
+        amy_bridge_play_note(n.slot, n.note, n.velocity, n.fx, 0, 0);
+    }
+}
+
 static void on_step(void *arg)
 {
     (void)arg;
@@ -122,10 +191,51 @@ static void on_step(void *arg)
                        ? (po33_fx_t)s.effect
                        : (po33_fx_t)s_active_fx;
 
-    if (slot != 0xFF) {
-        amy_bridge_play_note(slot, s.note, s.velocity,
-                             fx, s.effect_p1, s.effect_p2);
+    /* Swing (PO-33 "change swing" via BPM-held + Knob A):
+     *
+     *   On-beat steps (even index in 0..15) play immediately.
+     *   Off-beat steps (odd index) play delayed by:
+     *       delay_us = period_us * swing_level * SWING_MAX_PERCENT
+     *                  / 100 / (SWING_LEVELS - 1)
+     *   At level 0, delay is 0 (straight timing).
+     *   At level 7 with SWING_MAX_PERCENT=50, off-beat is delayed by
+     *   half a 16th note (max swing = pure shuffle).
+     *
+     * Implementation: when an off-beat step is owed a swing delay,
+     * stash the note in s_pending_note, arm a one-shot esp_timer, and
+     * do NOT play it now. The timer callback plays it later. */
+    bool is_offbeat = (s_step % 2) == 1;
+    bool defer       = is_offbeat && (s_swing > 0) && (slot != 0xFF);
+
+    if (!defer) {
+        if (slot != 0xFF) {
+            amy_bridge_play_note(slot, s.note, s.velocity,
+                                 fx, s.effect_p1, s.effect_p2);
+        }
+    } else {
+        /* Cancel any previous swing note that hasn't fired yet (e.g.
+         * the user pressed BPM long-press while a previous off-beat
+         * was in flight). The new off-beat replaces it. */
+        if (s_swing_timer) esp_timer_stop(s_swing_timer);
+        s_pending_note.slot     = slot;
+        s_pending_note.note     = s.note;
+        s_pending_note.velocity = s.velocity;
+        s_pending_note.fx       = fx;
+        s_pending               = true;
+        uint32_t delay_us = (s_period_us * (uint32_t)s_swing
+                            * (uint32_t)SWING_MAX_PERCENT)
+                            / (100U * (uint32_t)(SWING_LEVELS - 1));
+        if (s_swing_timer && delay_us > 0) {
+            esp_timer_start_once(s_swing_timer, delay_us);
+        } else {
+            /* period_us was 0 (timer not running) or swing math
+             * collapsed to zero — play immediately. */
+            s_pending = false;
+            amy_bridge_play_note(slot, s.note, s.velocity,
+                                 fx, s.effect_p1, s.effect_p2);
+        }
     }
+
     s_step++;
     if (s_step >= STEPS_PER_PATTERN) {
         s_step = 0;
@@ -148,6 +258,8 @@ void sequencer_play(void)
      */
     uint64_t period_us = (1000000ULL * 15ULL) / s_bpm;
     if (period_us < 1000) period_us = 1000;
+    /* Mirror into the volatile so on_step() can compute swing delays. */
+    s_period_us = (uint32_t)period_us;
 
     /* Re-create timer if callback was NULL at init time. */
     /* (We use esp_timer_create once and just re-start; the callback
@@ -176,6 +288,10 @@ void sequencer_stop(void)
     if (s_step_timer) {
         esp_timer_stop(s_step_timer);
     }
+    if (s_swing_timer) {
+        esp_timer_stop(s_swing_timer);
+    }
+    s_pending = false;
     s_playing = false;
     ESP_LOGI(TAG, "Stop.");
 }
@@ -203,6 +319,18 @@ void sequencer_set_active_fx(uint8_t fx)
 }
 
 uint8_t sequencer_get_active_fx(void) { return s_active_fx; }
+
+void sequencer_set_swing(uint8_t level)
+{
+    /* Clamp to [0, SWING_LEVELS-1]. Out-of-range values (incl. the
+     * future "swing = some byte that didn't come from our dispatcher"
+     * case) are coerced to 0 (no swing) so on_step() never sees a
+     * bogus level. */
+    if (level >= SWING_LEVELS) level = 0;
+    s_swing = level;
+}
+
+uint8_t sequencer_get_swing(void) { return s_swing; }
 
 void sequencer_tick(void)
 {
