@@ -10,9 +10,18 @@
 #include "config.h"
 #include "esp_log.h"
 #include "sequencer/sequencer.h"
+#include "ui/buttons.h"
+#include "ui/knobs.h"
 #include "ui/leds.h"
 
 static const char *TAG = "input";
+
+/* Held-mode state. While `s_bpm_held` is true we re-read Knob A on
+ * every input_drain() call and map 0..255 to [MIN_BPM, MAX_BPM],
+ * updating the sequencer. We exit the mode on the next drain where
+ * buttons_is_pressed(BTN_BPM) returns false. */
+static bool s_bpm_held = false;
+static uint8_t s_bpm_knob_last = 0;   /* last knob A reading, for delta detection */
 
 static const char *btn_id_str(uint8_t id)
 {
@@ -35,6 +44,13 @@ static const char *btn_id_str(uint8_t id)
         }
         return "?";
     }
+}
+
+/* Map Knob A's 0..255 reading to a BPM in [MIN_BPM, MAX_BPM]. */
+static uint16_t knob_a_to_bpm(uint8_t knob)
+{
+    uint32_t span = MAX_BPM - MIN_BPM;       /* 180 */
+    return (uint16_t)(MIN_BPM + (span * knob + 127) / 255);
 }
 
 void input_drain(void)
@@ -66,12 +82,21 @@ void input_drain(void)
             break;
 
         case BTN_BPM:
-            /* Tap = +1 BPM, long-press = -1 BPM. The set_bpm() call
-             * clamps to [MIN_BPM, MAX_BPM] so we don't have to. */
             if (ev.long_press) {
-                sequencer_set_bpm((uint16_t)(sequencer_get_bpm() - 1));
+                /* Long-press enters BPM-adjust mode. While the button
+                 * stays held, Knob A scans the BPM range (see below).
+                 * The first call snaps to the knob's current position
+                 * so the user gets immediate feedback, then continues
+                 * to track on each subsequent knob-tick. */
+                s_bpm_held = true;
+                s_bpm_knob_last = knobs_get_a();
+                sequencer_set_bpm(knob_a_to_bpm(s_bpm_knob_last));
             } else {
-                sequencer_set_bpm((uint16_t)(sequencer_get_bpm() + 1));
+                /* Tap cycles to the next preset level (F-021):
+                 * Hip Hop (80) -> Disco (120) -> Techno (140) -> wrap.
+                 * Cycling is independent of the current BPM value;
+                 * see sequencer_cycle_bpm_preset(). */
+                sequencer_cycle_bpm_preset();
             }
             break;
 
@@ -92,6 +117,27 @@ void input_drain(void)
         default:
             /* SOUND / REC / FX / WRITE / steps: handler lands later. */
             break;
+        }
+    }
+
+    /* Held-mode polling. Runs at the end of every input_drain() call,
+     * i.e. once per button-scan tick (~10 ms). If the BPM button was
+     * long-pressed earlier and is still held, track Knob A and update
+     * the sequencer. Exiting the mode is automatic on release. */
+    if (s_bpm_held) {
+        if (!buttons_is_pressed(BTN_BPM)) {
+            s_bpm_held = false;
+            ESP_LOGI(TAG, "BPM-adjust mode exit (BPM=%u)",
+                     sequencer_get_bpm());
+        } else {
+            uint8_t k = knobs_get_a();
+            int delta = (int)k - (int)s_bpm_knob_last;
+            if (delta < 0) delta = -delta;
+            /* KNOB_DEADZONE from config.h avoids jitter from ADC noise. */
+            if (delta > KNOB_DEADZONE) {
+                sequencer_set_bpm(knob_a_to_bpm(k));
+                s_bpm_knob_last = k;
+            }
         }
     }
 }

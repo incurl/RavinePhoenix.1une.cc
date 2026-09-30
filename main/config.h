@@ -219,6 +219,17 @@ enum {
 #define PATTERN_COUNT             16
 #define PATTERN_CHAIN_MAX         128
 
+/* PO-33 BPM preset levels (F-021). Tapping BTN_BPM repeatedly cycles
+ * through them in this order; long-pressing BTN_BPM enters BPM-adjust
+ * mode where Knob A maps to [MIN_BPM, MAX_BPM] while held. */
+#define BPM_PRESET_HIP_HOP        80
+#define BPM_PRESET_DISCO          120
+#define BPM_PRESET_TECHNO         140
+#define BPM_PRESETS               { BPM_PRESET_HIP_HOP, \
+                                    BPM_PRESET_DISCO,    \
+                                    BPM_PRESET_TECHNO }
+#define BPM_PRESET_COUNT          3
+
 /* ─── Sketch (v2 multi-storage) naming convention ──────────────── */
 /*
  * When the v2 multi-sketch storage system lands (see docs/DESIGN.md

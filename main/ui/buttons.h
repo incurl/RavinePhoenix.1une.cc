@@ -23,6 +23,12 @@ button_event_t buttons_pop(void);
 /* Periodic scan — call from button_scan_task. */
 void buttons_tick(void);
 
+/* Returns the current debounced state of the given button ID.
+ * For modifier buttons (BTN_SOUND..BTN_WRITE) returns true while held.
+ * For step buttons, returns true while the matrix sees the press.
+ * Used by mode logic (e.g. "while BPM is held, Knob A = BPM adjust"). */
+bool buttons_is_pressed(uint8_t btn_id);
+
 #ifdef __cplusplus
 }
 #endif

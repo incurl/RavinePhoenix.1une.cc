@@ -57,6 +57,24 @@ void sequencer_set_bpm(uint16_t bpm)
     }
 }
 
+void sequencer_cycle_bpm_preset(void)
+{
+    /* Tap-to-cycle: advance to next preset in sequence regardless of
+     * the current BPM. The user gets to Hip Hop by 3 taps from Techno
+     * even if they're at, e.g., 95 BPM (knob-adjust territory).
+     *
+     * We remember the current preset slot in a static so the cycle is
+     * deterministic across calls. If the user has used Knob A to land
+     * on an off-preset value, the next tap returns to the slot *after*
+     * the last preset slot we delivered, not the nearest preset to the
+     * current value. This is the PO-33 behaviour. */
+    static uint8_t s_preset_idx = 1;   /* start on Disco == DEFAULT_BPM */
+    static const uint16_t s_presets[BPM_PRESET_COUNT] = BPM_PRESETS;
+
+    s_preset_idx = (uint8_t)((s_preset_idx + 1) % BPM_PRESET_COUNT);
+    sequencer_set_bpm(s_presets[s_preset_idx]);
+}
+
 void sequencer_set_pattern(uint8_t pattern)
 {
     if (pattern >= PATTERN_COUNT) return;

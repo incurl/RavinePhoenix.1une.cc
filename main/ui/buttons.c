@@ -178,3 +178,21 @@ button_event_t buttons_pop(void)
     if (s_queue) xQueueReceive(s_queue, &ev, 0);
     return ev;
 }
+
+bool buttons_is_pressed(uint8_t btn_id)
+{
+    /* Modifier buttons (0..6) are tracked individually. */
+    if (btn_id < BTN_GPIO_COUNT) {
+        return s_gpio_btns[btn_id].state;
+    }
+    /* Step buttons live in the matrix at row-major (r*4+c). */
+    if (BTN_IS_STEP(btn_id)) {
+        int idx = btn_id - BTN_STEP1;
+        int r = idx / BTN_COL_COUNT;
+        int c = idx % BTN_COL_COUNT;
+        if (r >= 0 && r < BTN_ROW_COUNT && c >= 0 && c < BTN_COL_COUNT) {
+            return s_state[r][c];
+        }
+    }
+    return false;
+}

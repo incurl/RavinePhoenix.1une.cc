@@ -407,18 +407,21 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §6
 - **Layman:** Hold **BPM** and turn Knob A to fine-tune the tempo, or press BPM repeatedly to cycle between three preset levels: Hip Hop (80), Disco (120), Techno (140).
 - **PO-33 button combo:** Hold BPM + knob A, or press BPM.
-- **Our hardware combo:** Press `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row): a tap raises the tempo by one, a long press lowers it. (Hold + Knob A for fine tempo is queued for v2.) UART: `bpm 140`.
-- **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`. `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`.
-- **Status:** ✅ done (but the three preset levels — Hip Hop / Disco / Techno — are not implemented yet, only continuous BPM).
+- **Our hardware combo:** `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row) has two behaviours:
+  - **Tap** advances to the next preset level (Hip Hop → Disco → Techno → wrap). See F-021 for the table.
+  - **Long-press (held)** enters BPM-adjust mode: while the button stays held, **Knob A** scans the BPM range `[MIN_BPM=60, MAX_BPM=240]`. On release, the new BPM is kept (no separate commit step).
+  - UART: `bpm 140` (sets an arbitrary integer BPM; does not use the preset machinery).
+- **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`, `sequencer_cycle_bpm_preset()`. `main/ui/input.c` → `BTN_BPM` case (tap/long-press split), `knob_a_to_bpm()` mapper, `s_bpm_held` mode. `main/ui/buttons.{c,h}` → `buttons_is_pressed(uint8_t)` (held-state poll for mode logic). `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`, `BPM_PRESETS`.
+- **Status:** ✅ done. Both continuous (knob adjust) and preset-level (tap cycle) paths are implemented and tested.
 
 #### F-021 — Three preset BPM levels (Hip Hop / Disco / Techno)
 
 - **Manual ref:** §6
 - **Layman:** The PO-33 has three named BPM levels you can cycle through. The PO-33 calls these "levels" because BPM is shown as a numeric value but it remembers the level name.
 - **PO-33 button combo:** Press BPM repeatedly.
-- **Our hardware combo:** Same gap as F-020.
-- **Code location:** Needs `enum bpm_level_t { BPM_HIP_HOP=80, BPM_DISCO=120, BPM_TECHNO=140 }` and a stepper function.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Same as F-020: each tap of `BTN_BPM` advances `s_preset_idx` (modulo 3) and calls `sequencer_set_bpm(presets[idx])`. The cycle starts at **Disco** (the `DEFAULT_BPM` 120), so the first tap lands on **Techno**, the next on **Hip Hop**, then back to Disco. Off-preset values (set by Knob A under long-press) are *not* snapped to the nearest preset on the next tap — the cycle advances slot-by-slot from whatever the last preset delivered.
+- **Code location:** `main/config.h` → `BPM_PRESETS` (macro) + `BPM_PRESET_COUNT 3`. `main/sequencer/sequencer.c` → `sequencer_cycle_bpm_preset()`. The static `s_preset_idx` lives inside that function (initial value 1 = Disco).
+- **Status:** ✅ done.
 
 ### 3.7 Section 7 — Headphone volume
 

@@ -18,6 +18,7 @@ void sequencer_play(void);
 void sequencer_stop(void);
 bool sequencer_is_playing(void);
 void sequencer_set_bpm(uint16_t bpm);
+void sequencer_cycle_bpm_preset(void);
 void sequencer_set_pattern(uint8_t pattern);
 uint16_t sequencer_get_bpm(void);
 uint8_t  sequencer_get_current_step(void);
