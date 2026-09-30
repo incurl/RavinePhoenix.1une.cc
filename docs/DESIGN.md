@@ -440,10 +440,10 @@ See §4 below for the per-effect deep dive.
 - **Our hardware combo:** `BPM` (`BTN_BPM`, GPIO 13 — rightmost of the top row) has the following behaviours:
   - **Tap** advances to the next preset level (Hip Hop → Disco → Techno → wrap). See F-021 for the table.
   - **Long-press (held)** enters BPM-mode: while held, **Knob A adjusts swing** (8 levels) and **Knob B fine-tunes BPM** (continuous, [60..240]). Each axis has its own deadzone + last-reading for delta detection; both fire on knob movement past the deadzone. On release, both values are kept (no separate commit step).
-  - **Held + step 1–5**: future — would set volume level (F-022, queued).
+  - **Held + step 1–5**: sets the volume level (F-022). Step 6–16 is a no-op (PO-33 doesn't define a behaviour).
   - UART: `bpm 140` (sets an arbitrary integer BPM; does not use the preset machinery).
 - **Code location:** `main/sequencer/sequencer.c` → `sequencer_set_bpm(uint16_t)`, `sequencer_cycle_bpm_preset()`, `sequencer_set_swing(uint8_t)`, the `on_step()` swing-delay path, `on_swing_fire()` timer callback. `main/ui/input.c` → `BTN_BPM` case (tap/long-press split), `knob_a_to_swing()` mapper, `knob_b_to_bpm()` mapper, `s_bpm_held` mode + held-mode polling. `main/ui/buttons.{c,h}` → `buttons_is_pressed(uint8_t)` (held-state poll). `main/config.h` → `MIN_BPM 60`, `MAX_BPM 240`, `BPM_PRESETS`, `SWING_LEVELS 8`, `SWING_MAX_PERCENT 50`.
-- **Status:** ✅ done. Tap cycles presets (F-021); long-press + Knob A sets swing; long-press + Knob B fine-tunes BPM. Volume level (hold BPM + 1–5) queued for v2 alongside F-022.
+- **Status:** ✅ done. Tap cycles presets (F-021); long-press + Knob A sets swing; long-press + Knob B fine-tunes BPM; held + step 1–5 sets volume level (F-022).
 
 #### F-021 — Three preset BPM levels (Hip Hop / Disco / Techno)
 
@@ -461,9 +461,9 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §7
 - **Layman:** You can pick one of 5 headphone volume levels so the device isn't too loud or too quiet for headphones.
 - **PO-33 button combo:** Hold BPM + 1–5.
-- **Our hardware combo:** Not yet.
-- **Code location:** AMY's master gain is configurable via `amy_config_t`. We'd expose a `set_volume_level(uint8_t)` in `amy_bridge.c`.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Hold BPM + step 1–5 → `amy_bridge_set_volume_level(N)`. The level is stored as 0..5 (5 = max, 0 = silent). AMY's public API does not expose a master gain, so the multiplier is applied per-note inside `amy_bridge_play_note()`: `velocity_out = (velocity_in / 127) * volume_multiplier(level)`. Multiplier curve: 0/0.25/0.5/0.75/0.9/1.0 (slightly compressed at the top end to avoid the perceptual jump between levels 4 and 5).
+- **Code location:** `main/audio/amy_bridge.{c,h}` → `amy_bridge_set_volume_level(uint8_t)` + static `s_volume_level` + `volume_multiplier()`. The multiplier is applied inside `amy_bridge_play_note()`. `main/ui/input.c` → BPM-held + step 1–5 branch in `input_drain()` (routes BEFORE the modifier lookup because BPM isn't in the press-bound `s_modifiers[]` table; its mode is polled).
+- **Status:** ✅ done. Note: the PO-33 also uses BPM tap alone (with no step) to *display* the current volume level — "press bpm (handle); numbers are lit until the current level" (audit item 26). That display-half lives in `display.c` and is queued for v2; the *set*-half is wired here.
 
 ### 3.8 Section 8 — Copy and delete
 
@@ -1149,6 +1149,7 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Tweak tone/filter/trim | FX tap cycles; knobs A/B adjust | FX tap cycles Tone → Filter → Trim → Tone; knobs bind to per-step data (Tone/Filter) or slot trim (Trim) |
 | Change swing | H+BPM + knob A | H+BPM + Knob A → 8 discrete levels (0=no swing, 7=max); release keeps the level |
 | Fine BPM | H+BPM + knob B | H+BPM + Knob B → continuous 60–240 BPM; release keeps the BPM |
+| Change volume | H+BPM + number (1-5) | H+BPM + step 1-5 → volume level 1..5 (5=max); multiplier applied per-note in amy_bridge_play_note() |
 | Sync out | always on | always on |
 | Sync in | H+REC + BPM cycles mode | partial |
 | Show battery | SOUND + BPM | not yet (TFT will show) |

@@ -41,6 +41,37 @@ static int8_t   s_rec_slot = -1;
 static uint32_t s_rec_pos  = 0;
 static int16_t *s_rec_block = NULL;
 
+/* Master volume level (PO-33 F-022). Default 5 = max so the device
+ * is loud on first power-on; the user lowers via "hold BPM + 1..5".
+ * Stored as level (0..5), not as a multiplier, so callers can log
+ * the level and we don't accumulate float-rounding errors. */
+static uint8_t s_volume_level = 5;
+
+/* Map level 0..5 -> velocity multiplier 0.0..1.0. The curve is
+ * roughly 0/0.25/0.5/0.75/0.9/1.0 -- slightly compressed at the
+ * top end to avoid the perceptual jump between level 4 and 5.
+ * AMY has no public master-gain API, so the multiplier is applied
+ * per-note inside play_note(). */
+static float volume_multiplier(uint8_t level)
+{
+    switch (level) {
+    case 0:  return 0.0f;
+    case 1:  return 0.25f;
+    case 2:  return 0.5f;
+    case 3:  return 0.75f;
+    case 4:  return 0.9f;
+    default: return 1.0f;   /* 5 and any out-of-range = max */
+    }
+}
+
+void amy_bridge_set_volume_level(uint8_t level)
+{
+    if (level > 5) level = 5;
+    s_volume_level = level;
+    ESP_LOGI(TAG, "volume level -> %u (mul=%.2f)",
+             level, volume_multiplier(level));
+}
+
 /* ─── slot registry ─────────────────────────────────────────────── */
 static size_t slot_offset_bytes(uint8_t slot)
 {
@@ -275,7 +306,9 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
 
     amy_event e = amy_default_event();
     e.midi_note = midi_note;
-    e.velocity  = (float)velocity / 127.0f;
+    /* Apply master volume level (PO-33 F-022). AMY has no public
+     * master gain, so we scale velocity per note. */
+    e.velocity  = ((float)velocity / 127.0f) * volume_multiplier(s_volume_level);
 
     if (use_sampler) {
         e.wave = PCM;

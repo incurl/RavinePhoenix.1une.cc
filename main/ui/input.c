@@ -451,6 +451,25 @@ void input_drain(void)
          * always mean "select slot to record into", not "select
          * pattern" etc. */
         if (BTN_IS_STEP(ev.btn_id) && !ev.long_press) {
+            /* BPM-held + step 1..5: volume level (F-022). Routed
+             * BEFORE the modifier lookup because BPM isn't in the
+             * s_modifiers[] table (its mode is polled, not bound
+             * to step presses). Step 1..5 set the level; step
+             * 6..16 fall through to the modifier/no-modifier path. */
+            if (s_bpm_held) {
+                uint8_t step_1_to_16 =
+                    (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
+                if (step_1_to_16 >= 1 && step_1_to_16 <= 5) {
+                    ESP_LOGI(TAG, "BPM + STEP%u -> volume level %u",
+                             (unsigned)step_1_to_16,
+                             (unsigned)step_1_to_16);
+                    amy_bridge_set_volume_level(step_1_to_16);
+                    continue;
+                }
+                /* Step 6..16 while BPM held: no-op. The PO-33
+                 * doesn't define a behaviour for these. */
+                continue;
+            }
             const held_modifier_binding_t *hm = active_held_modifier();
             if (hm) {
                 uint8_t step_1_to_16 =

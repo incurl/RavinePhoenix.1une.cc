@@ -13,7 +13,7 @@ Source of truth: [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-3
 | 5 | hold pattern (⠛) + number → select pattern                             | F-007: hold PATTERN + step 1-16                              | PATTERN + step → sequencer_set_pattern   | ✅ done (1b60815) |
 | 6 | [select pattern] press write (·) → enter/exit write mode               | F-009/F-010: queued for v2                                   | BTN_WRITE: no-op                          | ❌ MISSING |
 | 7 | [write mode] press sound#, press step#s → fill pattern                  | F-009/F-010: queued for v2                                   | no write mode                             | ❌ MISSING |
-| 8 | [select pattern] press play (>) → play pattern                         | (F-022 documents PLAY = tap toggle)                          | PLAY tap → sequencer_play/stop toggle    | ✅ DONE (matches PO-33) |
+| 8 | [select pattern] press play (>) → play pattern                         | PLAY tap → sequencer_play/stop toggle (the PO-33 PLAY LED mirrors the new state) | PLAY tap → sequencer_play/stop toggle; PLAY LED via leds_set_play | ✅ DONE (matches PO-33) |
 | 9 | hold pattern (⠛) + number(s) → change patterns (chain)                | F-013: chain build (partial); F-014: reorder (missing)        | pattern_on_step replaces, not appends    | ⚠️ WRONG semantics (we replace; PO-33 appends) |
 |10 | press fx (FX) → toggle tweak parameter (Tone/Filter/Trim)             | F-015: FX tap cycles s_tweak_mode TONE → FILTER → TRIM → TONE | tweak_mode_cycle() called from BTN_FX tap dispatch | ✅ done (tweak-mode commit) |
 |11 | [select tweak] turn knob A/B → tweak parameter                          | F-016/F-017/F-018: knob bindings wired via tweak_apply_step / tweak_apply_slot | TONE: Knob A -> MIDI note, Knob B -> velocity; FILTER: Knob A -> filter_cutoff (resonance TODO); TRIM: Knob A/B -> amy_bridge_set_trim on active slot | ✅ done (knob A in all 3 modes; knob B in TONE only; knob B in FILTER is logged TODO; knob B in TRIM sets trim end). Caveat: PO-33 has dedicated tweak-target buttons (S+1, S+2, ...) we lack. |
@@ -23,7 +23,7 @@ Source of truth: [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-3
 |15 | hold bpm (handle) + turn knob A → change swing                         | F-020: BPM long-press + Knob A = swing (8 levels); release keeps the level | sequencer_set_swing() from s_bpm_held polling; on_step() defers off-beat notes via s_swing_timer | ✅ done (badaa4f) |
 |16 | hold bpm (handle) + turn knob B → change tempo (fine tuned)            | F-020: BPM long-press + Knob B = continuous fine BPM         | knobs_get_b() read; knob_b_to_bpm() maps to [60..240] | ✅ done (badaa4f) |
 |17 | press bpm (handle) → change tempo (pre-defined modes)                  | F-020/F-021: tap cycles 80/120/140 (Hip Hop/Disco/Techno)   | BPM tap → sequencer_cycle_bpm_preset     | ✅ DONE |
-|18 | click bpm + number → change volume (max 5)                              | F-022: ❌ missing                                              | not bound                                 | ❌ MISSING |
+|18 | hold bpm (handle) + number (1-5) → change volume (max 5)                    | F-022: ✅ done. Hold BPM + step 1-5 → amy_bridge_set_volume_level(N); multiplier applied per-note in amy_bridge_play_note() | s_bpm_held branch in input_drain() routes BPM-held + step 1-5 BEFORE the modifier lookup (because BPM isn't a press-bound modifier) | ✅ done (volume commit). Display-half (press BPM alone to show current level; per PO-33 "numbers are lit until the current level") queued for v2 in display.c. |
 |19 | [select sound] hold write + sound + number → copy sound                 | F-023: ❌ missing                                              | no WRITE handler                          | ❌ MISSING (multi-modifier combo; not supported by framework) |
 |20 | hold write + sound + 9-16 + 1-16 → copy slice                          | F-024: ❌ missing                                              | no WRITE handler                          | ❌ MISSING |
 |21 | [select pattern] hold write + pattern + number → copy pattern           | F-025: ❌ missing                                              | no WRITE handler                          | ❌ MISSING |
@@ -31,7 +31,7 @@ Source of truth: [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-3
 |23 | [select pattern] hold record + pattern → delete pattern                 | F-027: ❌ missing                                              | no REC handler                            | ❌ MISSING |
 |24 | (Power off) hold pattern + insert batteries → factory reset            | F-037: storage_erase_all (not yet written)                   | no UI                                     | ❌ MISSING |
 |25 | press sound + bpm → battery status                                       | (not in docs)                                                | no UI                                     | ❌ MISSING |
-|26 | press bpm → volume level (numbers lit until current)                    | F-022: queued                                                | no UI                                     | ❌ MISSING (PO-33 says BPM tap = BOTH volume level AND tempo cycle! Conflict with #17!) |
+|26 | press bpm → volume level (numbers lit until current)                    | F-022: set-half done; display-half queued | BPM tap → sequencer_cycle_bpm_preset; display.c doesn't render the level on the matrix | ❌ MISSING (display-only; the per-step volume-level binding via F-022 is wired). PO-33 uses BPM tap for BOTH tempo cycling AND volume display cycling. |
 |27 | press sound OR pattern → active sounds/patterns                         | F-038: rendering missing                                      | no UI                                     | ❌ MISSING |
 
 ## Critical findings — the big lies
@@ -69,6 +69,8 @@ F-001 status says "✅ done" because the code has `amy_bridge_start_record()`. B
 
 | Item | Notes |
 |---|---|
+| Item | Notes |
+|---|---|
 | PLAY tap → play/stop toggle | Matches PO-33 "press play (>)" |
 | BPM tap → cycle tempo presets (Hip Hop 80 / Disco 120 / Techno 140) | Matches PO-33 "press bpm (handle) to toggle between different levels" |
 | PATTERN held + step → select pattern AND append to chain | Matches PO-33 "hold pattern (⠛) + number" + "change patterns" |
@@ -81,6 +83,7 @@ F-001 status says "✅ done" because the code has `amy_bridge_start_record()`. B
 | FX held + step 16 → PO33_FX_NONE ("no effect") | Matches PO-33 manual effects table entry 16 |
 | FX tap → cycle tweak parameter (Tone → Filter → Trim → Tone) | Matches PO-33 "press fx (FX) to toggle between different parameters" |
 | In tweak mode, knob A/B adjust the active parameter | Matches PO-33 "[select tweak parameter] turn knob A/B" |
+| BPM held + step 1–5 → volume level (set-half) | Matches PO-33 "change volume". The PO-33 also uses BPM tap alone to *display* the level; the display-half is queued for v2. |
 
 ## What's queued vs what's a lie
 
@@ -88,13 +91,16 @@ Items 1, 9, 14, 15, 16 in the table above were previously marked MISSING/WRONG; 
 
 What's still queued (and not "lie"-grade — just deferred):
 - F-009/F-010 write mode + fill pattern (audit items 6, 7, 13)
-- F-022 volume level + battery status (audit items 18, 25, 26)
+- F-022 volume display-half + battery status (audit items 25, 26)
 - F-023/F-024/F-025/F-026/F-027 copy/delete (audit items 19-23)
 - F-037 factory reset (audit item 24)
 - F-038 active sounds/patterns display (audit item 27)
 - TFT surfacing of the tweak mode label (v2 display work; the
   state is correctly tracked in `s_tweak_mode` but `display.c`
   doesn't render it).
+- TFT surfacing of the volume level on BPM tap (the PO-33 lights
+  up step LEDs to show the current level; display.c doesn't do
+  this yet).
 - PO-33's dedicated tweak-target buttons (S+1, S+2, etc.) which
   set which *slot* is being tweaked. We don't have those; tweak
   mode affects whichever slot just played. PO-33-grade behaviour
@@ -102,10 +108,9 @@ What's still queued (and not "lie"-grade — just deferred):
 
 ## Recommended fixes (in priority order, after this commit)
 
-1. **BPM held + step 1–5 = volume level** (F-022) — extend the BPM held mode to also accept step 1–5 presses.
+1. **BPM tap = volume level display** (audit item 26) — render the current `s_volume_level` on the matrix LEDs when BPM is tapped alone. Requires `display.c` work.
 2. **Multi-modifier combos** (F-023/F-024/F-025/F-026/F-027) — would require a multi-modifier framework entry.
 3. **Audit `po33_fx_t` enum ordering** vs PO-33 manual effects list. Flash-format-breaking; needs its own discussion.
 4. **WRITE enter/exit write mode** (F-009) — biggest remaining piece; needed for F-010, F-013's "save in pattern", F-023, F-025.
 5. **Tweak-mode label on TFT** — render `s_tweak_mode` in `display.c` so the user can see which mode is active.
 6. **Add `step_t.resonance` field** — currently knob B in Filter mode is logged but not stored (no per-step resonance data).
-

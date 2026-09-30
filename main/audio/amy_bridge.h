@@ -71,6 +71,21 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
                               po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2);
 
+/* Master volume level (PO-33 F-022: hold BPM + 1..5 sets the level).
+ * Level 0 (silent) is also accepted. Internally scales the velocity
+ * applied to subsequent play_note() calls. Levels map to multipliers:
+ *   level 0 -> 0.0   (silent)
+ *   level 1 -> 0.25
+ *   level 2 -> 0.5
+ *   level 3 -> 0.75
+ *   level 4 -> 0.9
+ *   level 5 -> 1.0  (max)
+ * AMY does not expose a master gain in its public API, so we apply
+ * the multiplier per-note. This means very-short notes might be
+ * affected by the level change between trigger and playback; in
+ * practice the 10 ms tick is fast enough that this is inaudible. */
+void amy_bridge_set_volume_level(uint8_t level);
+
 #ifdef __cplusplus
 }
 #endif
