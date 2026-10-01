@@ -1656,32 +1656,33 @@ We propose a hard cap `SKETCHES_MAX = 16` for the UI's sketch picker — beyond 
 
 ### 11.9 v2 UI proposal — the Sketch picker screen
 
-A new screen (extends §6):
+The picker is entered by holding **WRITE** for ≥600 ms (PO-33's "enter write mode" verb repurposed for v2 picker entry). It exits on a tap of WRITE. While the picker is active, the rotary encoder on the left side of the board (see `hardware/HARDWARE.md` §4.12) is the primary input device:
 
 ```
-+-----------------------------------+
-|  SKETCHES                  3 / 16 |       ← top bar: count
-|                                   |
-|   * DRUM KIT 1       0003  a1b2   |       ← * marks active sketch
-|     DISCO DEMO       0001  b3c4   |       0003 = slot, a1b2 = id
-|     AMBIENT 03       0002  1234   |
-|     (unused slot)                 |       ← "Create new" hint
-|                                   |
-|   [step 1..8]  scroll list        |
-|   [step 9..16] hold SOUND = new   |
-|                                   |
-|   press step 1-8 to load          |
-|   hold SOUND to create/delete     |
-+-----------------------------------+
+   (encoder)        +-----------------------------------+
+     (o)            |  SKETCHES                  3 / 16 |     ← top bar: count
+     ↑              |                                   |
+     click          |   * DRUM KIT 1       0003         |     ← * marks active
+     =load+exit     |     DISCO DEMO       0001         |
+                    |     AMBIENT 03       0002         |
+                    |     (unused slot)                 |     ← "Create new" hint
+                    |                                   |
+                    |   [step 1..16]  load + exit         |
+                    +-----------------------------------+
 ```
 
-Button bindings:
-- Press **step 1–8**: load the corresponding sketch (after a "switching…" progress indicator).
-- **SOUND** held: enter "manage" mode (create / delete / rename).
-- **BPM** tap / long-press: scroll the list (since the picker shows 8 of 16 at a time).
-- **PATTERN** tap / long-press: jump to first / last sketch.
+Input bindings:
+- **Turn encoder** (1 detent = 1 sketch): scroll the highlight.
+- **Click encoder**: load + exit (same as pressing the highlighted step).
+- **Press step 1..16**: load + exit (direct jump). Pressing a step that has no sketch (slot index ≥ `s_count`) is a no-op.
+- **Tap WRITE**: exit without loading.
+- **Hold WRITE** (≥600 ms, while picker is inactive): enter the picker.
 
-The "manage" mode shows a sub-menu with **create / duplicate / delete / rename / export** options. Each is a step-button shortcut.
+The picker is a single page of 16. There are **no per-sketch rename UI** in v2: each sketch has an auto-generated name ("Sketch N") and a 4-hex ID. Renames happen via the `sketch` UART command (see §11.10 in the storage layer, landed in Commit 3).
+
+The TFT screen layout (top bar + scrollable list with the highlighted row) is the responsibility of `display.c` and is queued for the same Commit 3 landing.
+
+Skip pills (s_modifiers[] / s_held_modifiers[] tables): the picker's `step press` path runs **before** the modifier-table routing in `input.c` so a step press in the picker doesn't accidentally fire SOUND-step / PATTERN-step / FX-step bindings.
 
 ### 11.10 Open questions for v2 implementation
 

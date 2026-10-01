@@ -30,7 +30,9 @@
 #include "esp_log.h"
 #include "audio/amy_bridge.h"
 #include "sequencer/sequencer.h"
+#include "sketch/sketch_picker.h"
 #include "ui/buttons.h"
+#include "ui/encoder.h"
 #include "ui/knobs.h"
 #include "ui/leds.h"
 
@@ -497,6 +499,19 @@ void input_drain(void)
                 m->on_step(step_1_to_16);
                 continue;
             }
+            /* Picker mode intercepts step presses: a step press is a
+             * direct jump + load. This runs BEFORE the no-modifier
+             * play_active_slot() path so a step press in the picker
+             * loads instead of triggering a note. */
+            if (sketch_picker_is_active()) {
+                uint8_t step_1_to_16 =
+                    (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
+                sketch_picker_on_step(step_1_to_16);
+                /* Don't `continue` -- a no-op (slot empty) should
+                 * still let the press fall through so the user gets
+                 * feedback. For now it's a no-op anyway. */
+                continue;
+            }
             /* No modifier held + step pressed: PO-33 second-press
              * play-the-selected-sound. No-op if nothing is selected. */
             play_active_slot();
@@ -579,8 +594,26 @@ void input_drain(void)
              * end-of-drain release polling. */
             break;
 
+        case BTN_WRITE:
+            /* PO-33 "enter write mode" verb repurposed for picker
+             * entry: long-press enters; tap exits. Both branch on the
+             * picker being active vs inactive. */
+            if (ev.long_press) {
+                if (!sketch_picker_is_active()) {
+                    esp_err_t e = sketch_picker_enter();
+                    if (e != ESP_OK) {
+                        ESP_LOGE(TAG, "sketch_picker_enter: %s",
+                                 esp_err_to_name(e));
+                    }
+                }
+            } else {
+                if (sketch_picker_is_active()) {
+                    sketch_picker_exit();
+                }
+            }
+            break;
+
         default:
-            /* WRITE: handler lands in a future commit. */
             break;
         }
     }
@@ -625,4 +658,9 @@ void input_drain(void)
         rec_on_release();
     }
     s_rec_prev_held = rec_now_held;
+
+    /* Picker polling. Reads the encoder delta + click and routes
+     * them through the picker state machine. The picker itself exits
+     * when the user clicks (load+exit) or taps WRITE. */
+    sketch_picker_tick();
 }

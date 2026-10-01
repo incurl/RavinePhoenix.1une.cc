@@ -122,3 +122,76 @@ esp_err_t storage_load_all(void)
     }
     return ESP_OK;
 }
+/* ─── Multi-sketch (v2) APIs ─────────────────────────────────────── */
+
+/* The v2 sketch layout (per docs/DESIGN.md §11.2): a master index
+ * /sketches.lst, one line per sketch: "<4-hex-id>\t<name>\n".
+ * Per-sketch folder: /<id>/ with p0.bin..p15.bin + s0.bin..s15.bin
+ * (same content as the v1 flat layout).
+ *
+ * For Commit 2, storage_sketch_list() reads the index and returns
+ * the IDs (and count). If sketches.lst is missing, we synthesise a
+ * single entry so the picker always has at least one sketch visible.
+ * The full create/save/delete/load path lands in Commit 3. */
+esp_err_t storage_sketch_list(uint8_t *out_count,
+                              char (*out_ids)[SKETCH_ID_LEN + 1])
+{
+    if (!out_count || !out_ids) return ESP_ERR_INVALID_ARG;
+    *out_count = 0;
+
+    FILE *f = fopen("/sketches/sketches.lst", "r");
+    if (!f) {
+        /* Synthesise a default sketch so the picker is never empty. */
+        strcpy(out_ids[0], "0001");
+        *out_count = 1;
+        return ESP_OK;
+    }
+    char line[64];
+    uint8_t n = 0;
+    while (n < SKETCHES_MAX && fgets(line, sizeof(line), f)) {
+        /* Skip comments / blank lines. */
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\0') continue;
+        /* Read up to 4 hex digits into the ID slot. */
+        char *p = line;
+        uint8_t i = 0;
+        while (i < SKETCH_ID_LEN && *p &&
+               ((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f') ||
+                (*p >= 'A' && *p <= 'F'))) {
+            out_ids[n][i++] = *p;
+        }
+        out_ids[n][i] = '\0';
+        if (i == SKETCH_ID_LEN) {
+            n++;
+        }
+        /* If we couldn't read a full 4-hex ID, skip the entry (corrupt
+         * index line). */
+    }
+    fclose(f);
+    *out_count = n;
+    if (n == 0) {
+        /* Empty or corrupt index: synthesise a default. */
+        strcpy(out_ids[0], "0001");
+        *out_count = 1;
+    }
+    return ESP_OK;
+}
+
+/* Stubs for Commit 2; full implementation lands in Commit 3. */
+esp_err_t storage_sketch_load(const char *id_str)
+{
+    (void)id_str;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+esp_err_t storage_sketch_create(void)
+{
+    return ESP_ERR_NOT_SUPPORTED;
+}
+esp_err_t storage_sketch_save_active(void)
+{
+    return ESP_ERR_NOT_SUPPORTED;
+}
+esp_err_t storage_sketch_delete(const char *id_str)
+{
+    (void)id_str;
+    return ESP_ERR_NOT_SUPPORTED;
+}
