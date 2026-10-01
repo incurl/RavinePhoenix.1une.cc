@@ -4,6 +4,7 @@ idf_component_register(
     INCLUDE_DIRS "."
     PRIV_REQUIRES
         driver
+        esp_driver_pcnt
         esp_lcd
         amy
         esp_littlefs

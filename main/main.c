@@ -21,6 +21,7 @@
 #include "sequencer/sequencer.h"
 #include "ui/buttons.h"
 #include "ui/display.h"
+#include "ui/encoder.h"
 #include "ui/knobs.h"
 #include "ui/leds.h"
 #include "ui/input.h"
@@ -72,6 +73,9 @@ void app_main(void)
     ESP_ERROR_CHECK(display_init());
     ESP_ERROR_CHECK(buttons_init());
     ESP_ERROR_CHECK(knobs_init());
+    /* Encoder is REQUIRED -- the sketch picker relies on it for
+     * scroll. If PCNT unit 0 can't be allocated we halt boot. */
+    ESP_ERROR_CHECK(encoder_init());
 
     /* 8. Boot splash */
     display_show_boot_screen();
@@ -105,6 +109,7 @@ static void button_scan_task(void *arg)
         buttons_tick();
         input_drain();
         knobs_tick();
+        encoder_tick();
         amy_bridge_pump_capture();
         vTaskDelayUntil(&last, period);
     }

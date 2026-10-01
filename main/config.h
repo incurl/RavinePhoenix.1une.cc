@@ -211,6 +211,15 @@ enum {
 #define KNOB_SAMPLES              8     /* samples averaged per read */
 #define KNOB_DEADZONE             4     /* ignore deltas below this in 0..255 units */
 
+/* ─── Rotary encoder (left side of board) ────────────────────── */
+/* Alps EC11E, 24 detents, vertical mount. Phase A and phase B are
+ * consumed by ESP32-S3 PCNT unit 0; the click-switch is a polled
+ * GPIO debounced inside encoder_tick(). The encoder is REQUIRED at
+ * build (no runtime fallback). */
+#define ENCODER_A_GPIO            GPIO_NUM_22      /* phase A    */
+#define ENCODER_B_GPIO            GPIO_NUM_23      /* phase B    */
+#define ENCODER_CLICK_GPIO        GPIO_NUM_24      /* click-switch */
+
 /* ─── Sequencer defaults ─────────────────────────────────────── */
 #define DEFAULT_BPM               120
 #define MIN_BPM                   60

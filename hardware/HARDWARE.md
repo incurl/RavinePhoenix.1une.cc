@@ -72,6 +72,7 @@ This is the full list of parts. **Every part is required** unless the part's "Re
 | 6 | Speaker | 4 Ω or 8 Ω small loudspeaker, 0.5 W–3 W | Optional | 1 | $2–$5 | Amazon, any electronics store; you can also cannibalize from an old set of powered speakers |
 | 7 | I²S class-D amplifier (drives the speaker) | **MAX98357A** breakout (Adafruit #3006 or SparkFun) | Optional (only if you add a speaker) | 1 | $6–$10 | Adafruit, SparkFun, Amazon |
 | 7b | **Two 10 kΩ linear potentiometers** + 2 panel-mount knobs (for "Knob A" and "Knob B") | Any 10 kΩ linear-taper pot (Bourns PTV09A, Alpha RV16AF-10K, or equivalent). **Linear** taper (not audio/log) — small adjustments near one end need to feel uniform across the range. | Recommended | 2 | $1–$3 | Amazon, Mouser, Digikey, SparkFun |
+| 7c | **Alps EC11E rotary encoder** (with detents and click-switch) | 24-detent vertical-mount rotary encoder with built-in click-switch; the sketch picker relies on it for scroll + load. EC11E182240S or equivalent. | **Yes** (build halts if missing — see §4.12) | 1 | $0.50–$1.00 | Mouser, Digikey, SparkFun |
 | 8 | LiPo battery, **single cell, 3.7 V nominal (4.2 V max), 2800 mAh** | A 18650-size protected Li-ion cell (e.g. **Panasonic NCR18650B**, **Samsung INR18650-30Q**, or an Adafruit #328-equivalent LiPo pouch). Must include a built-in protection circuit (PCM/BMS) against over-discharge, over-charge, and short circuit. | Recommended (chosen for this guide) | 1 | $5–$12 | Amazon, Adafruit, SparkFun, eBay, 18650BatteryStore, Illumn |
 | 9 | LiPo charging module (if you use a battery) | **TP4056** module (with protection, no separate load-share needed) | Optional (only with battery) | 1 | $1 | Amazon, AliExpress |
 | 10 | USB-C breakout (only if your dev board has micro-USB, not USB-C) | Generic USB-C breakout | Only if needed | 1 | $1 | Amazon, Adafruit |
@@ -206,10 +207,13 @@ In addition to the 4×4 matrix, the device has **seven dedicated (modifier) butt
       └────────────────────────────────────────────────────────────┘
 
 
-    ┌─────────┐  ┌──────────┐  ┌─────────┐   (o)         (o)
-    │  SOUND  │  │ PATTERN  │  │   BPM   │  Knob A      Knob B
-    └─────────┘  └──────────┘  └─────────┘ GPIO 20     GPIO 46
-                                            A1_CH9      A1_CH5
+   ┌────┐
+   │    │  ┌─────────┐  ┌──────────┐  ┌─────────┐   (o)         (o)
+   │ ENC│  │  SOUND  │  │ PATTERN  │  │   BPM   │  Knob A      Knob B
+   │    │  └─────────┘  └──────────┘  └─────────┘ GPIO 20     GPIO 46
+   │GPIOs│                                                   A1_CH9      A1_CH5
+   │22/23/24│
+   └────┘
 
     ┌───┐┌───┐┌───┐┌───┐                               ┌─────────┐
     │ 1 ││ 2 ││ 3 ││ 4 │                               │   REC   │
@@ -228,10 +232,10 @@ In addition to the 4×4 matrix, the device has **seven dedicated (modifier) butt
     Top row      SOUND=11    PATTERN=44    BPM=13        + 2 knobs
     Right column REC=41   FX=12   PLAY=42   WRITE=43   (under Knob B)
     Knobs        Knob A = GPIO 20 (ADC1_CH9)   Knob B = GPIO 46 (ADC1_CH5)
-    Totals       23 buttons + 2 knobs = 33 of 49 GPIOs   (16 free;
-                  9 of those 16 are truly usable on the N16R8 module —
+    Totals       23 buttons + 2 knobs + 1 encoder = 36 of 49 GPIOs   (13 free;
+                  6 of those 13 are truly usable on the N16R8 module —
                   GPIO 26–32 are bonded to the on-board Octal PSRAM and
-                  cannot be used; the rest are general-purpose)
+                  cannot be used; the rest are general-purpose; see §4.12)
 ```
 
 Each is a momentary tactile switch between the GPIO and GND (no matrix, no external resistor — the firmware enables the internal pull-up).
@@ -779,3 +783,49 @@ The public API in `main/audio/amy_bridge.h` is the contract. Keep it stable and 
 ---
 
 *End of document. ~6,000 words. Source of truth for the firmware's pin map is [`main/config.h`](../../main/config.h); for the chip's specifications, [Espressif's ESP32-S3 product page](https://www.espressif.com/en/products/socs/esp32-s3). The schematic in §4 is intentionally text-only; if you'd like a KiCad or Fritzing source, the project repo welcomes contributions.*
+### 4.12 The rotary encoder (left side of the board)
+
+A single **Alps EC11E** 24-detent rotary encoder sits to the **left of the matrix**, roughly at Knob A's y-row. It is the primary input device for the sketch picker (see §11.9 in `docs/DESIGN.md`) — the encoder replaces BPM/PATTERN tap-as-scroll inside the picker. The encoder has a built-in click-switch (push-down) for "open the selected sketch."
+
+```
+         ┌──── encoder (vertical mount, top screw on top)
+         │           (o)         (o)
+         │         Knob A      Knob B
+         │         GPIO 20     GPIO 46
+         │
+         │    (o)        ↑         (o)
+         │   ENC        click     RIGHT
+         │  GPIO22/23   GPIO24     (next page — future)
+         │
+         └────────────────────────────
+                ↑
+                left side of board
+```
+
+Wiring:
+
+| EC11E pin | ESP32-S3 GPIO | Notes |
+|---|---|---|
+| A (quadrature phase A) | **GPIO 22** | Routed to PCNT unit 0 channel 0 |
+| B (quadrature phase B) | **GPIO 23** | Routed to PCNT unit 0 channel 0 |
+| Common (encoder + switch GND) | **GND** | Shared with the rest of the board |
+| Switch (active-low, momentary) | **GPIO 24** | Polled with 30 ms debounce in `encoder_tick()` |
+| (Encoder +VCC) | **+3.3 V** | Drawn from the existing +3.3V bus |
+
+The EC11E's built-in click-switch is a momentary-to-GND switch; an internal pull-up on GPIO 24 keeps the line HIGH when idle. The encoder's rotary common (the two outside terminals on the EC11E body) is hard-grounded at the encoder body — we don't poll it.
+
+The encoder is read in two parts:
+
+- **PCNT hardware** counts phase A/B pulses on GPIO 22/23. The ESP32-S3's PCNT peripheral tracks direction in hardware; we read-and-clear the cumulative count in `encoder_get_delta()`, which returns `±N` (one detent = one count).
+- **GPIO polling** on GPIO 24 debounces the click-switch in software inside `encoder_tick()` (called from `button_scan_task` at 10 ms cadence). 30 ms debounce (same `BTN_DEBOUNCE_MS` as the rest of the UI).
+
+The EC11E's typical switch bounce is well under 30 ms, so the polling refresh rate is comfortably amortised.
+
+**BOM addition:**
+
+| # | Part | Notes | Required | Qty | Cost |
+|---|---|---|---|---|---|
+| 7c | **Alps EC11E rotary encoder**, 24 detents, vertical-mount, with click-switch | EC11E182240S or equivalent; 24 detents gives a comfortable 1-detent-per-sketch scroll feel | **Yes** (build fails without it) | 1 | $0.50–$1.00 |
+
+**Required vs. optional.** The encoder is **required** — `encoder_init()` returns `ESP_ERR_NOT_SUPPORTED` if PCNT unit 0 cannot be allocated, and the boot halts. The picker relies on the encoder for scroll; a button-only fallback would require redesigning the sketch UI.
+
