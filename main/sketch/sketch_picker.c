@@ -113,3 +113,15 @@ void sketch_picker_tick(void)
         sketch_picker_exit();
     }
 }
+
+/* Renderer getters (display.c reads these). */
+uint8_t sketch_picker_get_count(void)     { return s_count; }
+uint8_t sketch_picker_get_highlight(void) { return (uint8_t)s_highlight; }
+void    sketch_picker_get_id(uint8_t idx, char *out_id)
+{
+    if (!out_id) return;
+    if (idx >= SKETCHES_MAX) { out_id[0] = 0; return; }
+    /* s_ids[] is 0..s_count-1 valid; beyond that the storage helper
+     * leaves NUL bytes from memset; copy as-is. */
+    strcpy(out_id, s_ids[idx]);
+}

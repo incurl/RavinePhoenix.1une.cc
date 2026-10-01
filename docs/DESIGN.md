@@ -1680,7 +1680,16 @@ Input bindings:
 
 The picker is a single page of 16. There are **no per-sketch rename UI** in v2: each sketch has an auto-generated name ("Sketch N") and a 4-hex ID. Renames happen via the `sketch` UART command (see §11.10 in the storage layer, landed in Commit 3).
 
-The TFT screen layout (top bar + scrollable list with the highlighted row) is the responsibility of `display.c` and is queued for the same Commit 3 landing.
+The TFT screen layout for the picker is in `display.c`. When the picker is active, `display_tick()` calls `render_picker_screen()` instead of `render_main_screen()`. The layout is a 240x320 ILI9341 panel:
+
+```
+  y=0..18    status bar (blue), "PICKER" + "TURN=scroll"
+  y=24       "SKETCHES  N / 16" (left) + "click=load" (right, dim)
+  y=40..300  4 rows x 4 cols of slot cells, 56x64 px each, 4-px gap
+  y=308      "WRITE=exit" (left) + "tap step=load" (right, dim)
+```
+
+The currently-highlighted cell is rendered with a red background and a yellow `*` glyph at the bottom-left. Loaded cells show the 4-hex sketch ID in white; empty cells show `----` in dim grey.
 
 Skip pills (s_modifiers[] / s_held_modifiers[] tables): the picker's `step press` path runs **before** the modifier-table routing in `input.c` so a step press in the picker doesn't accidentally fire SOUND-step / PATTERN-step / FX-step bindings.
 

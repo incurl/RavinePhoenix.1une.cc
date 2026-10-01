@@ -46,6 +46,11 @@ void sketch_picker_exit(void);
  * driver and routes them through the picker state machine. */
 void sketch_picker_tick(void);
 
+/* Read-only state getters for the renderer (display.c). */
+uint8_t sketch_picker_get_count(void);
+uint8_t sketch_picker_get_highlight(void);
+void   sketch_picker_get_id(uint8_t idx, char *out_id);
+
 #ifdef __cplusplus
 }
 #endif

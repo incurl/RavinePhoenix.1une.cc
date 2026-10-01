@@ -5,6 +5,7 @@
 #include "display.h"
 #include "config.h"
 #include "sequencer/sequencer.h"
+#include "sketch/sketch_picker.h"
 #include "system/clock.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -175,35 +176,133 @@ void display_show_boot_screen(void)
 
 static char s_buf[64];
 
-void display_tick(void)
+/* Top status bar text color: blue (ILI9341 RGB565 BGR = 0x001F). */
+#define COLOR_STATUS_BAR_BG  0x001F
+#define COLOR_STATUS_BAR_FG  0xFFFF
+#define COLOR_BG              0x0000
+#define COLOR_TEXT            0xFFFF
+#define COLOR_TEXT_DIM        0xC618   /* grey */
+#define COLOR_HIGHLIGHT_BG    0xF800   /* red */
+#define COLOR_SLOT_EMPTY      0x4208   /* dark grey */
+
+static void render_main_screen(void)
 {
-    fb_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, 0x0000);
+    fb_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, COLOR_BG);
 
     /* top status bar */
-    fb_fill_rect(0, 0, TFT_WIDTH, 18, 0x001F);
+    fb_fill_rect(0, 0, TFT_WIDTH, 18, COLOR_STATUS_BAR_BG);
 
     snprintf(s_buf, sizeof(s_buf), "PAT%u", sequencer_get_current_pattern());
-    fb_draw_text(4, 4, s_buf, 0xFFFF);
+    fb_draw_text(4, 4, s_buf, COLOR_STATUS_BAR_FG);
 
     snprintf(s_buf, sizeof(s_buf), "BPM %u", sequencer_get_bpm());
-    fb_draw_text(80, 4, s_buf, 0xFFFF);
+    fb_draw_text(80, 4, s_buf, COLOR_STATUS_BAR_FG);
 
     uint16_t h, m;
     clock_get_hhmm(&h, &m);
     snprintf(s_buf, sizeof(s_buf), "%02u:%02u", h, m);
-    fb_draw_text(180, 4, s_buf, 0xFFFF);
+    fb_draw_text(180, 4, s_buf, COLOR_STATUS_BAR_FG);
 
     /* 16 step grid */
     int step = sequencer_get_current_step();
     for (int i = 0; i < STEPS_PER_PATTERN; i++) {
         int x = 8 + i * 14;
         int y = 60;
-        if (i == step) fb_fill_rect(x - 1, y - 1, 12, 12, 0xF800);
-        fb_fill_rect(x, y, 10, 10, 0xFFFF);
+        if (i == step) fb_fill_rect(x - 1, y - 1, 12, 12, COLOR_HIGHLIGHT_BG);
+        fb_fill_rect(x, y, 10, 10, COLOR_TEXT);
     }
 
     snprintf(s_buf, sizeof(s_buf), "STEP %02u", step);
     fb_draw_text(8, 100, s_buf, 0x07FF);
+}
 
+/* Sketch picker screen. Renders a top bar with "SKETCHES N / 16" + a
+ * 4x4 grid (16 slots, 4 rows x 4 cols). The currently-highlighted
+ * slot (from sketch_picker_get_highlight) is filled with a red
+ * background and the ID rendered in inverse. Empty slots (beyond
+ * sketch_picker_get_count) are rendered in dim grey.
+ *
+ * Layout (240x320):
+ *   y=0..18   status bar (same blue as main)
+ *   y=24      "SKETCHES  N / 16"        (white text)
+ *   y=24      "Click=load WRITE=exit"   (grey text, right side)
+ *   y=40..300 16 slots in a 4x4 grid, each row 64px tall
+ *
+ * The matrix rows mirror the matrix: slot index 0..3 in row 0, 4..7
+ * in row 1, etc. This means the picker matrix maps naturally to the
+ * physical 4x4 button matrix: pressing STEP 1 selects the first row
+ * leftmost slot, pressing STEP 5 selects the second row leftmost
+ * slot, etc. */
+static void render_picker_screen(void)
+{
+    fb_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, COLOR_BG);
+
+    /* top status bar (same look as main) */
+    fb_fill_rect(0, 0, TFT_WIDTH, 18, COLOR_STATUS_BAR_BG);
+    fb_draw_text(4, 4, "PICKER", COLOR_STATUS_BAR_FG);
+    fb_draw_text(80, 4, "TURN=scroll", COLOR_STATUS_BAR_FG);
+
+    /* "SKETCHES N / 16" header */
+    uint8_t count = sketch_picker_get_count();
+    snprintf(s_buf, sizeof(s_buf), "SKETCHES %u / 16", (unsigned)count);
+    fb_draw_text(4, 24, s_buf, COLOR_TEXT);
+
+    /* Hint text */
+    fb_draw_text(120, 24, "click=load", COLOR_TEXT_DIM);
+
+    /* 4x4 grid of slots. Each cell 56x64 px, 4-px gap. */
+    const int cell_w = 56;
+    const int cell_h = 64;
+    const int gap = 4;
+    const int grid_x = (TFT_WIDTH - (4 * cell_w + 3 * gap)) / 2;  /* centred */
+    const int grid_y = 40;
+
+    uint8_t highlight = sketch_picker_get_highlight();
+
+    for (uint8_t i = 0; i < 16; i++) {
+        int row = i / 4;
+        int col = i % 4;
+        int x = grid_x + col * (cell_w + gap);
+        int y = grid_y + row * (cell_h + gap);
+
+        if (i == highlight) {
+            fb_fill_rect(x, y, cell_w, cell_h, COLOR_HIGHLIGHT_BG);
+            fb_fill_rect(x + 2, y + 2, cell_w - 4, cell_h - 4, COLOR_BG);
+        } else {
+            fb_fill_rect(x, y, cell_w, cell_h, COLOR_SLOT_EMPTY);
+        }
+
+        char id[8] = {0};
+        if (i < count) {
+            sketch_picker_get_id(i, id);
+        } else {
+            strcpy(id, "----");
+        }
+        /* ID at top of cell, white on highlighted, dim on others. */
+        uint16_t text_color = (i == highlight) ? COLOR_TEXT_DIM : COLOR_TEXT;
+        fb_draw_text(x + 6, y + 6, id, text_color);
+
+        /* Sketch index at bottom of cell. */
+        snprintf(s_buf, sizeof(s_buf), "%u", (unsigned)(i + 1));
+        fb_draw_text(x + 22, y + 22, s_buf, text_color);
+
+        /* Star marker for the highlighted slot. */
+        if (i == highlight) {
+            fb_draw_text(x + 22, y + 50, "*", 0xFFE0);  /* yellow */
+        }
+    }
+
+    /* Footer with rotate/click hint. */
+    fb_draw_text(4, 308, "WRITE=exit", COLOR_TEXT_DIM);
+    fb_draw_text(170, 308, "tap step=load", COLOR_TEXT_DIM);
+}
+
+void display_tick(void)
+{
+    if (sketch_picker_is_active()) {
+        render_picker_screen();
+    } else {
+        render_main_screen();
+    }
     fb_flush();
 }
