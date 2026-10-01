@@ -228,7 +228,10 @@ In addition to the 4×4 matrix, the device has **seven dedicated (modifier) butt
     Top row      SOUND=11    PATTERN=44    BPM=13        + 2 knobs
     Right column REC=41   FX=12   PLAY=42   WRITE=43   (under Knob B)
     Knobs        Knob A = GPIO 20 (ADC1_CH9)   Knob B = GPIO 46 (ADC1_CH5)
-    Totals       23 buttons + 2 knobs = 17 of 45 GPIOs   (12 free, incl. 45)
+    Totals       23 buttons + 2 knobs = 33 of 49 GPIOs   (16 free;
+                  9 of those 16 are truly usable on the N16R8 module —
+                  GPIO 26–32 are bonded to the on-board Octal PSRAM and
+                  cannot be used; the rest are general-purpose)
 ```
 
 Each is a momentary tactile switch between the GPIO and GND (no matrix, no external resistor — the firmware enables the internal pull-up).
