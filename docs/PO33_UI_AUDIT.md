@@ -99,8 +99,8 @@ Still queued:
 - F-038 active sounds/patterns display (per-step + display per-mode)
 - Atomic-rename pattern for sketch saves (currently LittleFS write;
   docs §11.8 lists it as future hardening).
-- WRITE-mode state machine (F-009) -- still needed for fill-pattern
-  + FX save-in-pattern (F-013) + copy/delete (F-023/F-024/F-025/F-026/F-027).
+- FX-save-in-pattern (F-013) -- still requires the full
+  per-step effect state to land alongside apply_fx().
 
 ## What's queued vs what's a lie
 

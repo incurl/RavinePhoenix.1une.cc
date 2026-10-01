@@ -224,6 +224,16 @@ static bool s_recording = false;
  * edge (release) at the end-of-drain polling block. */
 static bool s_rec_prev_held = false;
 
+/* ─── Write-mode (PO-33 F-009/F-010/F-011) state ──────────────── */
+
+/* True while the user has tapped WRITE to enter write mode. While
+ * active, tapping a step button binds (or clears, on toggle) the
+ * currently-active slot to that step. The picker is read-only, so
+ * write mode and the picker cannot both be active; tapping WRITE
+ * when the picker is active exits the picker (existing behaviour),
+ * and write-mode cannot be entered while the picker is up. */
+static bool s_write_mode = false;
+
 static void rec_on_step(uint8_t step_1_to_16)
 {
     if (s_recording) return;     /* first press wins; ignore the rest */
@@ -318,6 +328,86 @@ static void tweak_mode_cycle(void)
 }
 
 tweak_mode_t tweak_get_mode(void) { return s_tweak_mode; }
+
+/* ─── Write-mode (PO-33 F-009 / F-010 / F-011) ──────────────────── */
+
+bool write_mode_is_active(void) { return s_write_mode; }
+
+void write_mode_enter(void)
+{
+    if (s_write_mode) return;            /* idempotent */
+    /* The picker is exclusive. If the picker is somehow open,
+     * write-mode entry is rejected; user must exit the picker first
+     * (e.g. by tapping WRITE again). */
+    if (sketch_picker_is_active()) return;
+    s_write_mode = true;
+    ESP_LOGI(TAG, "write mode enter (active slot = %u)",
+             (unsigned)sequencer_get_active_slot());
+}
+
+void write_mode_exit(void)
+{
+    if (!s_write_mode) return;           /* idempotent */
+    s_write_mode = false;
+    ESP_LOGI(TAG, "write mode exit");
+}
+
+/* Toggle-or-clear write-mode application on a 1-based step index
+ * (1..16). Requires an active slot. Returns false if no slot is
+ * active (the dispatcher's step-press path falls through to
+ * play_active_slot() in that case). */
+bool write_mode_apply_step(uint8_t step_1_to_16, bool is_long)
+{
+    if (step_1_to_16 < 1 || step_1_to_16 > STEPS_PER_PATTERN) return false;
+
+    /* Need an active slot. PO-33's flow is "WRITE -> SOUND+step
+     * (select slot) -> STEP+step (assign)"; if the user jumps to
+     * write-mode without picking a slot, the step presses are
+     * no-ops. */
+    uint8_t slot = sequencer_get_active_slot();
+    if (slot >= SLOT_COUNT) {
+        ESP_LOGW(TAG, "write-mode step ignored: no active slot");
+        return false;
+    }
+
+    /* Currently playing pattern + the target step. */
+    uint8_t pattern = sequencer_get_current_pattern();
+    uint8_t step_idx = (uint8_t)(step_1_to_16 - 1);
+
+    step_t s;
+    pattern_get_step(pattern, step_idx, &s);
+
+    if (is_long) {
+        /* Long-press = clear (F-011). Always clears regardless of
+         * current slot assignment. */
+        s.slot_id = 0xFF;
+        s.plock_active = false;
+        pattern_set_step(pattern, step_idx, &s);
+        ESP_LOGI(TAG, "step %u cleared (long-press)", (unsigned)step_1_to_16);
+        return true;
+    }
+
+    /* Tap = toggle (F-010). If the step already points at the
+     * active slot, clear it; otherwise assign it. */
+    if (s.slot_id == slot) {
+        s.slot_id = 0xFF;
+        s.plock_active = false;
+        pattern_set_step(pattern, step_idx, &s);
+        ESP_LOGI(TAG, "step %u cleared (toggle off)", (unsigned)step_1_to_16);
+    } else {
+        s.slot_id = slot;
+        /* Default to middle C if the step was empty and has no
+         * note yet. For melodic slots the user can tweak pitch
+         * with the tweak-mode knobs (F-016); for drum slots the
+         * note is unused. */
+        if (!s.plock_active && s.note == 0) s.note = 60;
+        s.plock_active = true;
+        pattern_set_step(pattern, step_idx, &s);
+        ESP_LOGI(TAG, "step %u bound to slot %u (toggle on)",
+                 (unsigned)step_1_to_16, (unsigned)slot);
+    }
+    return true;
+}
 
 /* Map knob A 0..255 to MIDI note 36..96 (C2..C7). 61 notes span the
  * range; knob granularity is 4-5 units per semitone which feels
@@ -512,6 +602,20 @@ void input_drain(void)
                  * feedback. For now it's a no-op anyway. */
                 continue;
             }
+            /* Write mode (F-009/F-010/F-011): a step press binds the
+             * currently-active slot to that step. Tap = toggle
+             * (F-010), long-press = clear (F-011). Runs after the
+             * picker intercept so the picker is read-only. */
+            if (s_write_mode) {
+                uint8_t step_1_to_16 =
+                    (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
+                if (write_mode_apply_step(step_1_to_16, ev.long_press)) {
+                    continue;
+                }
+                /* write_mode_apply_step returned false = no active
+                 * slot. Fall through to play_active_slot() so the
+                 * user still gets audible feedback. */
+            }
             /* No modifier held + step pressed: PO-33 second-press
              * play-the-selected-sound. No-op if nothing is selected. */
             play_active_slot();
@@ -595,11 +699,17 @@ void input_drain(void)
             break;
 
         case BTN_WRITE:
-            /* PO-33 "enter write mode" verb repurposed for picker
-             * entry: long-press enters; tap exits. Both branch on the
-             * picker being active vs inactive. */
+            /* WRITE has two roles:
+             *   - Long-press → picker (committed in 2539b14).
+             *   - Tap → toggle write mode (PO-33 F-009).
+             * Picker is exclusive: a tap that lands while the picker
+             * is open exits the picker (long-press mode does not start
+             * a picker while write mode is already active, since the
+             * picker blocks pattern play while it is up; v2 picker
+             * doesn't actually play, but the mutual exclusion still
+             * applies for clarity). */
             if (ev.long_press) {
-                if (!sketch_picker_is_active()) {
+                if (!sketch_picker_is_active() && !s_write_mode) {
                     esp_err_t e = sketch_picker_enter();
                     if (e != ESP_OK) {
                         ESP_LOGE(TAG, "sketch_picker_enter: %s",
@@ -608,7 +718,14 @@ void input_drain(void)
                 }
             } else {
                 if (sketch_picker_is_active()) {
+                    /* Tap while picker open: exit the picker.
+                     * (Picker takes precedence; user can re-tap WRITE
+                     * to enter write mode.) */
                     sketch_picker_exit();
+                } else {
+                    /* Toggle write mode. */
+                    if (s_write_mode) write_mode_exit();
+                    else             write_mode_enter();
                 }
             }
             break;

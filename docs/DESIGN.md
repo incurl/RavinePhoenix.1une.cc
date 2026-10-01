@@ -315,8 +315,8 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Layman:** You enter "write mode" by pressing **WRITE** (·). Now when you press a step button, the slot you select gets added to that step. Press WRITE again to exit write mode.
 - **PO-33 button combo:** Press WRITE → press a slot number → press step numbers where you want that slot to play → press WRITE again.
 - **Our hardware combo:** The `WRITE` button now exists (`BTN_WRITE`, GPIO 43 — bottom of the right column), matching the PO-33's "·" key, but the write-mode handler is not wired yet. For now use UART: `pattern 0`, then `sequencer_set_step_slot(0, 5, 3, 60)`.
-- **Code location:** `main/sequencer/sequencer.h` → `sequencer_set_step_slot(uint8_t pattern, uint8_t step, uint8_t slot, uint8_t note)`.
-- **Status:** ⚠️ partial. Code supports it; UI button combo missing.
+- **Code location:** `main/ui/input.h` → `write_mode_is_active()`, `write_mode_enter()`, `write_mode_exit()`, `write_mode_apply_step()`. The dispatcher in `main/ui/input.c` toggles write mode on `BTN_WRITE` tap (when the picker is inactive) and routes step presses through `write_mode_apply_step()` when write mode is active. Storage: `main/sequencer/pattern.{c,h}` → `pattern_get_step()`, `pattern_set_step()`. Slot selection uses the existing `sequencer_get_active_slot()` (set by `BTN_SOUND + step N`).
+- **Status:** ✅ done. Tap=active step binds (F-010 toggle), long-press=clears (F-011). Requires an active slot; without one, step presses are no-ops (matching the PO-33 flow: WRITE → SOUND+number → STEP). The `display.c` top status bar shows a yellow `WRITE` label while the mode is active.
 
 #### F-010 — Fill a step (press to add, press again to remove)
 
@@ -324,17 +324,17 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Layman:** When you press a step button while in write mode, the slot gets added. Press the same step again to remove it. Pressing the same step multiple times toggles it.
 - **PO-33 button combo:** Press step → press step again to toggle off.
 - **Our hardware combo:** Same — see F-009. Each step button is a toggle.
-- **Code location:** `main/sequencer/pattern.c` → `pattern_set_step()` writes a step, and `step_t.slot_id = 0xFF` is the "empty" sentinel.
-- **Status:** ✅ done.
+- **Code location:** `main/ui/input.c` → `write_mode_apply_step()` with `is_long=false`. Toggle: if `step.slot_id == active_slot`, clear; otherwise assign.
+- **Status:** ✅ done (write-mode-aware toggle). The toggle uses the existing `step_t.slot_id` 0xFF sentinel for the "empty" state.
 
 #### F-011 — Clear a step
 
 - **Manual ref:** §2.1
 - **Layman:** Press WRITE + the step number to remove the slot from that step.
 - **PO-33 button combo:** WRITE + step.
-- **Our hardware combo:** Long-press the step button to clear it (currently not bound; planned).
-- **Code location:** Will live in `main/sequencer/sequencer.c` when added.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Long-press the step button while in write mode (F-009) to clear that step's slot assignment. Routed through `write_mode_apply_step(N, is_long=true)` which sets `step.slot_id = 0xFF` and clears `plock_active`. The long-press semantics live on the same line as the F-010 tap semantics, so write-mode + a step press triggers one or the other based on `ev.long_press`.
+- **Code location:** `main/ui/input.c` → `write_mode_apply_step(N, true)` (the `is_long` branch). Storage: `main/sequencer/pattern.c` → `pattern_set_step()`.
+- **Status:** ✅ done. Long-press on a step in write mode clears it regardless of whether the step currently points at the active slot.
 
 #### F-012 — Clear an entire pattern
 
@@ -1138,7 +1138,7 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Change pattern | H+PATTERN + number | H+`PATTERN` + step 1–16, or `pattern N` |
 | Change BPM (preset) | press BPM (cycle) | `BPM` tap cycles preset (Hip Hop → Disco → Techno → wrap), or `bpm N` |
 | Apply effect | H+FX + number (1–15) | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = "no effect" (PO33_FX_NONE). NOT a step-press: swing is BPM + Knob A. |
-| Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); handler queued for v2 |
+| Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); tap toggles write mode (F-009); long-press enters sketch picker (F-019) |
 | Select a sample slot | H+SOUND + number | H+`SOUND` + step 1–16 → active slot; press same step with no modifier = plays once |
 | Save pattern | auto on power-off | `save` over UART |
 | Load on boot | auto | `load` over UART |
@@ -1147,6 +1147,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
 | Tweak tone/filter/trim | FX tap cycles; knobs A/B adjust | FX tap cycles Tone → Filter → Trim → Tone; knobs bind to per-step data (Tone/Filter) or slot trim (Trim) |
+| Enter / exit write mode | tap WRITE | `WRITE` tap toggles write mode (yellow `WRITE` label in status bar). Tap step in write mode → bind/clear active slot on that step (toggle on tap, clear on long-press). |
+| Pick slot to bind | H+SOUND + step 1-16 | `SOUND + step N` selects slot N-1 as the active slot for the next write-mode step press. |
 | Change swing | H+BPM + knob A | H+BPM + Knob A → 8 discrete levels (0=no swing, 7=max); release keeps the level |
 | Fine BPM | H+BPM + knob B | H+BPM + Knob B → continuous 60–240 BPM; release keeps the BPM |
 | Change volume | H+BPM + number (1-5) | H+BPM + step 1-5 → volume level 1..5 (5=max); multiplier applied per-note in amy_bridge_play_note() |

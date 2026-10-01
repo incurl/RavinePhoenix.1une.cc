@@ -61,6 +61,26 @@ void tweak_apply_step(uint8_t *note, uint8_t *velocity,
  * amy_bridge_set_trim() with the new bounds. */
 void tweak_apply_slot(uint8_t slot);
 
+/* Write-mode state (PO-33 F-009). Toggle on WRITE tap when the
+ * picker is inactive. While in write mode, tapping a step button
+ * binds (or clears, on toggle) the active slot for that step. The
+ * picker is read-only, so write mode and the picker cannot both be
+ * active -- tapping WRITE while in the picker exits the picker (existing
+ * behaviour). */
+bool   write_mode_is_active(void);
+void   write_mode_enter(void);
+void   write_mode_exit(void);
+
+/* Apply write-mode to the step at the given 1-based step index
+ * (1..16) using the currently-active slot (sequencer_get_active_slot).
+ * If no slot is active, this is a no-op. The assignment follows the
+ * PO-33's "press step again to remove" toggle semantics (F-010).
+ *
+ * is_long: false = tap = toggle; true = long-press = clear (F-011).
+ * If no slot is active OR no step is at this index, returns false
+ * (the caller can decide whether to fall through). */
+bool   write_mode_apply_step(uint8_t step_1_to_16, bool is_long);
+
 #ifdef __cplusplus
 }
 #endif

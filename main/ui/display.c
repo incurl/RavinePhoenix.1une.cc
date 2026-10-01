@@ -195,6 +195,14 @@ static void render_main_screen(void)
     snprintf(s_buf, sizeof(s_buf), "PAT%u", sequencer_get_current_pattern());
     fb_draw_text(4, 4, s_buf, COLOR_STATUS_BAR_FG);
 
+    /* Write-mode indicator (F-009). Replaces the BPM slot in the top
+     * bar while write mode is active; the BPM is also accessible via
+     * the existing "BPM" cheat-sheet row. Yellow on blue for
+     * visibility against the white PAT/BPM labels. */
+    if (write_mode_is_active()) {
+        fb_draw_text(40, 4, "WRITE", 0xFFE0);  /* yellow */
+    }
+
     snprintf(s_buf, sizeof(s_buf), "BPM %u", sequencer_get_bpm());
     fb_draw_text(80, 4, s_buf, COLOR_STATUS_BAR_FG);
 
