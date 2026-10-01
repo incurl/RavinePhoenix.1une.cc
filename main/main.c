@@ -141,8 +141,13 @@ static void po33_shell_help(void)
            "  stoprec           stop recording\n"
            "  pattern <0..15>   select pattern\n"
            "  free              show free heap\n"
-           "  save              save sketches + samples\n"
-           "  load              reload from flash\n"
+           "  save              save sketches + samples (v1)\n"
+           "  load              reload from flash (v1)\n"
+           "  sketch new        save active as a new sketch (v2)\n"
+           "  sketch save       same as `sketch new` (alias)\n"
+           "  sketch load <id>  load sketch by 4-hex id (v2)\n"
+           "  sketch del <id>   delete sketch by 4-hex id (v2)\n"
+           "  sketch list       list sketches with count and ids (v2)\n"
            "  sleep             enter deep sleep\n");
 }
 
@@ -208,6 +213,45 @@ static void po33_shell_task(void *arg)
                     printf("pattern=%d\n", p);
                 } else {
                     printf("invalid pattern\n");
+                }
+            } else if (strcmp(line, "sketch new") == 0 ||
+                       strcmp(line, "sketch save") == 0) {
+                esp_err_t e = storage_sketch_save_active();
+                if (e == ESP_OK) printf("sketch saved\n");
+                else            printf("sketch save failed: %s\n",
+                                        esp_err_to_name(e));
+            } else if (strncmp(line, "sketch load ", 11) == 0) {
+                const char *id = line + 11;
+                /* Allow "sketch load 0001" -- require a 4-hex id. */
+                if (strlen(id) != 4) {
+                    printf("usage: sketch load <4-hex id>\n");
+                } else {
+                    esp_err_t e = storage_sketch_load(id);
+                    if (e == ESP_OK) printf("sketch %s loaded\n", id);
+                    else            printf("sketch load failed: %s\n",
+                                            esp_err_to_name(e));
+                }
+            } else if (strncmp(line, "sketch del ", 10) == 0) {
+                const char *id = line + 10;
+                if (strlen(id) != 4) {
+                    printf("usage: sketch del <4-hex id>\n");
+                } else {
+                    esp_err_t e = storage_sketch_delete(id);
+                    if (e == ESP_OK) printf("sketch %s deleted\n", id);
+                    else            printf("sketch del failed: %s\n",
+                                            esp_err_to_name(e));
+                }
+            } else if (strcmp(line, "sketch list") == 0) {
+                uint8_t n = 0;
+                char ids[SKETCHES_MAX][SKETCH_ID_LEN + 1];
+                esp_err_t e = storage_sketch_list(&n, ids);
+                if (e != ESP_OK) {
+                    printf("sketch list failed: %s\n", esp_err_to_name(e));
+                } else {
+                    printf("count=%u\n", (unsigned)n);
+                    for (int i = 0; i < n; i++) {
+                        printf("  %s\n", ids[i]);
+                    }
                 }
             } else {
                 printf("unknown: '%s'\n", line);

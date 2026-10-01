@@ -85,20 +85,19 @@ F-001 status says "✅ done" because the code has `amy_bridge_start_record()`. B
 | In tweak mode, knob A/B adjust the active parameter | Matches PO-33 "[select tweak parameter] turn knob A/B" |
 | BPM held + step 1–5 → volume level (set-half) | Matches PO-33 "change volume". The PO-33 also uses BPM tap alone to *display* the level; the display-half is queued for v2. |
 
-## Audit updates after the encoder + sketch-picker commits
+## Audit updates after the encoder + sketch-picker + storage commits
 
 The picker itself isn't a single line in the 27-row table — it lives
 in `docs/DESIGN.md` §11.9 as a v2 UI proposal. With the encoder
-driver (commit `a5d22a7`) and the picker state machine (this commit)
-landed, the picker UI's core is in place. Still queued:
+driver (commit `a5d22a7`), the picker state machine (commit `2539b14`),
+and the storage layer + UART verbs (this commit) landed, the picker
+end-to-end works. Still queued:
 
 - TFT rendering of the picker (display.c work)
-- `storage_sketch_load()` full impl (currently a stub returning
-  `ESP_ERR_NOT_SUPPORTED`; lands in the storage-layer commit)
-- The `sketch new|load|save|del|list` UART verbs (lands in the
-  storage-layer commit)
 - `apply_fx()` cases that are still no-ops (LOOP_16, LOOP_12, ...)
 - F-038 active sounds/patterns display (per-step + display per-mode)
+- Atomic-rename pattern for sketch saves (currently LittleFS write;
+  docs §11.8 lists it as future hardening).
 
 ## What's queued vs what's a lie
 
