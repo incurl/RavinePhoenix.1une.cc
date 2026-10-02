@@ -177,7 +177,14 @@ enum {
 
 /* ─── Jam Sync GPIO ──────────────────────────────────────────── */
 #define SYNC_OUT_GPIO             GPIO_NUM_18
-#define SYNC_IN_GPIO              GPIO_NUM_19
+/* SYNC_IN (jam-sync input, F-031) was originally GPIO 19. GPIO 19
+ * is the ESP32-S3 USB-OTG D− line and is reserved for the future
+ * USB-MIDI feature (§14 — `USB-MIDI`). Reassigned to GPIO 25
+ * (RTC-domain; capable of waking the chip from deep sleep on a
+ * sync pulse, which GPIO 19 cannot). The GPIO is still configured
+ * as input with internal pull-up by `sync_init()`; no listener is
+ * wired yet (F-031 ❌ missing). */
+#define SYNC_IN_GPIO              GPIO_NUM_25
 
 /* ─── Status LEDs (optional) ─────────────────────────────────── */
 #define LED_REC_GPIO              GPIO_NUM_21
@@ -197,14 +204,28 @@ enum {
  *   device; what they do depends on the active tweak mode). We use the
  *   same names.
  *
- *   Knob A → ADC1_CH9  on GPIO 20
+ *   Knob A → ADC1_CH1  on GPIO 2   (was GPIO 20 / ADC1_CH9; see note)
  *   Knob B → ADC1_CH5  on GPIO 46
  *
- *   Both GPIOs are non-strapping and confirmed ADC-capable on the
- *   ESP32-S3-WROOM-1-N16R8 module used by the DevKitC-1.
+ *   Knob A was reassigned from GPIO 20 to GPIO 2 to free the USB-OTG
+ *   D+ line (GPIO 20) for the future USB-MIDI feature (§14). GPIO 2 is
+ *   the only free ADC1 channel on the N16R8 module not already used by
+ *   I2S / TFT / SD card / boot strapping.
+ *
+ *   ⚠️ GPIO 2 is a strapping pin: it must be floating or held HIGH at
+ *   boot, otherwise the chip enters download-boot (esptool) mode. The
+ *   Knob A voltage divider in the BOM (10 kΩ to 3V3, wiper to ADC) is
+ *   high-impedance and the ADC's internal pull-up keeps GPIO 2 high
+ *   unless the knob is turned fully counter-clockwise. In practice the
+ *   boot-time pull-up wins. If users report "device stuck in download
+ *   mode", instruct them to rotate Knob A away from the minimum stop
+ *   before power-cycling.
+ *
+ *   Knob B (GPIO 46 / ADC1_CH5) is non-strapping and confirmed
+ *   ADC-capable on the ESP32-S3-WROOM-1-N16R8 module.
  */
-#define KNOB_A_GPIO               GPIO_NUM_20
-#define KNOB_A_ADC_CHANNEL        ADC_CHANNEL_9
+#define KNOB_A_GPIO               GPIO_NUM_2
+#define KNOB_A_ADC_CHANNEL        ADC_CHANNEL_1
 #define KNOB_B_GPIO               GPIO_NUM_46
 #define KNOB_B_ADC_CHANNEL        ADC_CHANNEL_5
 #define KNOB_ADC_ATTEN            ADC_ATTEN_DB_12

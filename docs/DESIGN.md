@@ -69,8 +69,8 @@ Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top fa
 
     +---------+  +----------+  +---------+   (o)         (o)
     |  SOUND  |  | PATTERN  |  |   BPM   |  Knob A      Knob B
-    +---------+  +----------+  +---------+ GPIO 20     GPIO 46
-                                            A1_CH9      A1_CH5
+    +---------+  +----------+  +---------+ GPIO 2      GPIO 46
+                                            A1_CH1      A1_CH5
 
     +---+ +---+ +---+ +---+                            +---------+
     | 1 | | 2 | | 3 | | 4 |                            |   REC   |
@@ -104,7 +104,7 @@ There are **23 physical buttons** in total:
   - `PLAY` — start/stop sequencer
   - `WRITE` — enter / exit write mode (the PO-33's "·" key, handler queued)
 
-There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 20 / ADC1_CH9, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control. The actual mapping (verified against the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual):
+There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 2 / ADC1_CH1, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control. The actual mapping (verified against the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual):
 - **BPM row:** knob A = swing (8 discrete levels), knob B = fine tempo (continuous 60–240). Both wired in this commit.
 - **Tweak-mode (FX tapped to select):** knob A = pitch / filter cutoff / sample start (Tone / Filter / Trim), knob B = volume / resonance / sample length. Queued for v2.
 - (No "tempo level cycling" knob mapping — that was a confusion in earlier docs; tempo levels are BPM tap only.)
@@ -174,7 +174,7 @@ An **effect** (called "FX" for short) is a modification applied to a sound. Effe
 
 ### 2.10 Tweak parameter
 
-A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware uses two physical knobs — wired to GPIO 20 (Knob A) and GPIO 46 (Knob B), with the `ui/knobs.c` driver reading them every button-scan tick. `BTN_FX` tap cycles the mode (Tone → Filter → Trim → Tone); turning the knobs adjusts the playing step or active slot accordingly. See §3.4 (F-015 through F-018) for the per-mode knob bindings.
+A **tweak parameter** is one of three special settings you can adjust on a sound: **Tone** (how high or low it sounds, and how loud it plays), **Filter** (which frequencies are kept or removed — like a bass-boost or treble-cut on a stereo), and **Trim** (where the recording starts and ends). On the real PO-33 you twist the two knobs (Knob A and Knob B) to change these. Our firmware uses two physical knobs — wired to GPIO 2 (Knob A) and GPIO 46 (Knob B), with the `ui/knobs.c` driver reading them every button-scan tick. (Knob A was reassigned from GPIO 20 to GPIO 2 to free the USB-OTG D+ line for the future USB-MIDI feature — see §10.6.) `BTN_FX` tap cycles the mode (Tone → Filter → Trim → Tone); turning the knobs adjusts the playing step or active slot accordingly. See §3.4 (F-015 through F-018) for the per-mode knob bindings.
 
 ### 2.11 Punch-in
 
@@ -383,7 +383,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4.1 ("ton")
 - **Layman:** With Tweak = Tone, **Knob A** raises or lowers the pitch of the current sound by semitones; **Knob B** raises or lowers its volume.
 - **PO-33 button combo:** Turn knob A / B.
-- **Our hardware combo:** Knob A → GPIO 20 (ADC1_CH9); Knob B → GPIO 46 (ADC1_CH5). The knob driver (`ui/knobs.c`) reads them on every button-scan tick. Wiring through to per-step pitch/volume is v2 work; the data model (`step_t.note`, `step_t.velocity`) already supports it.
+- **Our hardware combo:** Knob A → GPIO 2 (ADC1_CH1); Knob B → GPIO 46 (ADC1_CH5). The knob driver (`ui/knobs.c`) reads them on every button-scan tick. Wiring through to per-step pitch/volume is v2 work; the data model (`step_t.note`, `step_t.velocity`) already supports it.
 - **Code location:** `step_t.note` (pitch), `step_t.velocity` (volume); `ui/knobs.c` reads; `main/audio/amy_bridge.c` writes into `amy_event.midi_note` / `amy_event.velocity`.
 - **Status:** ✅ done while `s_tweak_mode == TWEAK_TONE`. `tweak_apply_step()` reads `knobs_get_a()` → MIDI note (0..255 → 36..97, mapping C2..C7) and `knobs_get_b()` → velocity (0..255 → 0..127). The sequencer's `on_step()` and `play_active_slot()` call `tweak_apply_step()` before `amy_bridge_play_note()`. v1 lacks `resonance` as a per-step field (F-017 below); the knob B reading in Filter mode is logged but not stored.
 
@@ -392,7 +392,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4.2 ("Flt")
 - **Layman:** With Tweak = Filter, **Knob A** picks the cutoff frequency (low-pass or high-pass); **Knob B** picks how strong the filter is (resonance).
 - **PO-33 button combo:** Turn knobs.
-- **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). The filter data field is `step_t.filter_cutoff` (0–255); v1 firmware maps a low-pass sweep into `amy_event.filter_freq` via the existing `PO33_FX_FILTER_SWEEP` effect.
+- **Our hardware combo:** Same knob GPIOs (A = GPIO 2, B = GPIO 46). The filter data field is `step_t.filter_cutoff` (0–255); v1 firmware maps a low-pass sweep into `amy_event.filter_freq` via the existing `PO33_FX_FILTER_SWEEP` effect.
 - **Code location:** `step_t.filter_cutoff`; `main/audio/amy_bridge.c` → `apply_fx()` → `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`. `main/ui/input.c` → `tweak_apply_step()` in `TWEAK_FILTER` mode reads `knobs_get_a()` → `filter_cutoff` (0..255). Resonance knob is logged but no per-step field exists yet; v2 adds a `resonance` field to `step_t`.
 - **Status:** ✅ done for cutoff (knob A). Resonance (knob B) queued for v2.
 
@@ -401,7 +401,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4.3 ("tri")
 - **Layman:** With Tweak = Trim, you pick where in the recording the playback actually starts (**Knob A**), and how long the playback lasts (**Knob B**). This is how you chop off silence at the start, or trim a long recording to a short snippet.
 - **PO-33 button combo:** Turn knob A = start, B = length.
-- **Our hardware combo:** Same knob GPIOs (A = GPIO 20, B = GPIO 46). Per-slot trim is already stored in `s_slots[slot].start` / `.end` and exposed via `amy_bridge_set_trim()` (UART). Knob → trim binding queued for v2.
+- **Our hardware combo:** Same knob GPIOs (A = GPIO 2, B = GPIO 46). Per-slot trim is already stored in `s_slots[slot].start` / `.end` and exposed via `amy_bridge_set_trim()` (UART). Knob → trim binding queued for v2.
 - **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_set_trim(slot, start, end)`. `s_slots[slot].start` / `.end` are stored.
 - **Status:** ✅ done while `s_tweak_mode == TWEAK_TRIM`. `tweak_apply_slot(slot)` reads `knobs_get_a()`/`b()` → trim start/end (mapped to sample indices 0..slot_len-1 via `amy_bridge_slot_ptr()` + `amy_bridge_slot_len_samples()`) and calls `amy_bridge_set_trim()`. Triggered from `play_active_slot()`; the per-step sequencer path doesn't apply trim (no per-step trim field, and the user is expected to trim the active slot, not individual pattern steps).
 
@@ -546,7 +546,7 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §10
 - **Layman:** Set the PO-33 to "sync mode", press PLAY, and it will not play on its own — it waits for an external pulse on the sync-in jack, then plays one step per pulse.
 - **PO-33 button combo:** Hold RECORD + BPM to cycle sync modes SY0–SY5.
-- **Our hardware combo:** The GPIO (GPIO 19) is configured as input with pullup, but no listener task is implemented yet.
+- **Our hardware combo:** The GPIO (**GPIO 25** — was GPIO 19, reassigned to free the USB-OTG D− line for the future USB-MIDI feature) is configured as input with pullup, but no listener task is implemented yet.
 - **Code location:** `main/system/sync.c` has the GPIO config; the listener is missing.
 - **Status:** ❌ missing (GPIO configured, listener not wired).
 

@@ -13,15 +13,31 @@ TEST_CASE("knob GPIOs are non-strapping", "[knobs]")
 {
     /* GPIO 0..3 are strapping pins on the ESP32-S3 (sampled at reset
      * to set boot mode and JTAG source). Using them as ADC inputs
-     * after boot is technically possible but discouraged. */
-    TEST_ASSERT_NOT_EQUAL(0, KNOB_A_GPIO);
+     * after boot is technically possible but discouraged.
+     *
+     * Exception: KNOB_A_GPIO may be GPIO 2 (Knob A was reassigned
+     * from GPIO 20 to GPIO 2 to free the USB-OTG D+ line for the
+     * future USB-MIDI feature). GPIO 2 is held high at boot by the
+     * knob's 10 kΩ pull-up to 3V3 + the ADC's internal pull-up, so
+     * the chip boots normally (not into download-boot mode). */
     TEST_ASSERT_NOT_EQUAL(0, KNOB_B_GPIO);
-    TEST_ASSERT_NOT_EQUAL(1, KNOB_A_GPIO);
     TEST_ASSERT_NOT_EQUAL(1, KNOB_B_GPIO);
-    TEST_ASSERT_NOT_EQUAL(2, KNOB_A_GPIO);
     TEST_ASSERT_NOT_EQUAL(2, KNOB_B_GPIO);
-    TEST_ASSERT_NOT_EQUAL(3, KNOB_A_GPIO);
     TEST_ASSERT_NOT_EQUAL(3, KNOB_B_GPIO);
+
+    /* KNOB_A may be GPIO 2 (the documented exception above). All
+     * other strapping pins remain off-limits. */
+    TEST_ASSERT_NOT_EQUAL(0, KNOB_A_GPIO);
+    TEST_ASSERT_NOT_EQUAL(1, KNOB_A_GPIO);
+    TEST_ASSERT_NOT_EQUAL(3, KNOB_A_GPIO);
+
+    /* If KNOB_A is on a strapping pin, it MUST be GPIO 2 specifically
+     * (the one strapping pin we've validated for knob use). Any other
+     * strapping-pin assignment is a config error. */
+    if (KNOB_A_GPIO == 2 || KNOB_A_GPIO == 0 || KNOB_A_GPIO == 1 || KNOB_A_GPIO == 3) {
+        TEST_ASSERT_EQUAL_MESSAGE(2, KNOB_A_GPIO,
+            "KNOB_A on a strapping pin other than GPIO 2 is not supported");
+    }
 }
 
 TEST_CASE("knob GPIOs are distinct from each other", "[knobs]")

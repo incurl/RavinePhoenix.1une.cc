@@ -210,8 +210,8 @@ In addition to the 4×4 matrix, the device has **seven dedicated (modifier) butt
    ┌────┐
    │    │  ┌─────────┐  ┌──────────┐  ┌─────────┐   (o)         (o)
    │ ENC│  │  SOUND  │  │ PATTERN  │  │   BPM   │  Knob A      Knob B
-   │    │  └─────────┘  └──────────┘  └─────────┘ GPIO 20     GPIO 46
-   │GPIOs│                                                   A1_CH9      A1_CH5
+   │    │  └─────────┘  └──────────┘  └─────────┘ GPIO 2      GPIO 46
+   │GPIOs│                                                   A1_CH1      A1_CH5
    │22/23/24│
    └────┘
 
@@ -231,7 +231,7 @@ In addition to the 4×4 matrix, the device has **seven dedicated (modifier) butt
     Step matrix  16 buttons on 8 GPIOs — rows 35/36/37/38   cols 33/34/39/40
     Top row      SOUND=11    PATTERN=44    BPM=13        + 2 knobs
     Right column REC=41   FX=12   PLAY=42   WRITE=43   (under Knob B)
-    Knobs        Knob A = GPIO 20 (ADC1_CH9)   Knob B = GPIO 46 (ADC1_CH5)
+    Knobs        Knob A = GPIO 2 (ADC1_CH1)   Knob B = GPIO 46 (ADC1_CH5)
     Totals       23 buttons + 2 knobs + 1 encoder = 36 of 49 GPIOs   (13 free;
                   6 of those 13 are truly usable on the N16R8 module —
                   GPIO 26–32 are bonded to the on-board Octal PSRAM and
@@ -277,7 +277,7 @@ If you skip the LEDs, the firmware still works. The TFT shows "REC ●" and "▶
 | Signal | GPIO | Connector |
 |---|---|---|
 | Sync OUT | **GPIO 18** | 3.5 mm jack **tip** (with 100 Ω series resistor); jack **sleeve** to GND |
-| Sync IN  | **GPIO 19** | 3.5 mm jack **tip**; jack **sleeve** to GND |
+| Sync IN  | **GPIO 25** | 3.5 mm jack **tip**; jack **sleeve** to GND | (was GPIO 19; reassigned in the USB-MIDI reservation.)
 
 Sync uses the Pocket Operator "SY2/SY3/SY4" protocol (pulse on every 16th note, max 5 Vpp). If you don't need to sync with another Pocket Operator, skip the jacks — the firmware still works without them.
 
@@ -391,14 +391,14 @@ The real PO-33 has two physical knobs labelled **A** and **B**. They have no sem
 
 | Knob | GPIO | ADC channel | ADC unit | Notes |
 |---|---|---|---|---|
-| **Knob A** | GPIO 20 | ADC1_CH9 | ADC1 | non-strapping, ADC-capable |
+| **Knob A** | GPIO 2 | ADC1_CH1 | ADC1 | **strapping pin** — must be floating or high at boot (the knob's 10 kΩ pull-up to 3V3 + the ADC pull-up hold it high in practice). Reassigned from GPIO 20 → 2 in the USB-MIDI reservation. |
 | **Knob B** | GPIO 46 | ADC1_CH5 | ADC1 | non-strapping, ADC-capable |
 
 Each potentiometer is wired as a 3-terminal voltage divider:
 
 ```
 3.3 V ──┐ ├─ 10 kΩ linear pot ──┐
-          │                      ├─ wiper ── GPIO 20 (Knob A) or GPIO 46 (Knob B)
+          │                      ├─ wiper ── GPIO 2 (Knob A) or GPIO 46 (Knob B)
    GND ──┘                      │
                                │
                           (to ADC pin)
@@ -571,7 +571,7 @@ Each knob is a 3-wire device. The middle (wiper) terminal goes to the ADC pin; o
 
 | Knob | GPIO (ADC pin) | 3.3 V end | GND end |
 |---|---|---|---|
-| **Knob A** | **GPIO 20** | left terminal | right terminal |
+| **Knob A** | **GPIO 2** | left terminal | right terminal |
 | **Knob B** | **GPIO 46** | left terminal | right terminal |
 
 (The "left vs. right" is arbitrary; pick either and the firmware works the same — `knobs_get_a()` returns 0 at the GND end and 255 at the 3.3 V end, and vice versa.)
@@ -791,7 +791,7 @@ A single **Alps EC11E** 24-detent rotary encoder sits to the **left of the matri
          ┌──── encoder (vertical mount, top screw on top)
          │           (o)         (o)
          │         Knob A      Knob B
-         │         GPIO 20     GPIO 46
+         │         GPIO 2      GPIO 46
          │
          │    (o)        ↑         (o)
          │   ENC        click     RIGHT
