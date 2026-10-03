@@ -162,9 +162,12 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 Things that will probably break on first build (in priority order):
 
-1. **AMY patch application** — if `components/amy/src/` was wiped,
-   re-apply the patch summarised above (or read the diff between the
-   committed AMY sources and this checkout's AMY sources).
+1. **AMY patches application** — if `components/amy/src/` was wiped,
+   re-apply **both** patches summarised above (or diff the committed
+   AMY sources against this checkout's AMY sources). Patch 1
+   (loopstart/loopend delta plumbing) is needed for the 4 punch-in FX
+   to affect playback; Patch 2 (pcm_load_external) is needed for the
+   AMY-side memory to stay small enough to fit in PSRAM.
 2. **`#include "esp_rom_gpio.h"`** in `sync.c` may not exist on every
    IDF version — it's a recent split. Check whether `<esp_rom_gpio.h>`
    is the right include.
@@ -174,12 +177,15 @@ Things that will probably break on first build (in priority order):
    component already installed the ISR service, this returns
    `ESP_FAIL` (already installed). Make it idempotent or move to
    a dedicated init flag.
-5. **`set_trim` re-register** — on rapid trim changes, the
-   `pcm_unload_preset` + `pcm_load` cycle could race the audio render
-   task. If `pcm_load` is called while the renderer is reading
-   `sample_ram`, the read may fault or stutter. Real fix: a write barrier
-   (`amy_event` to flush before re-loading), or defer the reload to a
-   safe window.
+5. **`set_trim` re-register** — on rapid trim changes,
+   `pcm_unload_preset` + `pcm_load_external` could race the audio render
+   task. Since `pcm_load_external` doesn't copy (it just updates
+   metadata pointing at the same `s_pool` buffer), the race is *less*
+   severe than it was with `pcm_load` (no memcpy to land mid-write).
+   But the metadata swap is still a non-atomic pointer write; in
+   theory the renderer could read inconsistent state. Real fix: a
+   write barrier (`amy_event` to flush before re-loading), or defer
+   the reload to a safe window.
 
 A first build will catch all of these. Plan ~30 minutes for the build
 + test cycle once the venv is fixed.
