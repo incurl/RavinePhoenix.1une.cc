@@ -556,8 +556,8 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §10.1 (the table: SY0 stereo/stereo, SY1 stereo mono/sync, SY2 sync stereo, SY3 sync mono/sync, SY4 mono/sync stereo, SY5 mono/sync mono/sync)
 - **Layman:** The PO-33 can send either stereo audio, sync pulse, or both — on either its line-in or its line-out. There are 5 useful combinations. The default is SY0 (stereo in, stereo out, no sync), which is what you want when listening to music through headphones.
 - **PO-33 button combo:** Hold RECORD + BPM to cycle.
-- **Our hardware combo:** Not yet. The hardware side (routing I²S L/R or sync GPIO into the same jack) needs a small analog mux.
-- **Status:** ❌ missing.
+- **Our hardware combo:** **Not implementable on the v1 hardware.** The 5 modes route different signals (stereo audio, mono audio, sync pulse) into the 3.5 mm jack contacts; the v1 board has **separate jacks** for headphone out and line in (no analog mux), and the sync GPIO is on a dedicated pin (GPIO 25 sync in, GPIO 18 sync out). Without a hardware revision that adds an analog mux and re-routes the jack contacts, F-032 has no phase variation to operate on. F-031 (sync-in listener) is the software piece that would benefit from F-032 once the hardware exists; it's wired in this PR but doesn't expose a mode selector (since there's nothing to select).
+- **Status:** ❌ missing (hardware-gated; deferred until a board revision adds the analog mux).
 
 ### 3.11 Section 11 — Clock and alarm
 
