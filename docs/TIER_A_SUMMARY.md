@@ -1,7 +1,7 @@
 # Tier A feature work — summary and handoff
 
 This is a handoff document for the Tier A work that landed between commits
-`a1f8ecd` and `74c5cc9` (inclusive) — 9 commits, 13 features, ~46% of the
+`a1f8ecd` and `f3b3730` (inclusive) — 10 commits, 13 features, ~46% of the
 PO-33 scorecard moved from ❌ missing to either ✅ done or ⚠️ partial.
 
 The intent of this document: a future contributor (or future you) can pick
@@ -21,31 +21,32 @@ the git log.
 | 5 | `a0addd4` | REC + PATTERN held = clear active pattern | F-012 | sequencer + UI gesture |
 | 6 | `1460d5c` | Battery monitor + always-on indicator | F-035 | power_mgmt + display |
 | 7 | `6db63d5` | **pcm_load gap fix** — register user samples with AMY | F-019 prereq | audio (no AMY patch) |
-| 8 | `80d4ef6` | LOOP_16 / LOOP_SHORT / STUTTER_4 / RETRIGGER_PATTERN | F-019 / F-031 subset | audio + sequencer + AMY patch |
+| 8 | `80d4ef6` | LOOP_16 / LOOP_SHORT / STUTTER_4 / RETRIGGER_PATTERN | F-019 / F-031 subset | audio + sequencer + AMY patch (loopstart/loopend) |
 | 9 | `5dde83c` | Chain remove via UART | F-014 | sequencer + UART |
 | 10 | `4d3180d` | Save-in-pattern for FX (write-mode-gated) | F-019 write half | sequencer + UI |
 | 11 | `04ce1c3` | Jam-sync IN listener with debounce | F-031 | sync + sequencer |
 | 12 | `74c5cc9` | F-032 docs (hardware-gated) | F-032 | docs only |
+| 13 | `f3b3730` | **pcm_load_external** — reuse PSRAM pool (no AMY-side copy) | perf/memory | AMY patch + firmware |
 
 Scorecard moved from **15/14/21 (30%)** to **23/15/12 (46%)**: +8 ✅ done,
 1 partial→partial improvement, 9 features newly ⚠️ partial, 1 hardware-gated
-(no score impact).
+(no score impact). Commit #13 (the memory fix) doesn't move the scorecard —
+it removes a "worst case OOM" risk documented below.
 
 ---
 
-## AMY patch (the load-bearing one)
+## AMY patches (two)
 
-The 4 punch-in FX that now work (#8 above) require a local patch to vendored
-AMY at `components/asm/src/`. AMY's `amy_event` did **not** propagate
-per-event `loopstart`/`loopend` to the voice. The patch is small but
-crosses 3 files.
+The vendored AMY at `components/asm/src/` needs **two** local patches to
+make Tier A work. Both are gitignored (the directory is), so re-vendoring
+AMY without applying them silently regresses the firmware.
 
-> **If AMY is re-vendored, this patch must be re-applied.** It's not in
-> git (the directory is gitignored). See the original commit `80d4ef6`
-> for context. The complete diff vs. stock AMY (shorepine/amy @ the
-> time of writing) is summarised below.
+### Patch 1 — per-event `loopstart` / `loopend` (commit `80d4ef6`)
 
-### Files touched (in `components/amy/src/`)
+The 4 punch-in FX in #8 above need per-event loop bounds. AMY's `amy_event`
+did not propagate `loopstart`/`loopend` to the voice; this patch fixes that.
+
+> The complete diff vs. stock AMY is in commit `80d4ef6`. Summary:
 
 | File | Change |
 |---|---|
@@ -53,22 +54,36 @@ crosses 3 files.
 | `amy.c` | + `EVENT_TO_DELTA_I(loopstart, LOOPSTART)` and `loopend` in `play_event()`<br>+ `DELTA_TO_SYNTH_I(LOOPSTART, loopstart)` and `LOOPEND` in `play_delta()`<br>+ `AMY_UNSET(psynth->loopstart); AMY_UNSET(psynth->loopend);` in `setup_osc()` |
 | `pcm.c` | In `pcm_start_note()`'s else-branch: prefer `synth->loopstart/loopend` over `preset->loopstart/loopend` when both are set (AMY_IS_SET). Fall back to the preset otherwise. |
 
-### Semantics
+**Semantics:**
 
-- `amy_event.loopstart=UINT32_MAX` (= unset) → use preset's loopstart.
-- `amy_event.loopstart=0` (= explicit zero) → loop from sample index 0.
+- `amy_event.loopstart = UINT32_MAX` (= unset) → use preset's loopstart.
+- `amy_event.loopstart = 0` (= explicit zero) → loop from sample index 0.
 - Both must be set + `loopstart < loopend` for the override to take effect.
 
-### What it enables
+**What it enables:** `PO33_FX_LOOP_16` (last 1/16), `PO33_FX_LOOP_SHORT` (last 4096 samples), `PO33_FX_STUTTER_4` (last 1/32), `PO33_FX_STUTTER_3` (last 1/24), `PO33_FX_LOOP_12` (last 1/12), `PO33_FX_LOOP_SHORTER` (last 1/24). All driven from `apply_fx()` in `main/audio/amy_bridge.c`.
 
-`PO33_FX_LOOP_16` (last 1/16 of sample), `PO33_FX_LOOP_SHORT` (last 4096 samples),
-`PO33_FX_STUTTER_4` (last 1/32 = tight stutter), `PO33_FX_STUTTER_3` (last 1/24),
-`PO33_FX_LOOP_12` (last 1/12), `PO33_FX_LOOP_SHORTER` (last 1/24).
+### Patch 2 — `pcm_load_external` for caller-owned samples (commit `f3b3730`)
 
-All driven from `apply_fx()` in `main/audio/amy_bridge.c`, which sets
-`e.loopstart` and `e.loopend` per-FX.
+The memory fix in #13 above removes the AMY-side sample copy. Before this
+patch, `pcm_load()` allocated a fresh block in PSRAM and copied the sample
+into it. With 16 slots filled at max length that doubled the sample
+memory and exceeded the 8 MB N16R8 budget by ~0.6 MB. `pcm_load_external()`
+takes a caller-owned pointer instead, so the firmware's existing
+`amy_bridge` PSRAM pool is shared directly with AMY.
 
-### What it does NOT enable
+| File | Change |
+|---|---|
+| `amy.h` | + `#define AMY_PCM_TYPE_MEMORY_EXTERNAL 4` (new type alongside `ROM`/`FILE`/`MEMORY`/`GAMMA`)<br>+ `extern void pcm_load_external(...)` declaration |
+| `pcm.c` | + `void pcm_load_external(...)`: allocates only the metadata (LL node + `memorypcm_preset_t`, ~80 bytes), sets `type = AMY_PCM_TYPE_MEMORY_EXTERNAL`, points `sample_ram` at the caller's buffer. No changes needed to `pcm_unload_preset` (existing single-block `free()` is correct for both types: for `MEMORY` it frees the combined metadata+sample block; for `MEMORY_EXTERNAL` it frees only the metadata — sample buffer stays with the caller). |
+| `main/audio/amy_bridge.c` | `register_slot_with_amy()` calls `pcm_load_external(preset, s_pool + offset, ...)` instead of `pcm_load(...) + memcpy(...)`. `amy_bridge_register_slot()` and `amy_bridge_set_trim()` no longer need an explicit pre-unload (the new function handles it). |
+
+**Why no other AMY changes were needed:** the renderer's `pcm_render_block`
+and `pcm_note_on` already branch on `type != AMY_PCM_TYPE_FILE` for
+streaming-specific behaviour (which both `MEMORY` and `MEMORY_EXTERNAL`
+bypass). The read-only access of `preset->sample_ram` in the renderer
+works regardless of who owns the memory.
+
+### What the patches do NOT enable
 
 - `PO33_FX_REVERSE` — AMY has no per-event reverse direction. Would need a
   new AMY feature.
@@ -83,29 +98,29 @@ These three remain ❌ missing and are documented in §3.5 / §4 of
 
 ---
 
-## Memory budget (after Tier A)
+## Memory budget (after Tier A + pcm_load_external)
 
 | Consumer | Size |
 |---|---|
 | 40 s × 44100 Hz mono pool (PSRAM) | 3.37 MB |
-| **AMY-side sample copies** (one per registered slot; ~5–8 typical) | **0.5–3.3 MB** |
+| AMY-side sample metadata (~80 bytes per registered slot × 16) | ~1.3 KB |
 | 2.4″ TFT framebuffer | 150 KB |
 | AMY state (oscs, events, voices, reverb/echo tails) | ~1.5 MB |
 | LittleFS working memory | ~64 KB |
 | Misc / heap overhead | ~256 KB |
-| **PSRAM headroom (typical)** | **~−0.6 MB to +1.5 MB free** |
+| **PSRAM headroom** | **~2.5 MB free** |
 
-The `pcm_load gap fix` (#7 above) doubles the AMY-side sample cost.
-Typical case (5–8 recorded slots, 1.5 MB AMY-side) leaves ~1 MB PSRAM
-headroom. **Worst case** (all 16 slots at PO-33 spec lengths, 3.3 MB
-AMY-side) **exceeds the 8 MB N16R8 PSRAM budget by ~0.6 MB** and would
-OOM at the AMY-side `pcm_load` call. The firmware logs
-`pcm_load failed for slot N` and falls back to AMY's ROM preset 0 for
-that slot. The user can record 5–10 slots normally; filling all 16 at
-max triggers the OOM on the last one.
+The PSRAM sample pool is now shared via `pcm_load_external()` (commit
+`f3b3730`); AMY keeps only a small metadata struct per registered slot
+(~80 bytes). With 16 slots fully filled, AMY-side cost is ~1.3 KB
+total. PSRAM headroom is ~2.5 MB regardless of how many slots are
+recorded, which is comfortable.
 
-Mitigations for v2: reduce pool size to 30 s, or move to a non-PSRAM
-ESP32-S3 module variant (the HARDWARE.md §8.4 trade-off table).
+> **Note on history.** Before `f3b3730`, the `pcm_load gap fix`
+> (`6db63d5`) made AMY-side allocations balloon to ~3.3 MB at full slot
+> load, exceeding the 8 MB N16R8 budget by ~0.6 MB. That OOM risk is
+> now eliminated by `pcm_load_external`. The "fill all 16 slots" worst
+> case is no longer a memory concern.
 
 ---
 
