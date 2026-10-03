@@ -60,6 +60,17 @@ uint8_t  sequencer_get_current_pattern(void);
  * only the step bindings are reset to empty. */
 void sequencer_clear_current_pattern(void);
 
+/* F-031 jam-sync IN: advance the sequencer by one step. Called from
+ * the sync listener task when SYNC_IN_GPIO receives a pulse. If the
+ * sequencer is playing, this triggers the same per-step logic as the
+ * local esp_timer tick (notes, FX, swing). No-op when stopped. */
+void sequencer_tick(void);
+
+/* F-031: toggle sync-IN-driven playback. When true, sequencer_play()
+ * does NOT start the local esp_timer step clock; instead the listener
+ * task (system/sync.c) drives sequencer_tick() per incoming pulse. */
+void sequencer_set_sync_in_active(bool active);
+
 /* F-019 PO33_FX_RETRIGGER_PATTERN: request that the active pattern
  * restart from step 0 on the next step tick. Posted (not immediate)
  * so the call from amy_bridge is safe from any context -- it just

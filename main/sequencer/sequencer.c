@@ -36,6 +36,13 @@ static volatile uint8_t s_active_fx   = PO33_FX_NONE;
  * next step tick. */
 static volatile bool s_retrigger_requested = false;
 
+/* F-031 sync IN. When true, the local esp_timer step clock is
+ * disabled -- the sync listener task drives sequencer_tick() on
+ * each incoming pulse. Default false; the sync module sets it true
+ * via sequencer_set_sync_in_active() if/when it implements that
+ * mode toggle. */
+static volatile bool s_sync_in_active = false;
+
 /* Swing level (0..SWING_LEVELS-1). Set by BPM-held + Knob A; consumed
  * by on_step() to delay off-beat 16th notes. */
 static volatile uint8_t s_swing = 0;
@@ -215,6 +222,21 @@ void sequencer_request_retrigger(void)
     /* F-019 PO33_FX_RETRIGGER_PATTERN. Set the flag; on_step()
      * consumes it on the next timer tick. Safe from any context. */
     s_retrigger_requested = true;
+}
+
+void sequencer_tick(void)
+{
+    /* F-031 sync IN. Run the same per-step logic as the esp_timer
+     * callback. Safe to call from any context; the esp_timer one
+     * won't fire while sync IN is driving the sequencer (the timer
+     * is one-shot and we don't restart it on sync-driven steps). */
+    on_step(NULL);
+}
+
+void sequencer_set_sync_in_active(bool active)
+{
+    s_sync_in_active = active;
+    ESP_LOGI(TAG, "sync IN %s", active ? "ENABLED" : "DISABLED");
 }
 
 void sequencer_save_fx_to_pattern(uint8_t fx, uint8_t p1, uint8_t p2)
@@ -397,7 +419,13 @@ void sequencer_play(void)
         .skip_unhandled_events = true,
     };
     esp_timer_create(&cfg, &s_step_timer);
-    esp_timer_start_periodic(s_step_timer, period_us);
+    if (!s_sync_in_active) {
+        esp_timer_start_periodic(s_step_timer, period_us);
+    } else {
+        /* F-031: sync IN is driving the sequencer. The local timer
+         * stays unstarted so it doesn't double-step. */
+        ESP_LOGI(TAG, "Play (sync IN active) -- local timer disabled");
+    }
 
     s_playing = true;
     s_step = 0;

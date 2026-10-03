@@ -547,9 +547,9 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §10
 - **Layman:** Set the PO-33 to "sync mode", press PLAY, and it will not play on its own — it waits for an external pulse on the sync-in jack, then plays one step per pulse.
 - **PO-33 button combo:** Hold RECORD + BPM to cycle sync modes SY0–SY5.
-- **Our hardware combo:** The GPIO (**GPIO 25** — was GPIO 19, reassigned to free the USB-OTG D− line for the future USB-MIDI feature) is configured as input with pullup, but no listener task is implemented yet.
-- **Code location:** `main/system/sync.c` has the GPIO config; the listener is missing.
-- **Status:** ❌ missing (GPIO configured, listener not wired).
+- **Our hardware combo:** Always-listening. SYNC_IN_GPIO is wired to a falling-edge interrupt; each pulse posts to a FreeRTOS binary semaphore and wakes a sync-in task that calls `sequencer_tick()` while the sequencer is playing. The local esp_timer step clock is suppressed while sync IN is active (`sequencer_set_sync_in_active(true)`), so the sequencer is fully driven by incoming pulses. The 20 ms debounce window rejects switch-bounce (a real PO-33 sends ~1 ms pulses at rates from ~60 BPM to ~240 BPM, so the minimum useful interval is ~62 ms; a 20 ms threshold catches bounces without rejecting fast pulses).
+- **Code location:** `main/system/sync.c` → `sync_in_isr()` (ISR, debounce + semaphore), `sync_in_task()` (FreeRTOS task, calls `sequencer_tick()`). `main/sequencer/sequencer.{c,h}` → `sequencer_tick()`, `sequencer_set_sync_in_active()`. `sequencer_play()` skips the local timer when sync IN is active. F-032 (5 sync modes) is NOT wired; this implementation treats every pulse identically (1 pulse = 1 step). The 5-mode PO-33 behaviour (different message protocols per mode) is v2.
+- **Status:** ⚠️ partial. Single-mode sync-in works (1 pulse = 1 step). 5-mode is not wired; no UI to toggle sync IN on/off (it's effectively always-on but does nothing useful while stopped). The mode-toggle gesture (REC + BPM) is **not** added; v2.
 
 #### F-032 — Five sync modes (SY0–SY5)
 
@@ -1039,11 +1039,11 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 7. Volume | 1 | 1 | 0 | 0 |
 | 8. Copy + delete | 5 | 0 | 0 | 5 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
-| 10. Sync | 3 | 1 | 0 | 2 |
+| 10. Sync | 3 | 1 | 1 | 1 |
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **23 (46%)** | **14 (28%)** | **13 (26%)** |
+| **Total** | **~50** | **23 (46%)** | **15 (30%)** | **12 (24%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
