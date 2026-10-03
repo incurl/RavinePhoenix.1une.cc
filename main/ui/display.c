@@ -17,6 +17,7 @@
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_ili9341.h"
+#include "esp_timer.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -403,10 +404,88 @@ static void render_picker_screen(void)
     fb_draw_text(170, 308, "tap step=load", COLOR_TEXT_DIM);
 }
 
+/* F-022 volume-level overlay state.
+ *
+ * display_show_volume_level(level) arms the overlay with a 1200 ms
+ * deadline; display_tick() renders render_volume_overlay() while the
+ * deadline is in the future and render_main_screen() otherwise. The
+ * overlay auto-clears without needing a timer task -- every
+ * display_tick() call also advances the deadline check, and once
+ * expired we just stop rendering it. */
+static bool     s_volume_overlay_active = false;
+static uint8_t  s_volume_level = 0;
+static int64_t  s_volume_deadline_us = 0;     /* esp_timer_get_time() value */
+
+#define VOLUME_OVERLAY_MS 1200
+
+void display_show_volume_level(uint8_t level)
+{
+    if (level > 5) level = 5;
+    s_volume_level = level;
+    s_volume_deadline_us = esp_timer_get_time() + (int64_t)(VOLUME_OVERLAY_MS) * 1000;
+    s_volume_overlay_active = true;
+}
+
+static void render_volume_overlay(void)
+{
+    /* Has the deadline passed since the last arm? Auto-clear. */
+    if (esp_timer_get_time() >= s_volume_deadline_us) {
+        s_volume_overlay_active = false;
+        render_main_screen();
+        return;
+    }
+
+    /* Clear the framebuffer (don't preserve the main screen beneath
+     * -- the overlay is meant to *replace* the main view for its
+     * short lifetime, like the PO-33's lit-buttons display). */
+    fb_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, COLOR_BG);
+
+    /* Centred 5-bar graphic at y=120. Each bar is 24x40 px with a
+     * 6-px gap. Total width: 5*24 + 4*6 = 144 px, centred on the
+     * 240-px screen: x_start = 48. */
+    static const int bar_w     = 24;
+    static const int bar_h     = 40;
+    static const int bar_gap   = 6;
+    static const int bar_count = 5;
+    static const int total_w   = bar_count * bar_w + (bar_count - 1) * bar_gap;
+    static const int x_start   = (TFT_WIDTH - total_w) / 2;
+    static const int y_top     = 120;
+
+    /* Header label */
+    fb_draw_text(4, y_top - 18, "VOLUME", COLOR_TEXT_DIM);
+
+    /* "LEVEL 3/5" or similar on the right */
+    snprintf(s_buf, sizeof(s_buf), "%u/%u", (unsigned)s_volume_level, (unsigned)bar_count);
+    fb_draw_text(204, y_top - 18, s_buf, COLOR_TEXT_DIM);
+
+    for (uint8_t i = 0; i < bar_count; i++) {
+        int x = x_start + i * (bar_w + bar_gap);
+        bool lit = (i < s_volume_level);
+        /* Background bar in dim grey (always visible) */
+        fb_fill_rect(x, y_top, bar_w, bar_h, COLOR_SLOT_EMPTY);
+        if (lit) {
+            /* Filled portion: green for bars 0..3, yellow for the top
+             * bar (level 5 / max) to suggest a "level meter" reaching
+             * its peak. The choice of yellow only at the top also
+             * gives the user a visual "you have headroom" cue. */
+            uint16_t color = (i == bar_count - 1) ? 0xFFE0 : 0x07E0;
+            fb_fill_rect(x, y_top, bar_w, bar_h, color);
+        }
+        /* 1-px white outline so bars stay visible against any
+         * neighbouring background. */
+        fb_fill_rect(x,                 y_top,              bar_w, 1,             COLOR_TEXT);
+        fb_fill_rect(x,                 y_top + bar_h - 1,  bar_w, 1,             COLOR_TEXT);
+        fb_fill_rect(x,                 y_top,              1, bar_h,             COLOR_TEXT);
+        fb_fill_rect(x + bar_w - 1,     y_top,              1, bar_h,             COLOR_TEXT);
+    }
+}
+
 void display_tick(void)
 {
     if (sketch_picker_is_active()) {
         render_picker_screen();
+    } else if (s_volume_overlay_active) {
+        render_volume_overlay();
     } else {
         render_main_screen();
     }

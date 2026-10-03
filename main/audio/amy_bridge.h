@@ -87,6 +87,7 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
  * affected by the level change between trigger and playback; in
  * practice the 10 ms tick is fast enough that this is inaudible. */
 void amy_bridge_set_volume_level(uint8_t level);
+uint8_t amy_bridge_get_volume_level(void);  /* current level 0..5 */
 
 #ifdef __cplusplus
 }

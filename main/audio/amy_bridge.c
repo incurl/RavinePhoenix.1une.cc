@@ -72,6 +72,8 @@ void amy_bridge_set_volume_level(uint8_t level)
              level, volume_multiplier(level));
 }
 
+uint8_t amy_bridge_get_volume_level(void) { return s_volume_level; }
+
 /* ─── slot registry ─────────────────────────────────────────────── */
 static size_t slot_offset_bytes(uint8_t slot)
 {

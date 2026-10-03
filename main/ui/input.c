@@ -32,6 +32,7 @@
 #include "sequencer/sequencer.h"
 #include "sketch/sketch_picker.h"
 #include "ui/buttons.h"
+#include "ui/display.h"
 #include "ui/encoder.h"
 #include "ui/knobs.h"
 #include "ui/leds.h"
@@ -556,6 +557,11 @@ void input_drain(void)
                              (unsigned)step_1_to_16,
                              (unsigned)step_1_to_16);
                     amy_bridge_set_volume_level(step_1_to_16);
+                    /* F-022 display-half: flash the new level on the
+                     * TFT for ~1.2 s so the user gets feedback about
+                     * which level was just set, even though they can't
+                     * hear the difference (1 unit step -> ~5% gain). */
+                    display_show_volume_level(step_1_to_16);
                     continue;
                 }
                 /* Step 6..16 while BPM held: no-op. The PO-33

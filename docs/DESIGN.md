@@ -463,7 +463,7 @@ See §4 below for the per-effect deep dive.
 - **PO-33 button combo:** Hold BPM + 1–5.
 - **Our hardware combo:** Hold BPM + step 1–5 → `amy_bridge_set_volume_level(N)`. The level is stored as 0..5 (5 = max, 0 = silent). AMY's public API does not expose a master gain, so the multiplier is applied per-note inside `amy_bridge_play_note()`: `velocity_out = (velocity_in / 127) * volume_multiplier(level)`. Multiplier curve: 0/0.25/0.5/0.75/0.9/1.0 (slightly compressed at the top end to avoid the perceptual jump between levels 4 and 5).
 - **Code location:** `main/audio/amy_bridge.{c,h}` → `amy_bridge_set_volume_level(uint8_t)` + static `s_volume_level` + `volume_multiplier()`. The multiplier is applied inside `amy_bridge_play_note()`. `main/ui/input.c` → BPM-held + step 1–5 branch in `input_drain()` (routes BEFORE the modifier lookup because BPM isn't in the press-bound `s_modifiers[]` table; its mode is polled).
-- **Status:** ✅ done. Note: the PO-33 also uses BPM tap alone (with no step) to *display* the current volume level — "press bpm (handle); numbers are lit until the current level" (audit item 26). That display-half lives in `display.c` and is queued for v2; the *set*-half is wired here.
+- **Status:** ✅ done. **Display-half:** after the user holds BPM + step 1..5 to set the volume, the TFT briefly shows a 5-bar "level meter" centred at y=120 (green bars 1..N, yellow bar at the maximum level). The overlay persists for ~1.2 s and then auto-clears back to the main screen (`main/ui/display.c` `display_show_volume_level()` + `render_volume_overlay()`, deadline-driven from `display_tick()`; no separate timer task). The overlay is **also** armed when `display_show_volume_level()` is called with the current level, so a future "press BPM to display volume" wiring (the audit item 26 mention in §7) can just call it directly. The PO-33 lit-buttons behaviour cannot be replicated 1:1 (we don't have lit buttons), but the level-bar overlay reads as the same intent.
 
 ### 3.8 Section 8 — Copy and delete
 
@@ -1035,14 +1035,14 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 4. Tweaking (tone / filter / trim) | 4 | 0 | 3 | 1 |
 | 5. Effects (16 punch-ins) | 16 | 3 | 6 | 7 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
-| 7. Volume | 1 | 0 | 0 | 1 |
+| 7. Volume | 1 | 1 | 0 | 0 |
 | 8. Copy + delete | 5 | 0 | 0 | 5 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 1 | 0 | 2 |
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 1 | 0 | 1 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **14 (28%)** | **14 (28%)** | **22 (44%)** |
+| **Total** | **~50** | **15 (30%)** | **14 (28%)** | **21 (42%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
