@@ -348,6 +348,37 @@ bool amy_bridge_is_recording(void)
     return s_rec_slot >= 0;
 }
 
+void amy_bridge_clear_slot(uint8_t slot)
+{
+    /* F-026. Refuse to clobber a slot that is currently being
+     * recorded -- that would race the I²S capture path. */
+    if (s_rec_slot >= 0 && (uint8_t)s_rec_slot == slot) {
+        ESP_LOGW(TAG, "clear_slot(%u) refused: recording in progress", slot);
+        return;
+    }
+    if (slot >= SLOT_COUNT) return;
+    if (!s_slots[slot].in_use) return;   /* already empty: no-op */
+
+    /* Unregister from AMY so the next play_note(slot) falls back to
+     * ROM preset 0 again. pcm_unload_preset only frees the ~80-byte
+     * metadata block; sample_ram (which points into s_pool) is
+     * caller-owned and we zero it next. */
+    if (s_registered_mask & (1u << slot)) {
+        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + slot));
+        s_registered_mask &= ~(1u << slot);
+    }
+    /* Zero the slot's PSRAM region so subsequent recording doesn't
+     * pick up tail samples from the previous recording. */
+    int16_t *dst = s_pool + slot_offset_bytes(slot) / sizeof(int16_t);
+    memset(dst, 0, s_slots[slot].length_samples * sizeof(int16_t));
+    s_slots[slot].in_use         = false;
+    s_slots[slot].is_drum        = false;
+    s_slots[slot].length_samples = 0;
+    s_slots[slot].start          = 0;
+    s_slots[slot].end            = 0;
+    ESP_LOGI(TAG, "Slot %u cleared", slot);
+}
+
 void amy_bridge_pump_capture(void)
 {
     if (s_rec_slot < 0 || !s_rec_block) return;

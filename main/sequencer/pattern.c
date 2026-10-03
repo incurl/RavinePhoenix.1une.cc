@@ -26,6 +26,18 @@ void pattern_clear(pattern_t *p)
     }
 }
 
+void pattern_copy(uint8_t dst, uint8_t src)
+{
+    if (dst >= PATTERN_COUNT || src >= PATTERN_COUNT) return;
+    if (dst == src) return;
+    /* memcpy the whole struct including the 16-char name. The slot
+     * pointers aren't in the struct (they're in s_slots[slot] on the
+     * amy_bridge side); copying pattern_t copies step IDs, notes,
+     * velocities, effects, and the name only -- slot sample data
+     * stays in PSRAM. */
+    g_patterns[dst] = g_patterns[src];
+}
+
 void pattern_set_step(uint8_t pattern, uint8_t step, const step_t *s)
 {
     if (pattern >= PATTERN_COUNT || step >= STEPS_PER_PATTERN) return;

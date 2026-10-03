@@ -33,6 +33,12 @@ extern uint8_t   g_chain_len;
 
 void pattern_init_all(void);
 void pattern_clear(pattern_t *p);
+
+/* F-025: copy pattern `src` to pattern `dst` (deep copy of all 16
+ * steps + the 16-char name). The current active pattern index
+ * (`s_pattern` in sequencer.c) is left unchanged; the destination
+ * pattern just gets populated with the source's data. */
+void pattern_copy(uint8_t dst, uint8_t src);
 void pattern_set_step(uint8_t pattern, uint8_t step, const step_t *s);
 void pattern_get_step(uint8_t pattern, uint8_t step, step_t *out);
 

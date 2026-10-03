@@ -240,6 +240,25 @@ static void po33_shell_task(void *arg)
                 esp_err_t e = storage_factory_reset();
                 if (e == ESP_OK) printf("factory reset done; sketches wiped, samples preserved\n");
                 else            printf("factory reset failed: %s\n", esp_err_to_name(e));
+            } else if (strncmp(line, "pattern_copy ", 13) == 0) {
+                /* F-025 copy pattern <dst> <src> (0..15 each). */
+                unsigned d = 0, s = 0;
+                if (sscanf(line + 13, "%u %u", &d, &s) == 2
+                    && d < PATTERN_COUNT && s < PATTERN_COUNT) {
+                    pattern_copy((uint8_t)d, (uint8_t)s);
+                    printf("pattern %u <- %u\n", d, s);
+                } else {
+                    printf("usage: pattern_copy <dst 0..15> <src 0..15>\n");
+                }
+            } else if (strncmp(line, "slot_clear ", 11) == 0) {
+                /* F-026 clear slot <N> (sample + unregister from AMY). */
+                unsigned s = 0;
+                if (sscanf(line + 11, "%u", &s) == 1 && s < SLOT_COUNT) {
+                    amy_bridge_clear_slot((uint8_t)s);
+                    printf("slot %u cleared\n", s);
+                } else {
+                    printf("usage: slot_clear <slot 0..15>\n");
+                }
             } else if (strncmp(line, "clock_set_alarm ", 16) == 0) {
                 /* "clock_set_alarm <hh> <mm> <slot>" -- F-034 */
                 int hh = 0, mm = 0, slot = 0;

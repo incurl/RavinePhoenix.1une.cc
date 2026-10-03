@@ -491,26 +491,26 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §8 ("hold write + pattern and press 1-16 to paste the active pattern to the corresponding new slot")
 - **Layman:** Hold WRITE + PATTERN and the active pattern is copied to another pattern slot.
 - **PO-33 button combo:** WRITE + PATTERN + number.
-- **Our hardware combo:** Not yet.
-- **Code location:** Would call `memcpy(&g_patterns[dst], &g_patterns[src], sizeof(pattern_t))` in `main/sequencer/pattern.c`.
-- **Status:** ❌ missing.
+- **Our hardware combo:** UART only: `pattern_copy <dst 0..15> <src 0..15>` (e.g. `pattern_copy 9 5` to duplicate pattern 5 into slot 9). The WRITE+PATTERN+step button gesture is technically possible but adds another 3-button combo to a UI that's already juggling BPM+step, REC+PATTERN, REC+BPM, WRITE long-press for the picker, etc. Deferred to v2.
+- **Code location:** `main/sequencer/pattern.{c,h}` → `pattern_copy(uint8_t dst, uint8_t src)`. Deep-copy of the whole `pattern_t` (16 steps + name). Slot sample data is not affected.
+- **Status:** ✅ done (UART only). Button combo deferred.
 
 #### F-026 — Delete a sound
 
 - **Manual ref:** §8 ("delete sound: hold record + sound")
 - **Layman:** Hold RECORD + the slot's number and the slot is wiped empty.
 - **PO-33 button combo:** REC + slot number.
-- **Our hardware combo:** Not yet.
-- **Code location:** Would call `amy_bridge_clear_slot(uint8_t slot)` — sets `s_slots[slot].in_use = false` and zero-fills the data.
-- **Status:** ❌ missing.
+- **Our hardware combo:** UART only: `slot_clear <N>` (e.g. `slot_clear 3`). The REC + step long-press gesture is technically possible but the existing REC held+step path is wired to `amy_bridge_start_record()` (which is the REC-for-record semantic). Adding a long-press variant means refactoring the held-modifier dispatch to distinguish tap vs long-press, which is non-trivial. Deferred to v2.
+- **Code location:** `main/audio/amy_bridge.{c,h}` → `amy_bridge_clear_slot(uint8_t slot)`. Unregisters the preset from AMY, zeroes the sample data, and resets `s_slots[slot]` to empty. Refuses to clobber a slot that is currently being recorded (would race the I²S capture path).
+- **Status:** ✅ done (UART only). Button combo deferred.
 
 #### F-027 — Delete a pattern
 
 - **Manual ref:** §8 ("press record + pattern to clear the active pattern")
 - **Layman:** Hold REC + PATTERN and the current pattern is wiped.
 - **PO-33 button combo:** REC + PATTERN.
-- **Our hardware combo:** Same gap as F-012.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Same gesture as F-012 (clear active pattern). **Already implemented** as F-012 (commit `a0adddrc`); this F-ID is a duplicate of F-012 in the lode/PO-33 README.
+- **Status:** ✅ done (covered by F-012).
 
 ### 3.9 Section 9 — Data transfer
 
@@ -1038,13 +1038,13 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 5. Effects (16 punch-ins) | 16 | 7 | 6 | 3 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
 | 7. Volume | 1 | 1 | 0 | 0 |
-| 8. Copy + delete | 5 | 0 | 0 | 5 |
+| 8. Copy + delete | 5 | 3 | 0 | 2 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 1 | 1 | 1 |
 | 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 2 | 0 | 0 |
-| **Total** | **~50** | **25 (50%)** | **14 (28%)** | **11 (22%)** |
+| **Total** | **~50** | **27 (54%)** | **14 (28%)** | **9 (18%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

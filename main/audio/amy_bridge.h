@@ -68,6 +68,13 @@ void      amy_bridge_stop_record(void);
 bool      amy_bridge_is_recording(void);
 void      amy_bridge_pump_capture(void);    /* call from audio task */
 
+/* F-026: clear a slot's recording. Marks the slot as not-in-use,
+ * unregisters the preset from AMY (so playback falls back to ROM
+ * preset 0 again), and zeroes the sample data in s_pool. Safe to
+ * call on a slot that was never recorded (no-op). The slot is then
+ * available for re-recording. */
+void      amy_bridge_clear_slot(uint8_t slot);
+
 /* Note trigger from sequencer. */
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
