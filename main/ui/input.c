@@ -37,6 +37,7 @@
 #include "ui/encoder.h"
 #include "ui/knobs.h"
 #include "ui/leds.h"
+#include "storage/storage.h"
 
 static const char *TAG = "input";
 
@@ -234,6 +235,13 @@ static bool s_rec_prev_held = false;
  * both buttons were first detected as held together. Zero means
  * "not currently timing a combo". */
 static int64_t s_rec_pattern_combo_started_us = 0;
+
+/* F-037 REC + BPM factory-reset combo state. Same shape as
+ * s_rec_pattern_combo_started_us (F-012), but with a 5-second gate
+ * instead of BTN_LONG_PRESS_MS (600ms). The longer hold is
+ * intentional: factory reset is destructive and must not fire on
+ * casual contact. */
+static int64_t s_rec_bpm_combo_started_us = 0;
 
 /* ─── Write-mode (PO-33 F-009/F-010/F-011) state ──────────────── */
 
@@ -839,6 +847,32 @@ void input_drain(void)
     } else if (!both_held) {
         /* Reset state once both buttons are released. */
         s_rec_pattern_combo_started_us = 0;
+    }
+
+    /* F-037 REC + BPM long-press -> factory reset. Destructive:
+     * wipes the LittleFS partition and resets in-RAM pattern/chain
+     * state. 5-second hold (5x the F-012 600ms gate) is intentional;
+     * factory reset should never fire on a casual press. Latched
+     * the same way F-012 is (one fire per hold; release-and-re-press
+     * to fire again). */
+    bool bpm_now_held = buttons_is_pressed(BTN_BPM);
+    bool rec_bpm_held = rec_now_held && bpm_now_held;
+    if (rec_bpm_held && s_rec_bpm_combo_started_us == 0) {
+        s_rec_bpm_combo_started_us = esp_timer_get_time();
+    } else if (s_rec_bpm_combo_started_us > 0) {
+        int64_t elapsed_us = esp_timer_get_time() - s_rec_bpm_combo_started_us;
+        /* 5 seconds -- long enough that the user can't accidentally
+         * trip it by resting a hand on the buttons. */
+        if (elapsed_us >= 5LL * 1000 * 1000) {
+            ESP_LOGW(TAG, "REC + BPM held 5s -> FACTORY RESET");
+            esp_err_t e = storage_factory_reset();
+            if (e != ESP_OK) {
+                ESP_LOGE(TAG, "factory_reset failed: %s", esp_err_to_name(e));
+            }
+            s_rec_bpm_combo_started_us = -1;
+        }
+    } else if (!rec_bpm_held) {
+        s_rec_bpm_combo_started_us = 0;
     }
 
     /* Picker polling. Reads the encoder delta + click and routes

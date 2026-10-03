@@ -235,6 +235,11 @@ static void po33_shell_task(void *arg)
             } else if (strcmp(line, "chain clear") == 0) {
                 sequencer_chain_clear();
                 printf("chain cleared\n");
+            } else if (strcmp(line, "factory_reset") == 0) {
+                /* F-037: destructive. Caller types this consciously. */
+                esp_err_t e = storage_factory_reset();
+                if (e == ESP_OK) printf("factory reset done; sketches wiped, samples preserved\n");
+                else            printf("factory reset failed: %s\n", esp_err_to_name(e));
             } else if (strncmp(line, "clock_set_alarm ", 16) == 0) {
                 /* "clock_set_alarm <hh> <mm> <slot>" -- F-034 */
                 int hh = 0, mm = 0, slot = 0;

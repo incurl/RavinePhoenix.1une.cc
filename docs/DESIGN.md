@@ -605,10 +605,11 @@ See §4 below for the per-effect deep dive.
 
 - **Manual ref:** §13 ("hold pattern + insert batteries")
 - **Layman:** To wipe the device back to factory defaults, you power it off, hold PATTERN, and reinsert the batteries. Everything is erased.
-- **PO-33 button combo:** Power off → hold PATTERN → insert batteries.
-- **Our hardware combo:** UART: `storage_erase_all()` (not yet written). Mechanical deep-sleep wake cycles via the reset button are equivalent.
-- **Code location:** Needs `storage_erase_all()` in `main/storage/storage.c`.
-- **Status:** ⚠️ partial. Code path exists conceptually; no UI button combo.
+- **PO-33 button combo:** Power off → hold PATTERN → insert batteries. (Our firmware has no "battery" identity; deep-sleep wake is the PO-33's button-insert equivalent.)
+- **Our hardware combo:** **Hold REC + BPM for 5 seconds.** Long-press deliberately 5 seconds (vs. 600 ms for F-012) because factory reset is destructive and irreversible; the long hold prevents accidental trips. Latched the same way as F-012 (one fire per hold; release-and-re-press to fire again). Samples in PSRAM are NOT wiped -- the PO-33 doesn't wipe recordings on factory reset either; only saved patterns/chain/sketches on flash are.
+- **UART:** `factory_reset` verb -- for tests and headless use.
+- **Code location:** `main/storage/storage.{c,h}` → `storage_factory_reset()` (calls `esp_littlefs_format()` then `pattern_init_all()`). `main/ui/input.c` → REC+BPM gesture detector in the end-of-drain polling block (5 s gate). `main/main.c` → UART verb.
+- **Status:** ✅ done. The user is expected to know the gesture (5 s hold); no on-screen warning is shown. If the picker UI is open, it will display stale active-state until the user exits and re-enters -- acceptable; the picker is not common during a reset.
 
 #### F-038 — Show active sounds and patterns
 
@@ -1042,8 +1043,8 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 10. Sync | 3 | 1 | 1 | 1 |
 | 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
-| 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **24 (48%)** | **14 (28%)** | **12 (24%)** |
+| 13. Factory reset + UI | 2 | 2 | 0 | 0 |
+| **Total** | **~50** | **25 (50%)** | **14 (28%)** | **11 (22%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

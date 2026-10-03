@@ -33,6 +33,13 @@ esp_err_t storage_load_all(void);
 esp_err_t storage_save_pattern(uint8_t idx);
 esp_err_t storage_load_pattern(uint8_t idx);
 
+/* F-037 factory reset: wipe the sketches partition (every saved
+ * pattern, the chain, and all sketch directories) and reset the
+ * in-RAM pattern/chain state to defaults. Samples in PSRAM are
+ * preserved. Caller is responsible for gating (UI gesture, warning
+ * before invocation, etc.) -- this is destructive and irreversible. */
+esp_err_t storage_factory_reset(void);
+
 /* Multi-sketch (v2) APIs. */
 #define SKETCH_ID_LEN   4      /* "0000"..SKETCH_ID_MAX */
 #define SKETCH_NAME_LEN  SKETCH_NAME_MAX  /* alias — name is now the

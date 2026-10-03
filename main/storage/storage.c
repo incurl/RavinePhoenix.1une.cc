@@ -46,6 +46,39 @@ esp_err_t storage_mount(void)
     return ESP_OK;
 }
 
+esp_err_t storage_factory_reset(void)
+{
+    /* F-037: wipe the sketches partition and re-initialise in-RAM
+     * state to defaults. Destructive -- caller is responsible for
+     * gating the gesture (3-second hold of REC + BPM, see main.c /
+     * ui/input.c) and printing a warning before invoking.
+     *
+     * 1. Format the LittleFS partition (deletes every file under
+     *    /sketches/ including all saved patterns, the chain, and
+     *    every sketch directory).
+     * 2. Re-init the in-RAM pattern/chain state via pattern_init_all().
+     *    Samples live in PSRAM only (storage_init docs) and are NOT
+     *    wiped -- the user keeps their recordings. This matches the
+     *    PO-33 factory-reset semantics ("erase everything in the
+     *    song chain; samples are unchanged").
+     * 3. The sketch Picker UI may be open; storage_factory_reset()
+     *    doesn't touch it. Caller should close the picker if open
+     *    before invoking, or accept the stale-active-state UI. */
+    if (!s_sketches_fs) {
+        ESP_LOGE(TAG, "factory_reset: not initialised");
+        return ESP_ERR_INVALID_STATE;
+    }
+    esp_err_t e = esp_littlefs_format(s_sketches_fs);
+    if (e != ESP_OK) {
+        ESP_LOGE(TAG, "factory_reset: format failed %s", esp_err_to_name(e));
+        return e;
+    }
+    pattern_init_all();
+    ESP_LOGW(TAG, "factory_reset: sketches partition formatted; "
+                  "in-RAM patterns/chain reset to defaults");
+    return ESP_OK;
+}
+
 esp_err_t storage_save_pattern(uint8_t idx)
 {
     if (idx >= PATTERN_COUNT) return ESP_ERR_INVALID_ARG;
