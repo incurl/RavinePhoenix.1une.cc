@@ -425,7 +425,7 @@ See §4 below for the per-effect deep dive.
 
   **Where swing actually lives:** BPM-held + Knob A. Not a step press at all. See F-020.
 - **Code location:** `main/ui/input.c` → `s_modifiers[]` entry `{BTN_FX, fx_on_step}`; `fx_on_step()` step 1..15 maps to `PO33_FX_LOOP_16 + (step - 1)`, step 16 sets `PO33_FX_NONE`. `main/sequencer/sequencer.{c,h}` → `sequencer_set_active_fx()`, `sequencer_get_active_fx()`, and `on_step()` reads `s_active_fx` as the fallback when the step's per-step effect is `PO33_FX_NONE`. `main/audio/amy_bridge.{c,h}` → `po33_fx_t`, `apply_fx()`.
-- **Status:** ✅ done. Step 1..15 selects punch-ins; step 16 = "no effect" (no swing).
+- **Status:** ✅ done. Step 1..15 selects punch-ins; step 16 = "no effect" (no swing). **Save-in-pattern:** when write mode is active, FX + step N also bakes the chosen FX into the per-step `effect` field of every bound step of the active pattern (`sequencer_save_fx_to_pattern()` in `main/sequencer/sequencer.c`, called from `fx_on_step` in `main/ui/input.c`). Outside write mode, FX+step is a one-shot (sets `s_active_fx`, leaves per-step data untouched). PO-33's write-mode gating is preserved. p1/p2 are left at 0; per-step parameter tuning (the v2 "step FX is FX p1=knobA p2=knobB" form) is not yet wired.
 
 ### 3.6 Section 6 — BPM and tempo
 

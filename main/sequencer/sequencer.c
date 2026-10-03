@@ -217,6 +217,24 @@ void sequencer_request_retrigger(void)
     s_retrigger_requested = true;
 }
 
+void sequencer_save_fx_to_pattern(uint8_t fx, uint8_t p1, uint8_t p2)
+{
+    /* F-019 "save effect in pattern". Set the per-step effect on every
+     * step of the active pattern that has a slot bound. */
+    int saved = 0;
+    for (uint8_t s = 0; s < STEPS_PER_PATTERN; s++) {
+        if (g_patterns[s_pattern].steps[s].slot_id != 0xFF) {
+            g_patterns[s_pattern].steps[s].effect    = fx;
+            g_patterns[s_pattern].steps[s].effect_p1 = p1;
+            g_patterns[s_pattern].steps[s].effect_p2 = p2;
+            saved++;
+        }
+    }
+    ESP_LOGI(TAG, "saved fx=%u (p1=%u p2=%u) to %d steps of pattern %u",
+             (unsigned)fx, (unsigned)p1, (unsigned)p2,
+             saved, (unsigned)s_pattern);
+}
+
 uint16_t sequencer_get_bpm(void)         { return s_bpm; }
 uint8_t  sequencer_get_current_step(void){ return s_step; }
 uint8_t  sequencer_get_current_pattern(void){ return s_pattern; }

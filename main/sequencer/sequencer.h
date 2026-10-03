@@ -66,6 +66,13 @@ void sequencer_clear_current_pattern(void);
  * sets a flag the sequencer's on_step() callback consumes. */
 void sequencer_request_retrigger(void);
 
+/* F-019 "save effect in pattern": set the per-step `effect` field
+ * on every step of the active pattern that has a slot bound.
+ * Steps without a slot (slot_id == 0xFF) are left untouched so empty
+ * steps stay empty. p1/p2 are the FX parameter bytes from the
+ * PO-33 punch-in table. fx == PO33_FX_NONE means "no effect". */
+void sequencer_save_fx_to_pattern(uint8_t fx, uint8_t p1, uint8_t p2);
+
 /* Pattern building helpers */
 void sequencer_set_step_slot(uint8_t pattern, uint8_t step,
                              uint8_t slot, uint8_t note);

@@ -302,9 +302,24 @@ static void fx_on_step(uint8_t step_1_to_16)
     if (step_1_to_16 >= 1 && step_1_to_16 <= 15) {
         uint8_t fx = (uint8_t)(PO33_FX_LOOP_16 + (step_1_to_16 - 1));
         sequencer_set_active_fx(fx);
+        /* F-019 "save effect in pattern": PO-33 only bakes the FX
+         * into per-step data when write mode is active. Without write
+         * mode, FX+step is a one-shot (subsequent notes use the new
+         * active FX, but per-step effects already in the pattern are
+         * unchanged). With write mode, also save the FX to every
+         * bound step of the active pattern.
+         * p1/p2 left at 0 here; per-step parameter tuning lives in
+         * v2 (no UI binding for p1/p2 in v1). */
+        if (write_mode_is_active()) {
+            sequencer_save_fx_to_pattern(fx, 0, 0);
+        }
     } else {
-        /* step 16 = "no effect". Clear active FX. */
+        /* step 16 = "no effect". Clear active FX; with write mode
+         * also clear per-step effects across the pattern. */
         sequencer_set_active_fx((uint8_t)PO33_FX_NONE);
+        if (write_mode_is_active()) {
+            sequencer_save_fx_to_pattern((uint8_t)PO33_FX_NONE, 0, 0);
+        }
     }
 }
 
