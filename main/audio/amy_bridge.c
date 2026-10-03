@@ -94,6 +94,11 @@ size_t amy_bridge_slot_len_samples(uint8_t slot)
     return s_slots[slot].length_samples;
 }
 
+bool amy_bridge_slot_has_sample(uint8_t slot)
+{
+    return amy_bridge_slot_len_samples(slot) > 0;
+}
+
 size_t amy_bridge_slot_max_bytes(uint8_t slot)
 {
     if (slot >= SLOT_COUNT) return 0;

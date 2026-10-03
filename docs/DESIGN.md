@@ -616,7 +616,7 @@ See §4 below for the per-effect deep dive.
 - **PO-33 button combo:** Press SOUND or PATTERN.
 - **Our hardware combo:** We don't have lit buttons (the buttons on a stock 4×4 matrix keypad are not illuminated). The TFT does show the same information — which slots are filled, which is selected — on the Sound select UI page (proposed in §6).
 - **Code location:** `main/ui/display.c` would render the per-slot filled/empty/selected icons.
-- **Status:** ⚠️ partial. Data is in `s_slots[]`; rendering is missing.
+- **Status:** ✅ done. The TFT now renders a per-slot row and a per-pattern row in the main screen (16 dots each, lit = white, unlit = dim grey, currently selected = red with a yellow border — `main/ui/display.c` `render_active_state_panel()`, called from `render_main_screen()` after the existing STEP label). Slot fill = `amy_bridge_slot_has_sample()`; pattern fill = scan `g_patterns[p].steps[s].slot_id != 0xFF`. Because the panel is always visible on the main screen (not toggled by SOUND/PATTERN taps, which have other bindings), no new button combos are needed.
 
 ---
 
@@ -1041,8 +1041,8 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 10. Sync | 3 | 1 | 0 | 2 |
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 1 | 0 | 1 |
-| 13. Factory reset + UI | 2 | 0 | 1 | 1 |
-| **Total** | **~50** | **13 (26%)** | **15 (30%)** | **22 (44%)** |
+| 13. Factory reset + UI | 2 | 1 | 0 | 1 |
+| **Total** | **~50** | **14 (28%)** | **14 (28%)** | **22 (44%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

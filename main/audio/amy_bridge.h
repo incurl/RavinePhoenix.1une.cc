@@ -17,6 +17,7 @@
 
 #include "esp_err.h"
 #include <stdint.h>
+#include <stdbool.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -57,6 +58,7 @@ esp_err_t amy_bridge_register_slot(uint8_t slot, const int16_t *data,
 const    int16_t *amy_bridge_slot_ptr(uint8_t slot);
 size_t   amy_bridge_slot_len_samples(uint8_t slot);
 size_t   amy_bridge_slot_max_bytes(uint8_t slot);
+bool     amy_bridge_slot_has_sample(uint8_t slot);  /* true iff slot has a recording (>0 samples) */
 esp_err_t amy_bridge_set_trim(uint8_t slot, uint32_t start, uint32_t end);
 
 /* Recording (mic → PSRAM). `rec_buf` should point at the active slot's PSRAM

@@ -5,6 +5,8 @@
 #include "display.h"
 #include "config.h"
 #include "sequencer/sequencer.h"
+#include "sequencer/pattern.h"
+#include "audio/amy_bridge.h"
 #include "sketch/sketch_picker.h"
 #include "system/clock.h"
 #include "ui/input.h"
@@ -186,6 +188,84 @@ static char s_buf[64];
 #define COLOR_HIGHLIGHT_BG    0xF800   /* red */
 #define COLOR_SLOT_EMPTY      0x4208   /* dark grey */
 
+/* PO-33 F-038 panel: shows the per-slot and per-pattern active-state
+ * the same way the real PO-33 shows it via its lit step buttons.
+ *
+ *  - "lit"   (slot/pattern has data)         -> white filled square
+ *  - "unlit" (slot/pattern is empty)         -> dim grey filled square
+ *  - "flashing / currently selected"         -> red filled square with
+ *                                               a yellow border (the
+ *                                               "active" highlight color
+ *                                               is the same red used by
+ *                                               the step cursor above)
+ *
+ * 16 dots per row, 6x6 px each, 4-px gap. Total row width:
+ *   16 * 6 + 15 * 4 = 156 px. Centered on a 240-px screen: x = 42.
+ *
+ * Pattern fill = "at least one step has a non-FF slot_id". Cheap O(N*M)
+ * scan; runs once per display_tick (~30 Hz) on 16x16 = 256 step
+ * checks, negligible. */
+static void render_active_state_panel(void)
+{
+    static const int dot_w   = 6;
+    static const int dot_h   = 6;
+    static const int gap     = 4;
+    static const int row_w   = SLOT_COUNT * dot_w + (SLOT_COUNT - 1) * gap;
+    static const int row_x0  = (TFT_WIDTH - row_w) / 2;
+    static const int row_y0  = 130;   /* SND row */
+    static const int row_y1  = 158;   /* PAT row */
+
+    fb_draw_text(4, row_y0 - 2, "SND", COLOR_TEXT_DIM);
+    fb_draw_text(4, row_y1 - 2, "PAT", COLOR_TEXT_DIM);
+
+    const uint8_t active_slot = sequencer_get_active_slot();
+    const uint8_t active_pat  = sequencer_get_current_pattern();
+
+    for (uint8_t i = 0; i < SLOT_COUNT; i++) {
+        int x = row_x0 + i * (dot_w + gap);
+        bool filled = amy_bridge_slot_has_sample(i);
+        bool active = (i == active_slot);
+        uint16_t fill_color =
+            active ? COLOR_HIGHLIGHT_BG :
+            filled ? COLOR_TEXT :
+                     COLOR_SLOT_EMPTY;
+        fb_fill_rect(x, row_y0, dot_w, dot_h, fill_color);
+        if (active) {
+            /* Yellow 1-px border so the "currently selected" indicator
+             * reads as flashing even when the dot is otherwise the
+             * same red as the step cursor. Inset by 1 px so the border
+             * sits on the outside of the fill. */
+            fb_fill_rect(x - 1,             row_y0 - 1,            dot_w + 2, 1, 0xFFE0);
+            fb_fill_rect(x - 1,             row_y0 + dot_h,        dot_w + 2, 1, 0xFFE0);
+            fb_fill_rect(x - 1,             row_y0,                1, dot_h, 0xFFE0);
+            fb_fill_rect(x + dot_w,         row_y0,                1, dot_h, 0xFFE0);
+        }
+    }
+
+    for (uint8_t p = 0; p < PATTERN_COUNT; p++) {
+        int x = row_x0 + p * (dot_w + gap);
+        bool filled = false;
+        for (uint8_t s = 0; s < STEPS_PER_PATTERN; s++) {
+            if (g_patterns[p].steps[s].slot_id != 0xFF) {
+                filled = true;
+                break;
+            }
+        }
+        bool active = (p == active_pat);
+        uint16_t fill_color =
+            active ? COLOR_HIGHLIGHT_BG :
+            filled ? COLOR_TEXT :
+                     COLOR_SLOT_EMPTY;
+        fb_fill_rect(x, row_y1, dot_w, dot_h, fill_color);
+        if (active) {
+            fb_fill_rect(x - 1,             row_y1 - 1,            dot_w + 2, 1, 0xFFE0);
+            fb_fill_rect(x - 1,             row_y1 + dot_h,        dot_w + 2, 1, 0xFFE0);
+            fb_fill_rect(x - 1,             row_y1,                1, dot_h, 0xFFE0);
+            fb_fill_rect(x + dot_w,         row_y1,                1, dot_h, 0xFFE0);
+        }
+    }
+}
+
 static void render_main_screen(void)
 {
     fb_fill_rect(0, 0, TFT_WIDTH, TFT_HEIGHT, COLOR_BG);
@@ -237,6 +317,9 @@ static void render_main_screen(void)
 
     snprintf(s_buf, sizeof(s_buf), "STEP %02u", step);
     fb_draw_text(8, 100, s_buf, 0x07FF);
+
+    /* F-038: per-slot and per-pattern active-state panel. */
+    render_active_state_panel();
 }
 
 /* Sketch picker screen. Renders a top bar with "SKETCHES N / 16" + a
