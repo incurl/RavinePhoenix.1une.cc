@@ -47,12 +47,14 @@ tweak_mode_t tweak_get_mode(void);
  * per-step note in place. No-op for Trim mode (which has no per-step
  * representation). Knob A maps to: Tone -> note (MIDI 0..127),
  * Filter -> filter_cutoff (0..255). Knob B maps to: Tone ->
- * velocity (0..127), Filter -> resonance -- but resonance has no
- * per-step field in step_t, so v1 leaves resonance as a no-op (the
- * knob reading is logged but not applied). v2 adds a `resonance`
- * field to step_t. */
+ * velocity (0..127), Filter -> filter_resonance (0..255).
+ *
+ * Both filter outputs are per-step fields (step_t.filter_cutoff,
+ * step_t.filter_resonance), populated by the caller before invoking
+ * amy_bridge_play_note(). The audio layer maps them onto the AMY
+ * filter (filter_freq / filter_resonance) in amy_bridge.c. */
 void tweak_apply_step(uint8_t *note, uint8_t *velocity,
-                      uint8_t *filter_cutoff);
+                      uint8_t *filter_cutoff, uint8_t *filter_resonance);
 
 /* Apply the current tweak-mode binding (Trim) to the active slot.
  * No-op for Tone and Filter modes (the caller can call this

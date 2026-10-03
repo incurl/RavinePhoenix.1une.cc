@@ -191,7 +191,8 @@ static void on_swing_fire(void *arg)
     n.fx       = s_pending_note.fx;
     s_pending  = false;
     if (n.slot != 0xFF) {
-        amy_bridge_play_note(n.slot, n.note, n.velocity, n.fx, 0, 0);
+        amy_bridge_play_note(n.slot, n.note, n.velocity, n.fx, 0, 0,
+                             0, 0);
     }
 }
 
@@ -229,19 +230,21 @@ static void on_step(void *arg)
     bool defer       = is_offbeat && (s_swing > 0) && (slot != 0xFF);
 
     /* Tweak-mode override: in Tone or Filter mode, the per-step note /
-     * velocity / filter_cutoff are replaced by the current knob
-     * readings. This is the PO-33 "select tweak parameter, turn
-     * knobs" idiom (F-016 / F-017). Trim mode is per-slot (handled
-     * by tweak_apply_slot() in play_active_slot), not per-step, so
-     * we don't apply it here. */
+     * velocity / filter_cutoff / filter_resonance are replaced by the
+     * current knob readings. This is the PO-33 "select tweak
+     * parameter, turn knobs" idiom (F-016 / F-017). Trim mode is
+     * per-slot (handled by tweak_apply_slot() in play_active_slot),
+     * not per-step, so we don't apply it here. */
     if (slot != 0xFF) {
-        tweak_apply_step(&s.note, &s.velocity, &s.filter_cutoff);
+        tweak_apply_step(&s.note, &s.velocity,
+                         &s.filter_cutoff, &s.filter_resonance);
     }
 
     if (!defer) {
         if (slot != 0xFF) {
             amy_bridge_play_note(slot, s.note, s.velocity,
-                                 fx, s.effect_p1, s.effect_p2);
+                                 fx, s.effect_p1, s.effect_p2,
+                                 s.filter_cutoff, s.filter_resonance);
         }
     } else {
         /* Cancel any previous swing note that hasn't fired yet (e.g.
@@ -263,7 +266,8 @@ static void on_step(void *arg)
              * collapsed to zero — play immediately. */
             s_pending = false;
             amy_bridge_play_note(slot, s.note, s.velocity,
-                                 fx, s.effect_p1, s.effect_p2);
+                                 fx, s.effect_p1, s.effect_p2,
+                                 s.filter_cutoff, s.filter_resonance);
         }
     }
 

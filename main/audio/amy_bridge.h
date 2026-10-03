@@ -71,7 +71,8 @@ void      amy_bridge_pump_capture(void);    /* call from audio task */
 /* Note trigger from sequencer. */
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
-                              po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2);
+                              po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2,
+                              uint8_t filter_cutoff, uint8_t filter_resonance);
 
 /* Master volume level (PO-33 F-022: hold BPM + 1..5 sets the level).
  * Level 0 (silent) is also accepted. Internally scales the velocity

@@ -13,6 +13,8 @@ typedef struct {
     uint8_t  note;           /* 0..127, 60 = middle C */
     uint8_t  velocity;       /* 0..127 */
     uint8_t  filter_cutoff;  /* 0..255 */
+    uint8_t  filter_resonance; /* 0..255 (F-017). 0 = no resonance,
+                                * ~128 = moderate resonance, 255 = max. */
     uint8_t  effect;         /* effect_id_t */
     uint8_t  effect_p1;
     uint8_t  effect_p2;

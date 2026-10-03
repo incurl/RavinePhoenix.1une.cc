@@ -421,7 +421,7 @@ static uint8_t knob_a_to_midi_note(uint8_t k) {
 }
 
 void tweak_apply_step(uint8_t *note, uint8_t *velocity,
-                      uint8_t *filter_cutoff)
+                      uint8_t *filter_cutoff, uint8_t *filter_resonance)
 {
     switch (s_tweak_mode) {
     case TWEAK_TONE:
@@ -430,11 +430,11 @@ void tweak_apply_step(uint8_t *note, uint8_t *velocity,
         *velocity    = (uint8_t)((uint32_t)knobs_get_b() * 127 / 255);
         break;
     case TWEAK_FILTER:
-        /* Knob A -> filter cutoff. Knob B -> resonance (no per-step
-         * field in step_t; logged for visibility, v2 adds the field). */
-        *filter_cutoff = knobs_get_a();
-        ESP_LOGI(TAG, "tweak FILTER: cutoff=%u resonance=%u (resonance TODO)",
-                 knobs_get_a(), knobs_get_b());
+        /* Knob A -> filter cutoff (0..255). Knob B -> filter
+         * resonance (0..255). Both are mapped onto the AMY filter
+         * by amy_bridge_play_note(); see amy_bridge.c. */
+        *filter_cutoff   = knobs_get_a();
+        *filter_resonance = knobs_get_b();
         break;
     case TWEAK_TRIM:
         /* No-op for in-pattern tweaking (no per-step trim data). */
@@ -480,11 +480,11 @@ static void play_active_slot(void)
         tweak_apply_slot(slot);
         return;
     }
-    uint8_t note = 60, velocity = 100, filter_cutoff = 0;
-    tweak_apply_step(&note, &velocity, &filter_cutoff);
-    (void)filter_cutoff;  /* play_note API doesn't take filter_cutoff yet */
+    uint8_t note = 60, velocity = 100, filter_cutoff = 0, filter_resonance = 0;
+    tweak_apply_step(&note, &velocity, &filter_cutoff, &filter_resonance);
     amy_bridge_play_note(slot, note, velocity,
-                         (po33_fx_t)sequencer_get_active_fx(), 0, 0);
+                         (po33_fx_t)sequencer_get_active_fx(), 0, 0,
+                         filter_cutoff, filter_resonance);
 }
 
 /* Find the first press-bound modifier currently being held, or NULL.

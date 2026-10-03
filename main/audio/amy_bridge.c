@@ -306,7 +306,8 @@ static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2)
 
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
-                              po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2)
+                              po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2,
+                              uint8_t filter_cutoff, uint8_t filter_resonance)
 {
     if (slot >= SLOT_COUNT) return ESP_ERR_INVALID_ARG;
     bool use_sampler = s_slots[slot].in_use;
@@ -324,6 +325,25 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
         e.synth = 1;
         e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : VOICE_COUNT;
         e.patch_number = 0;
+    }
+
+    /* Per-step filter (Tweak Filter mode, F-017). Set this BEFORE
+     * apply_fx() so that PO33_FX_FILTER_SWEEP -- which is an FX
+     * punch-in that explicitly wants to drive the filter -- can
+     * clobber it. Both filter_cutoff and filter_resonance default
+     * to 0 in the caller (play_active_slot / on_step / play_loop)
+     * when tweak mode is not FILTER; 0 means "no filter".
+     *
+     * Map knob units to AMY units:
+     *   cutoff 0..255 -> filter_freq 0..8000 Hz (linear; PO-33 sweep
+     *     audible range is roughly 200..6000 Hz, so 0 stays silent,
+     *     255 hits the top end of audibility)
+     *   resonance 0..255 -> filter_resonance 1.0..6.0 (1.0 = no
+     *     resonance, 6.0 = aggressive peak) */
+    if (filter_cutoff > 0) {
+        e.filter_freq     = (float)filter_cutoff * 8000.0f / 255.0f;
+        e.filter_resonance = 1.0f + (float)filter_resonance / 51.0f;
+        e.filter_type     = FILTER_LPF;
     }
 
     apply_fx(&e, fx, fx_p1, fx_p2);

@@ -394,7 +394,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **PO-33 button combo:** Turn knobs.
 - **Our hardware combo:** Same knob GPIOs (A = GPIO 2, B = GPIO 46). The filter data field is `step_t.filter_cutoff` (0–255); v1 firmware maps a low-pass sweep into `amy_event.filter_freq` via the existing `PO33_FX_FILTER_SWEEP` effect.
 - **Code location:** `step_t.filter_cutoff`; `main/audio/amy_bridge.c` → `apply_fx()` → `PO33_FX_FILTER_SWEEP` sets `e->filter_type = FILTER_LPF` and `e->filter_freq`. `main/ui/input.c` → `tweak_apply_step()` in `TWEAK_FILTER` mode reads `knobs_get_a()` → `filter_cutoff` (0..255). Resonance knob is logged but no per-step field exists yet; v2 adds a `resonance` field to `step_t`.
-- **Status:** ✅ done for cutoff (knob A). Resonance (knob B) queued for v2.
+- **Status:** ✅ done. Both knobs are wired through to audio: `step_t.filter_resonance` (new field, 0..255) carries the knob B value alongside the existing `step_t.filter_cutoff`, and `amy_bridge_play_note()` maps them onto AMY's `filter_freq` and `filter_resonance` fields whenever `filter_cutoff > 0`. `PO33_FX_FILTER_SWEEP` continues to clobber the per-step filter (it's a punch-in effect that explicitly drives the filter). Mapping: cutoff 0..255 → `filter_freq` 0..8000 Hz; resonance 0..255 → `filter_resonance` 1.0..6.0. The per-step data is persisted in LittleFS via `sizeof(pattern_t)`; adding the field shifts the on-disk format — v1 has no shipped firmware, so existing flash contents are not preserved.
 
 #### F-018 — Tweak Trim (Knob A = start point, Knob B = length)
 
@@ -1032,7 +1032,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 1. Sounds (record / mic / line-in) | 5 | 3 | 1 | 1 |
 | 2. Patterns (write mode) | 7 | 3 | 2 | 2 |
 | 3. Songs (chain) | 2 | 0 | 1 | 1 |
-| 4. Tweaking (tone / filter / trim) | 4 | 0 | 3 | 1 |
+| 4. Tweaking (tone / filter / trim) | 4 | 1 | 2 | 1 |
 | 5. Effects (16 punch-ins) | 16 | 3 | 6 | 7 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
 | 7. Volume | 1 | 1 | 0 | 0 |
@@ -1042,7 +1042,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 1 | 0 | 1 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **15 (30%)** | **14 (28%)** | **21 (42%)** |
+| **Total** | **~50** | **16 (32%)** | **13 (26%)** | **21 (42%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

@@ -34,7 +34,7 @@ TEST_CASE("register and trigger a slot", "[amy]")
     TEST_ASSERT_EQUAL(ESP_OK, e);
     TEST_ASSERT_EQUAL_size_t(n, amy_bridge_slot_len_samples(8));
 
-    e = amy_bridge_play_note(8, 60, 100, PO33_FX_NONE, 0, 0);
+    e = amy_bridge_play_note(8, 60, 100, PO33_FX_NONE, 0, 0, 0, 0);
     TEST_ASSERT_EQUAL(ESP_OK, e);
 
     /* AMY's bridge should still report no OOM after a single note. */
