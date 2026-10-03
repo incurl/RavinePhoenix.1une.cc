@@ -159,6 +159,7 @@ target_compile_definitions(amy PRIVATE
 ## 📚 Documentation
 
 - **[`docs/DESIGN.md`](docs/DESIGN.md)** — feature-to-implementation map (~16 000 words). What the firmware does, how every PO-33 feature maps to code, the honest ✅ / ⚠️ / ❌ scorecard, and how the ESP32-S3 can break the PO-33's limits.
+- **[`docs/TIER_A_SUMMARY.md`](docs/TIER_A_SUMMARY.md)** — handoff doc for the 13 Tier A features (9 commits, scorecard 30% → 46%). Includes the AMY patch description, memory budget, build-verification checklist, and the explicit v1-out-of-scope list.
 - **[`hardware/HARDWARE.md`](hardware/HARDWARE.md)** — beginner build guide (~5 600 words). Bill of materials, pin map, 10-step build order, troubleshooting, and the no-solder alternative.
 - **[`hardware/README.md`](hardware/README.md)** — conventions for the `hardware/` folder (where future schematic / PCB / enclosure files go).
 
