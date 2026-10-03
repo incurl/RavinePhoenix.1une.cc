@@ -28,6 +28,15 @@ void sequencer_chain_clear(void);
  * Cheap O(N) sweep over the chain buffer. */
 void sequencer_chain_remove(uint8_t pattern);
 
+/* F-014: swap chain entries at indices i and j. Both must be in range
+ * (< sequencer_chain_len()). No-op if i == j. */
+void sequencer_chain_swap(uint8_t i, uint8_t j);
+
+/* F-014: insert `pattern` at index `at` in the chain (shifts later
+ * entries forward by one). `at` must be <= chain length; at==length
+ * appends. Refuses if the chain is full. */
+esp_err_t sequencer_chain_insert(uint8_t at, uint8_t pattern);
+
 /* F-014: number of chain entries currently pointing at `pattern`. */
 size_t sequencer_chain_count(uint8_t pattern);
 

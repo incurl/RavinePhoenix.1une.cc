@@ -207,6 +207,43 @@ uint8_t sequencer_chain_len(void)
     return g_chain_len;
 }
 
+void sequencer_chain_swap(uint8_t i, uint8_t j)
+{
+    if (i == j) return;
+    if (i >= g_chain_len || j >= g_chain_len) {
+        ESP_LOGW(TAG, "chain_swap: index out of range (i=%u j=%u len=%u)",
+                 (unsigned)i, (unsigned)j, (unsigned)g_chain_len);
+        return;
+    }
+    uint8_t tmp = g_chain[i];
+    g_chain[i] = g_chain[j];
+    g_chain[j] = tmp;
+    ESP_LOGI(TAG, "chain_swap: swap[%u]=%u with swap[%u]=%u",
+             (unsigned)i, (unsigned)g_chain[i],
+             (unsigned)j, (unsigned)g_chain[j]);
+}
+
+esp_err_t sequencer_chain_insert(uint8_t at, uint8_t pattern)
+{
+    if (at > g_chain_len) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (g_chain_len >= PATTERN_CHAIN_MAX) {
+        ESP_LOGE(TAG, "chain_insert: chain full (%u)",
+                 (unsigned)g_chain_len);
+        return ESP_ERR_NO_MEM;
+    }
+    /* Shift entries at [at..len-1] forward by one. */
+    for (size_t r = g_chain_len; r > at; r--) {
+        g_chain[r] = g_chain[r - 1];
+    }
+    g_chain[at] = pattern;
+    g_chain_len++;
+    ESP_LOGI(TAG, "chain_insert: insert pattern %u at %u (len now %u)",
+             (unsigned)pattern, (unsigned)at, (unsigned)g_chain_len);
+    return ESP_OK;
+}
+
 void sequencer_clear_current_pattern(void)
 {
     /* F-012 (PO-33: "hold record + pattern to clear the active pattern").

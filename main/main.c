@@ -235,6 +235,27 @@ static void po33_shell_task(void *arg)
             } else if (strcmp(line, "chain clear") == 0) {
                 sequencer_chain_clear();
                 printf("chain cleared\n");
+            } else if (strncmp(line, "chain_swap ", 11) == 0) {
+                /* F-014: swap chain entries at indices i and j. */
+                unsigned i = 0, j = 0;
+                if (sscanf(line + 11, "%u %u", &i, &j) == 2) {
+                    sequencer_chain_swap((uint8_t)i, (uint8_t)j);
+                } else {
+                    printf("usage: chain_swap <i> <j>\n");
+                }
+            } else if (strncmp(line, "chain_insert ", 13) == 0) {
+                /* F-014: insert pattern N at index at (shifts later
+                 * entries forward). */
+                unsigned at = 0, p = 0;
+                if (sscanf(line + 13, "%u %u", &at, &p) == 2
+                    && p < PATTERN_COUNT) {
+                    esp_err_t e = sequencer_chain_insert((uint8_t)at, (uint8_t)p);
+                    if (e == ESP_OK) printf("chain insert %u at %u\n", p, at);
+                    else            printf("chain_insert failed: %s\n",
+                                            esp_err_to_name(e));
+                } else {
+                    printf("usage: chain_insert <at> <pattern 0..15>\n");
+                }
             } else if (strcmp(line, "factory_reset") == 0) {
                 /* F-037: destructive. Caller types this consciously. */
                 esp_err_t e = storage_factory_reset();

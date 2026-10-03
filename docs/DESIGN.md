@@ -361,9 +361,9 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §3
 - **Layman:** You can change the order of patterns in a chain by re-pressing them in a new sequence.
 - **PO-33 button combo:** Hold PATTERN + number. (The manual describes chain editing in terms of "re-add in new order"; we don't have a documented remove verb.)
-- **Our hardware combo:** Chain *remove* is wired via UART: `chain remove <pattern>` removes all occurrences of that pattern from the chain (compact-in-place, O(N)). `chain show` lists the chain contents. `chain clear` empties it. Reorder is implicit: clear + re-append in the new order. **No button combo for chain edit** because the existing PATTERN+step is "append"; there's no symmetric "remove" gesture that doesn't conflict.
-- **Code location:** `main/sequencer/sequencer.{c,h}` → `sequencer_chain_remove()`, `sequencer_chain_count()`, `sequencer_chain_at()`, `sequencer_chain_len()`. `main/main.c` → UART `chain show|remove|clear` verbs.
-- **Status:** ⚠️ partial. Remove works via UART. Reorder is "clear + re-append"; no in-place swap. Button combo deferred.
+- **Our hardware combo:** Chain editing is UART-only: `chain show`, `chain remove <pattern>`, `chain clear`, `chain swap <i> <j>`, `chain insert <at> <pattern>`. Together these give the user complete in-place chain editing: insert to add a missing entry, swap to fix a wrong order, remove to delete. **No button combo for chain edit** because the existing PATTERN+step is "append"; there's no symmetric "remove" gesture that doesn't conflict, and a "swap" gesture would be a 3+ button combo.
+- **Code location:** `main/sequencer/sequencer.{c,h}` → `sequencer_chain_remove()`, `sequencer_chain_count()`, `sequencer_chain_swap(i, j)`, `sequencer_chain_insert(at, pattern)`, `sequencer_chain_at()`, `sequencer_chain_len()`. `main/main.c` → UART `chain show|remove|clear|swap|insert` verbs.
+- **Status:** ✅ done (UART only). All chain editing is reachable via the `chain_*` UART verbs. Button combo deferred.
 
 ### 3.4 Section 4 — Tweaking (Tone / Filter / Trim)
 
@@ -1033,7 +1033,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 |---|---|---|---|---|
 | 1. Sounds (record / mic / line-in) | 5 | 3 | 1 | 1 |
 | 2. Patterns (write mode) | 7 | 4 | 2 | 1 |
-| 3. Songs (chain) | 2 | 1 | 1 | 0 |
+| 3. Songs (chain) | 2 | 2 | 0 | 0 |
 | 4. Tweaking (tone / filter / trim) | 4 | 1 | 2 | 1 |
 | 5. Effects (16 punch-ins) | 16 | 7 | 6 | 3 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
@@ -1044,7 +1044,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 2 | 0 | 0 |
-| **Total** | **~50** | **28 (56%)** | **14 (28%)** | **8 (16%)** |
+| **Total** | **~50** | **29 (58%)** | **13 (26%)** | **8 (16%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
