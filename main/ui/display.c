@@ -7,6 +7,7 @@
 #include "sequencer/sequencer.h"
 #include "sketch/sketch_picker.h"
 #include "system/clock.h"
+#include "ui/input.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "driver/spi_master.h"
@@ -205,6 +206,20 @@ static void render_main_screen(void)
 
     snprintf(s_buf, sizeof(s_buf), "BPM %u", sequencer_get_bpm());
     fb_draw_text(80, 4, s_buf, COLOR_STATUS_BAR_FG);
+
+    /* Tweak-mode indicator (F-015). Rendered only when write mode is
+     * inactive -- write mode occupies the same status-bar row with a
+     * yellow "WRITE" label, and they shouldn't visually fight.
+     * Cyan (0x07FF) on the blue status bar distinguishes the label
+     * from the white PAT/BPM/clock text without crowding them. */
+    if (!write_mode_is_active()) {
+        tweak_mode_t tm = tweak_get_mode();
+        const char *label =
+            (tm == TWEAK_TONE)   ? "TONE"   :
+            (tm == TWEAK_FILTER) ? "FILTER" :
+            (tm == TWEAK_TRIM)   ? "TRIM"   : "?";
+        fb_draw_text(130, 4, label, 0x07FF);  /* cyan */
+    }
 
     uint16_t h, m;
     clock_get_hhmm(&h, &m);

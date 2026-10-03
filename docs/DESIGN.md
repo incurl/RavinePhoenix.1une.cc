@@ -376,7 +376,7 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
   - **Held + step 1–15** = select a punch-in effect (F-019).
   - **Held + step 16** = "no effect" (clears active FX; the full "clear effect in pattern" combo lands in write mode, queued).
 - **Code location:** `main/ui/input.h` → `tweak_mode_t` enum + `tweak_get_mode()`. `main/ui/input.c` → `s_tweak_mode` state + `tweak_mode_cycle()` (called from the `BTN_FX` tap dispatch) + `tweak_apply_step()` / `tweak_apply_slot()` (called from the sequencer `on_step` and `play_active_slot` respectively). The cycle is Tone → Filter → Trim → Tone, never NONE.
-- **Status:** ✅ done. `BTN_FX tap` cycles the mode; long-press is a no-op (the held-+-step punch-in path from F-019 fires on step events before reaching the per-btn switch). The TFT currently shows no tweak-mode label — `display.c` doesn't render the mode — so the state lives in `s_tweak_mode` but isn't surfaced yet. This is a v2 display addition, not a logic gap.
+- **Status:** ✅ done. `BTN_FX tap` cycles the mode; long-press is a no-op (the held-+-step punch-in path from F-019 fires on step events before reaching the per-btn switch). The TFT now renders the active tweak-mode label in the top status bar (cyan text at x=130, between BPM and the clock; suppressed while write mode is active so the two indicators don't visually fight — `main/ui/display.c` `render_main_screen()`).
 
 #### F-016 — Tweak Tone (Knob A = pitch, Knob B = volume)
 
