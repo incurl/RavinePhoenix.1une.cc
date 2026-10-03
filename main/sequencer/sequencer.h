@@ -43,6 +43,11 @@ uint16_t sequencer_get_bpm(void);
 uint8_t  sequencer_get_current_step(void);
 uint8_t  sequencer_get_current_pattern(void);
 
+/* F-012: wipe all 16 steps of the active pattern. Does NOT touch
+ * the chain. The pattern index remains the same (s_pattern unchanged);
+ * only the step bindings are reset to empty. */
+void sequencer_clear_current_pattern(void);
+
 /* Pattern building helpers */
 void sequencer_set_step_slot(uint8_t pattern, uint8_t step,
                              uint8_t slot, uint8_t note);

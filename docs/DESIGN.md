@@ -341,9 +341,9 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §2.1 ("press record + pattern to clear the active pattern")
 - **Layman:** Hold **RECORD** + **PATTERN** and the entire current pattern is wiped (all 16 steps cleared).
 - **PO-33 button combo:** Hold REC + PATTERN.
-- **Our hardware combo:** Not yet. UART: `pattern 0; ... (clear all steps)`.
-- **Code location:** Needs `sequencer_clear_pattern(uint8_t pattern)` in `main/sequencer/pattern.c`.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Hold REC + PATTERN for at least `BTN_LONG_PRESS_MS` (600 ms). UART: `pattern 0; ... (clear all steps)`.
+- **Code location:** `main/sequencer/sequencer.{c,h}` → `sequencer_clear_current_pattern()` (wraps `pattern_clear()` on `g_patterns[s_pattern]`). `main/ui/input.c` → multi-button gesture detection in the end-of-drain polling block (`s_rec_pattern_combo_started_us` timestamp; both-buttons-held edge → start timing; elapsed ≥ 600 ms → fire; latch until release).
+- **Status:** ✅ done. The 600-ms hold-to-fire gate prevents accidental clears from brushing against REC while pressing PATTERN. The latch (set to -1 after firing; reset only when both buttons released) prevents double-clears if the user keeps holding.
 
 ### 3.3 Section 3 — Songs (pattern chaining)
 
@@ -1030,7 +1030,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | Section | Total features | ✅ Done | ⚠️ Partial | ❌ Missing |
 |---|---|---|---|---|
 | 1. Sounds (record / mic / line-in) | 5 | 3 | 1 | 1 |
-| 2. Patterns (write mode) | 7 | 3 | 2 | 2 |
+| 2. Patterns (write mode) | 7 | 4 | 2 | 1 |
 | 3. Songs (chain) | 2 | 0 | 1 | 1 |
 | 4. Tweaking (tone / filter / trim) | 4 | 1 | 2 | 1 |
 | 5. Effects (16 punch-ins) | 16 | 3 | 6 | 7 |
@@ -1042,7 +1042,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 1 | 0 | 1 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **16 (32%)** | **13 (26%)** | **21 (42%)** |
+| **Total** | **~50** | **17 (34%)** | **13 (26%)** | **20 (40%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

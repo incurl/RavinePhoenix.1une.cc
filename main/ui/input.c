@@ -28,6 +28,7 @@
 #include "input.h"
 #include "config.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "audio/amy_bridge.h"
 #include "sequencer/sequencer.h"
 #include "sketch/sketch_picker.h"
@@ -224,6 +225,15 @@ static bool s_recording = false;
 /* Previous-tick state of BTN_REC, used to detect the true->false
  * edge (release) at the end-of-drain polling block. */
 static bool s_rec_prev_held = false;
+
+/* F-012 "REC + PATTERN" gesture state. The user must hold BOTH
+ * REC and PATTERN simultaneously for BTN_LONG_PRESS_MS before the
+ * active pattern is wiped -- this prevents an accidental
+ * clear from brushing against REC while pressing PATTERN. The
+ * timestamp below records the esp_timer_get_time() value at which
+ * both buttons were first detected as held together. Zero means
+ * "not currently timing a combo". */
+static int64_t s_rec_pattern_combo_started_us = 0;
 
 /* ─── Write-mode (PO-33 F-009/F-010/F-011) state ──────────────── */
 
@@ -781,6 +791,40 @@ void input_drain(void)
         rec_on_release();
     }
     s_rec_prev_held = rec_now_held;
+
+    /* F-012 REC + PATTERN combo: clear the active pattern when both
+     * are held for at least BTN_LONG_PRESS_MS (600 ms).
+     *
+     * State machine:
+     *   timestamp == 0           -> not currently timing. On both-held
+     *                                edge, set timestamp to now.
+     *   timestamp > 0             -> combo in flight. If elapsed time
+     *                                reaches BTN_LONG_PRESS_MS, fire
+     *                                the clear and set timestamp to -1
+     *                                (latched; won't fire again until
+     *                                both buttons are released).
+     *   timestamp == -1           -> combo has fired; ignore until
+     *                                both buttons are released (reset
+     *                                timestamp to 0).
+     *   either button released     -> reset timestamp to 0 (cancel
+     *                                pending combo / unlock latched). */
+    bool pattern_now_held = buttons_is_pressed(BTN_PATTERN);
+    bool both_held = rec_now_held && pattern_now_held;
+    if (both_held && s_rec_pattern_combo_started_us == 0) {
+        s_rec_pattern_combo_started_us = esp_timer_get_time();
+    } else if (s_rec_pattern_combo_started_us > 0) {
+        int64_t elapsed_us = esp_timer_get_time() - s_rec_pattern_combo_started_us;
+        if (elapsed_us >= (int64_t)BTN_LONG_PRESS_MS * 1000) {
+            ESP_LOGI(TAG, "REC + PATTERN held -> clearing pattern %u",
+                     (unsigned)sequencer_get_current_pattern());
+            sequencer_clear_current_pattern();
+            /* Latch: don't fire again until the user releases both. */
+            s_rec_pattern_combo_started_us = -1;
+        }
+    } else if (!both_held) {
+        /* Reset state once both buttons are released. */
+        s_rec_pattern_combo_started_us = 0;
+    }
 
     /* Picker polling. Reads the encoder delta + click and routes
      * them through the picker state machine. The picker itself exits

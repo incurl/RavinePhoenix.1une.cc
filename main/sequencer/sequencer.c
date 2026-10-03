@@ -160,6 +160,16 @@ void sequencer_chain_clear(void)
     g_chain_len = 0;
 }
 
+void sequencer_clear_current_pattern(void)
+{
+    /* F-012 (PO-33: "hold record + pattern to clear the active pattern").
+     * Wipe the steps; leave the pattern index, name, chain, BPM, and
+     * active slot alone. Caller (input.c) is responsible for the
+     * long-press timing that gates this gesture. */
+    pattern_clear(&g_patterns[s_pattern]);
+    ESP_LOGI(TAG, "pattern %u cleared", (unsigned)s_pattern);
+}
+
 uint16_t sequencer_get_bpm(void)         { return s_bpm; }
 uint8_t  sequencer_get_current_step(void){ return s_step; }
 uint8_t  sequencer_get_current_pattern(void){ return s_pattern; }
