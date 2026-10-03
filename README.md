@@ -80,7 +80,7 @@ target_compile_definitions(amy PRIVATE
 │   ├── ui/
 │   │   ├── buttons.{c,h}
 │   │   ├── display.{c,h}
-│   │   ├── knobs.{c,h}           # Knob A (GPIO 20 / ADC1_CH9) + Knob B (GPIO 46 / ADC1_CH5)
+│   │   ├── knobs.{c,h}           # Knob A (GPIO 2 / ADC1_CH1) + Knob B (GPIO 46 / ADC1_CH5)
 │   │   └── leds.{c,h}
 │   ├── storage/
 │   │   └── storage.{c,h}        # patterns + samples → LittleFS
@@ -150,7 +150,7 @@ target_compile_definitions(amy PRIVATE
 | Function | GPIO |
 |---|---|
 | Sync OUT | GPIO18 |
-| Sync IN  | GPIO19 |
+| Sync IN  | GPIO25 (was GPIO 19; reserved GPIO 19 for USB-MIDI) |
 | LED REC  | GPIO21 |
 | LED PLAY | GPIO14 |
 

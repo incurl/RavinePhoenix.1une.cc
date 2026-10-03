@@ -1,5 +1,5 @@
 /*
- * knobs.c — analog knob driver for Knob A (GPIO 20 / ADC1_CH9) and
+ * knobs.c — analog knob driver for Knob A (GPIO 2 / ADC1_CH1) and
  * Knob B (GPIO 46 / ADC1_CH5). See config.h for the wiring rationale.
  */
 #include "knobs.h"
@@ -34,7 +34,7 @@ esp_err_t knobs_init(void)
     /* ADC1 unit-wide config (driver-managed; safe to call once). */
     adc1_config_width(ADC_WIDTH_BIT_12);
 
-    /* Channel A — GPIO 20 / ADC1_CH9. */
+    /* Channel A — GPIO 2 / ADC1_CH1. */
     adc1_config_channel_atten(KNOB_A_ADC_CHANNEL, KNOB_ADC_ATTEN);
     s_cal_a_ok = esp_adc_cal_characterize(ADC_UNIT_1, KNOB_ADC_ATTEN,
                                           ADC_WIDTH_BIT_12, 0,
