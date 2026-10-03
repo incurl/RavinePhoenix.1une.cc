@@ -8,7 +8,7 @@ module.exports = {
   description:
     "ESP32-S3 firmware that emulates the Teenage Engineering PO-33 K.O! " +
     "micro-sampler. Vendor-agnostic, MIT-licensed, browser-flashable.",
-  repo_url: "https://github.com/peter/RavinePhoenix.1une.cc",
+  repo_url: "https://github.com/incurl/RavinePhoenix.1une.cc",
   canonical_url: "https://ravinephoenix.1une.cc",
   author: "RavinePhoenix",
   license: "MIT",
