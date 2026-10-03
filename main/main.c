@@ -259,6 +259,18 @@ static void po33_shell_task(void *arg)
                 } else {
                     printf("usage: slot_clear <slot 0..15>\n");
                 }
+            } else if (strncmp(line, "slot_copy ", 10) == 0) {
+                /* F-023 copy slot <dst> <src>. */
+                unsigned d = 0, s = 0;
+                if (sscanf(line + 10, "%u %u", &d, &s) == 2
+                    && d < SLOT_COUNT && s < SLOT_COUNT) {
+                    esp_err_t e = amy_bridge_copy_slot((uint8_t)d, (uint8_t)s);
+                    if (e == ESP_OK) printf("slot %u copied from %u\n", d, s);
+                    else            printf("slot_copy failed: %s\n",
+                                            esp_err_to_name(e));
+                } else {
+                    printf("usage: slot_copy <dst 0..15> <src 0..15>\n");
+                }
             } else if (strncmp(line, "clock_set_alarm ", 16) == 0) {
                 /* "clock_set_alarm <hh> <mm> <slot>" -- F-034 */
                 int hh = 0, mm = 0, slot = 0;

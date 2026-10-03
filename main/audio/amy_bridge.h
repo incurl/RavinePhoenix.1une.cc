@@ -75,6 +75,21 @@ void      amy_bridge_pump_capture(void);    /* call from audio task */
  * available for re-recording. */
 void      amy_bridge_clear_slot(uint8_t slot);
 
+/* F-023: copy slot `src` to slot `dst`. After this call, both slots
+ * hold identical sample data. Both AMY presets are re-registered
+ * so playback is correct. The src slot is preserved (not deleted);
+ * this is a true duplicate, not a swap.
+ *
+ * Implementation: compact-then-extend. Memmoves the pool contents
+ * to make room at the dst position, copies src's bytes into the
+ * vacated dst region, then updates s_slots[].length_samples for
+ * every slot whose shift has changed.
+ *
+ * No-op (and returns ESP_ERR_INVALID_STATE) when either slot is
+ * currently being recorded into, since the I2S capture path
+ * races the memmove. */
+esp_err_t amy_bridge_copy_slot(uint8_t dst, uint8_t src);
+
 /* Note trigger from sequencer. */
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,

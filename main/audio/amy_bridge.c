@@ -379,6 +379,100 @@ void amy_bridge_clear_slot(uint8_t slot)
     ESP_LOGI(TAG, "Slot %u cleared", slot);
 }
 
+esp_err_t amy_bridge_copy_slot(uint8_t dst, uint8_t src)
+{
+    /* F-023: copy slot src -> dst. Both slots must exist, src must
+     * have a recording, neither may be the active recording slot. */
+    if (dst >= SLOT_COUNT || src >= SLOT_COUNT) return ESP_ERR_INVALID_ARG;
+    if (dst == src) return ESP_OK;
+    if (!s_slots[src].in_use) return ESP_ERR_INVALID_STATE;
+    if (s_rec_slot >= 0 &&
+        ((uint8_t)s_rec_slot == dst || (uint8_t)s_rec_slot == src)) {
+        ESP_LOGE(TAG, "copy_slot(%u, %u) refused: recording in progress",
+                 dst, src);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    uint32_t src_len = s_slots[src].length_samples;
+    uint32_t dst_len = s_slots[dst].length_samples;
+    if (src_len == 0) return ESP_ERR_INVALID_STATE;
+
+    /* Cap src_len at the dst slot's maximum, since drum->melatic or
+     * vice-versa would overflow the dst's allocated range. (Same
+     * drum-or-melodic class is enforced elsewhere via SLOT_DRUM_MAX_BYTES
+     * / SLOT_MELODIC_MAX_BYTES.) */
+    uint32_t dst_max = amy_bridge_slot_max_bytes(dst) / sizeof(int16_t);
+    if (src_len > dst_max) {
+        /* Refuse rather than truncate -- silent truncation is hostile
+         * UX. The caller can split into multiple shorter copies, or
+         * delete dst first. */
+        ESP_LOGE(TAG, "copy_slot(%u, %u): src_len %u > dst_max %u",
+                 dst, src, (unsigned)src_len, (unsigned)dst_max);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    /* Save src into a PSRAM scratch buffer. */
+    int16_t *src_data = heap_caps_malloc(src_len * sizeof(int16_t),
+                                        MALLOC_CAP_SPIRAM);
+    if (!src_data) return ESP_ERR_NO_MEM;
+    int16_t *src_ptr = s_pool + slot_offset_bytes(src) / sizeof(int16_t);
+    memcpy(src_data, src_ptr, src_len * sizeof(int16_t));
+
+    /* Compact/extend the pool region after slot dst by (src - dst) samples.
+     * Positive delta -> shift later slots forward (dst grows).
+     * Negative delta -> shift later slots backward (dst shrinks).
+     * Zero delta     -> no shift (dst and src same length). */
+    int32_t delta = (int32_t)src_len - (int32_t)dst_len;
+    if (delta != 0) {
+        size_t bytes_to_shift = 0;
+        for (int i = dst + 1; i < SLOT_COUNT; i++) {
+            bytes_to_shift += s_slots[i].length_samples * sizeof(int16_t);
+        }
+        if (bytes_to_shift > 0) {
+            int16_t *shift_src = s_pool + slot_offset_bytes(dst + 1) / sizeof(int16_t);
+            int16_t *shift_dst = shift_src + delta;  /* delta may be negative */
+            memmove(shift_dst, shift_src, bytes_to_shift);
+        }
+        /* length_samples of slots after dst unchanged -- only their
+         * physical offsets shift, which slot_offset_bytes() recomputes. */
+    }
+
+    /* Write src_data into dst's new region. */
+    int16_t *dst_ptr = s_pool + slot_offset_bytes(dst) / sizeof(int16_t);
+    memcpy(dst_ptr, src_data, src_len * sizeof(int16_t));
+
+    /* Update dst's metadata. start/end are sample indices; copy them
+     * so a tweak-trimmed src transfers its trim too. */
+    s_slots[dst].in_use         = true;
+    s_slots[dst].is_drum        = s_slots[src].is_drum;
+    s_slots[dst].length_samples = src_len;
+    s_slots[dst].start          = s_slots[src].start;
+    s_slots[dst].end            = s_slots[src].end;
+    /* sample_rate_hz doesn't need updating; src and dst are both
+     * sampled at SAMPLE_RATE_HZ -- enforced by register_slot. */
+
+    /* Free scratch. */
+    free(src_data);
+
+    /* Re-register both AMY presets so the new physical addresses are
+     * reflected in AMY's preset map. The previous pcm_load_external()
+     * entry for dst is overwritten; src is reloaded in case its
+     * length_samples or trim changed (it doesn't here, but cheap). */
+    if (s_registered_mask & (1u << src)) {
+        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + src));
+        s_registered_mask &= ~(1u << src);
+        register_slot_with_amy(src);
+    }
+    if (s_registered_mask & (1u << dst)) {
+        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + dst));
+        s_registered_mask &= ~(1u << dst);
+        register_slot_with_amy(dst);
+    }
+
+    ESP_LOGI(TAG, "Slot %u copied from %u (%u samples)", dst, src, (unsigned)src_len);
+    return ESP_OK;
+}
+
 void amy_bridge_pump_capture(void)
 {
     if (s_rec_slot < 0 || !s_rec_block) return;

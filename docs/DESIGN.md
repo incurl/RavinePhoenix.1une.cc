@@ -473,9 +473,9 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §8
 - **Layman:** Hold **WRITE** + **SOUND** + 1–16 and the active sound is copied to that slot.
 - **PO-33 button combo:** WRITE + SOUND + number.
-- **Our hardware combo:** Not yet.
-- **Code location:** Would call `amy_bridge_register_slot(dst, src_ptr, src_len, src_sr, src_is_drum)` in `main/audio/amy_bridge.c`.
-- **Status:** ❌ missing.
+- **Our hardware combo:** UART only: `slot_copy <dst 0..15> <src 0..15>` (e.g. `slot_copy 9 3` to duplicate slot 3 into slot 9). The WRITE + SOUND + step button gesture is technically possible but adds a 3-button combo; deferred to v2.
+- **Code location:** `main/audio/amy_bridge.{c,h}` → `amy_bridge_copy_slot(uint8_t dst, uint8_t src)`. Memmoves the pool to make room (or reclaim space) at `dst`'s position, copies src's bytes into the now-fitting dst region, then re-registers both AMY presets via `pcm_load_external()`. Refuses the copy if either slot is currently being recorded into, or if src's length exceeds dst's class max (drum slots max 2 s = 88200 samples; melodic slots max 3 s = 132300 samples).
+- **Status:** ✅ done (UART only). Button combo deferred.
 
 #### F-024 — Copy a slice of a drum sample
 
@@ -1038,13 +1038,13 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 5. Effects (16 punch-ins) | 16 | 7 | 6 | 3 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
 | 7. Volume | 1 | 1 | 0 | 0 |
-| 8. Copy + delete | 5 | 3 | 0 | 2 |
+| 8. Copy + delete | 5 | 4 | 0 | 1 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 1 | 1 | 1 |
 | 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 2 | 0 | 0 |
-| **Total** | **~50** | **27 (54%)** | **14 (28%)** | **9 (18%)** |
+| **Total** | **~50** | **28 (56%)** | **14 (28%)** | **8 (16%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
