@@ -192,11 +192,14 @@ sleep             # enter deep sleep immediately
 | Consumer | Size |
 |---|---|
 | 40 s × 44100 Hz mono pool (PSRAM) | 3.37 MB |
+| AMY-side sample copies (one per registered slot; ~5–8 typical) | 0.5–3.3 MB |
 | 2.4″ TFT framebuffer | 150 KB |
 | AMY state (oscs, events, voices, reverb/echo tails) | ~1.5 MB |
 | LittleFS working memory | ~64 KB |
 | Misc / heap overhead | ~256 KB |
-| **PSRAM headroom** | **~2.7 MB free** |
+| **PSRAM headroom (typical)** | **~−0.6 MB to +1.5 MB free** |
+
+Typical case (5–8 recorded slots, 1.5 MB AMY-side copies) leaves ~1 MB PSRAM headroom. Worst case (all 16 slots at max length, ~3.3 MB AMY-side copies) **exceeds the 8 MB N16R8 PSRAM budget by ~0.6 MB** and would OOM at the AMY-side `pcm_load` call. The firmware logs `pcm_load failed for slot N` and falls back to AMY's ROM preset 0 for that slot. If the user fills all 16 slots at the PO-33 spec lengths, the **first** playback after filling the last slot triggers the OOM; earlier slots are already registered so they keep working. This is a known limitation; v2 will either reduce the pool size to 30 s or move to a non-PSRAM module variant (see HARDWARE.md §8.4).
 
 ---
 

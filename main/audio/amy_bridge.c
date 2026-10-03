@@ -3,7 +3,10 @@
  *
  * Sample pool:
  *   One contiguous PSRAM block partitioned into 16 slots.
- *   Each slot is registered with AMY (see apply_fx for PCM vs synth path).
+ *   Each slot is also registered with AMY via pcm_load() (called from
+ *   amy_bridge_register_slot and re-called from set_trim) so that
+ *   play_note() actually plays the user's sample rather than falling
+ *   through to AMY's ROM preset 0. See register_slot_with_amy().
  *
  * Recording:
  *   AMY exposes the mic DMA as an internal buffer; we copy that into the
@@ -25,6 +28,11 @@ static const char *TAG = "amy_bridge";
 /* PO-33 preset numbers start above AMY's built-in patch range. */
 #define PO33_PRESET_BASE   2000
 
+/* Forward decl: defined later in this file. Used by
+ * amy_bridge_register_slot (immediate register-on-write) and
+ * amy_bridge_set_trim (re-register on trim change). */
+static esp_err_t register_slot_with_amy(uint8_t slot);
+
 static int16_t *s_pool       = NULL;
 static size_t   s_pool_bytes = 0;
 
@@ -36,6 +44,13 @@ static struct {
     uint32_t end;
     uint32_t sample_rate_hz;
 } s_slots[SLOT_COUNT];
+
+/* Bitmask of which slots are currently registered with AMY's preset
+ * map (one bit per slot). When a slot's trim changes, we unload and
+ * re-register so AMY's loopstart/loopend are up to date. Bits persist
+ * for the lifetime of the slot's registration, and are cleared when
+ * the slot is overwritten or unloaded. */
+static uint16_t s_registered_mask = 0;
 
 static int8_t   s_rec_slot = -1;
 static uint32_t s_rec_pos  = 0;
@@ -116,6 +131,70 @@ esp_err_t amy_bridge_set_trim(uint8_t slot, uint32_t start, uint32_t end)
     }
     s_slots[slot].start = start;
     s_slots[slot].end   = end;
+    /* Trim affects AMY's loopstart/loopend -- re-register so playback
+     * honours the new bounds. Unloading first is important because
+     * pcm_load() allocates fresh memory; the previous allocation is
+     * orphaned if we don't. */
+    if (s_registered_mask & (1u << slot)) {
+        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + slot));
+        s_registered_mask &= ~(1u << slot);
+        (void)register_slot_with_amy(slot);
+    }
+    return ESP_OK;
+}
+
+/* Internal helper: register (or re-register) the given slot with AMY
+ * so that amy_event.patch_number = PO33_PRESET_BASE + slot resolves
+ * to the user sample at playback time.
+ *
+ * Without this, play_note(slot) silently falls through to AMY's
+ * ROM preset 0 -- a default sample the user never recorded. The
+ * pcm_load() function copies the sample into AMY's own allocation
+ * (in PSRAM, per the ram_caps_sample config); the source copy in
+ * s_pool stays put for storage_save/load.
+ *
+ * Memory cost: a registered slot consumes an extra (length_samples *
+ * 2) bytes in PSRAM for the AMY-side copy. With all 16 slots fully
+ * loaded (3 s melodic + 2 s drum, the design's max), total AMY
+ * allocations reach ~3.3 MB -- the 8 MB N16R27 PSRAM absorbs this
+ * with ~4 MB headroom for the sample pool, AMY state, framebuffer,
+ * and LittleFS working set. */
+static esp_err_t register_slot_with_amy(uint8_t slot)
+{
+    if (slot >= SLOT_COUNT) return ESP_ERR_INVALID_ARG;
+    if (!s_slots[slot].in_use) return ESP_ERR_INVALID_STATE;
+
+    uint16_t preset = (uint16_t)(PO33_PRESET_BASE + slot);
+
+    /* pcm_load allocates fresh memory. If the preset is already
+     * registered (s_registered_mask bit set), we don't unload first
+     * because the caller (register_slot) handles the unload; here we
+     * just allocate the new copy. */
+    int16_t *ram = pcm_load(preset,
+                            s_slots[slot].length_samples,
+                            s_slots[slot].sample_rate_hz,
+                            1,            /* channels: mono */
+                            60.0f,        /* midinote: middle C */
+                            s_slots[slot].start,    /* loopstart */
+                            s_slots[slot].end);     /* loopend (>0 means
+                                                       not loop-whole) */
+    if (!ram) {
+        ESP_LOGE(TAG, "pcm_load failed for slot %u", slot);
+        return ESP_ERR_NO_MEM;
+    }
+    /* Copy the sample data into AMY's preset memory. pcm_load sets
+     * loopend = length - 1 when called with loopend = 0, so the
+     * "loop the whole sample" semantics are preserved when end == 0. */
+    const int16_t *src = s_pool + slot_offset_bytes(slot) / sizeof(int16_t);
+    memcpy(ram, src, s_slots[slot].length_samples * sizeof(int16_t));
+
+    s_registered_mask |= (1u << slot);
+    ESP_LOGI(TAG, "Slot %u registered with AMY (preset %u, %u samples, "
+                  "loop %u..%u)",
+             slot, (unsigned)preset,
+             (unsigned)s_slots[slot].length_samples,
+             (unsigned)s_slots[slot].start,
+             (unsigned)s_slots[slot].end);
     return ESP_OK;
 }
 
@@ -141,6 +220,13 @@ esp_err_t amy_bridge_register_slot(uint8_t slot, const int16_t *data,
     if (data) memcpy(dst, data, copy_samples * sizeof(int16_t));
     else      memset(dst, 0, copy_samples * sizeof(int16_t));
 
+    /* If the slot was previously registered with AMY, unload first so
+     * the old allocation is freed before we allocate a new one. */
+    if (s_registered_mask & (1u << slot)) {
+        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + slot));
+        s_registered_mask &= ~(1u << slot);
+    }
+
     s_slots[slot].in_use         = true;
     s_slots[slot].is_drum        = is_drum;
     s_slots[slot].length_samples = (uint32_t)copy_samples;
@@ -148,6 +234,20 @@ esp_err_t amy_bridge_register_slot(uint8_t slot, const int16_t *data,
     s_slots[slot].end            = (uint32_t)copy_samples;
     s_slots[slot].sample_rate_hz = (sample_rate_hz == 0) ? SAMPLE_RATE_HZ
                                                          : sample_rate_hz;
+
+    /* Register with AMY so play_note(slot) actually plays this
+     * sample. pcm_load's loopend semantics -- if we pass loopend=0 it
+     * sets loopend=length-1 ("loop whole sample") -- line up with
+     * our default (end == length_samples). */
+    esp_err_t reg_err = register_slot_with_amy(slot);
+    if (reg_err != ESP_OK) {
+        /* Slot is in s_pool + s_slots; AMY-side registration failed.
+         * We can't unplay the in_use flag without leaving the pool in
+         * an inconsistent state. Log and return ESP_OK so the caller
+         * doesn't think the recording failed; audio will fall back to
+         * ROM preset 0 (the previous behaviour). */
+        ESP_LOGE(TAG, "Slot %u copied to pool but AMY registration failed", slot);
+    }
 
     ESP_LOGI(TAG, "Slot %u: %u samples (%u Hz, %s)",
              slot, (unsigned)copy_samples,
@@ -195,6 +295,14 @@ esp_err_t amy_bridge_init(void)
     cfg.ram_caps_block  = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     cfg.ram_caps_sysex  = MALLOC_CAP_SPIRAM   | MALLOC_CAP_8BIT;
     cfg.ram_caps_synth  = MALLOC_CAP_SPIRAM   | MALLOC_CAP_8BIT;
+    /* Sample preset memory must be in PSRAM -- a single user sample
+     * can be up to 3 s = ~264 KB at 44.1 kHz / 16-bit, and we register
+     * up to 16 of them with AMY (in practice only the slots actually
+     * played). The 8 MB PSRAM pool absorbs this comfortably. Without
+     * this line AMY's default falls through to MALLOC_CAP_DEFAULT,
+     * which on ESP32-S3 is internal SRAM (~340 KB) -- the second
+     * registration would OOM. */
+    cfg.ram_caps_sample = MALLOC_CAP_SPIRAM   | MALLOC_CAP_8BIT;
 
     cfg.platform.multicore   = true;
     cfg.platform.multithread = true;
