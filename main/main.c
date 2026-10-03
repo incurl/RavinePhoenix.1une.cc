@@ -235,7 +235,20 @@ static void po33_shell_task(void *arg)
             } else if (strcmp(line, "chain clear") == 0) {
                 sequencer_chain_clear();
                 printf("chain cleared\n");
-            } else if (strcmp(line, "sketch new") == 0 ||
+            } else if (strncmp(line, "clock_set_alarm ", 16) == 0) {
+                /* "clock_set_alarm <hh> <mm> <slot>" -- F-034 */
+                int hh = 0, mm = 0, slot = 0;
+                int n = sscanf(line + 16, "%d %d %d", &hh, &mm, &slot);
+                if (n == 3 && clock_set_alarm((uint16_t)hh, (uint16_t)mm,
+                                              (uint8_t)slot) == ESP_OK) {
+                    printf("alarm set %02d:%02d slot %d\n", hh, mm, slot);
+                } else {
+                    printf("usage: clock_set_alarm <hh> <mm> <slot 0..15>\n");
+                }
+            } else if (strcmp(line, "clock_clear_alarm") == 0) {
+                clock_clear_alarm();
+                printf("alarm cleared\n");
+            } else if (strncmp(line, "sketch new", 10) == 0) {
                        strcmp(line, "sketch save") == 0) {
                 esp_err_t e = storage_sketch_save_active();
                 if (e == ESP_OK) printf("sketch saved\n");

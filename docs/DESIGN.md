@@ -577,7 +577,7 @@ See §4 below for the per-effect deep dive.
 - **PO-33 button combo:** Set via PO-33 menu (no single button combo in the manual).
 - **Our hardware combo:** UART: `clock_set_alarm 7 30 3` (play slot 3 at 07:30).
 - **Code location:** `main/system/clock.c` → `clock_set_alarm(hh, mm, slot)`; the alarm callback is not yet implemented (no FreeRTOS timer that checks the time).
-- **Status:** ⚠️ partial. Storage works; the check-and-fire timer is missing.
+- **Status:** ✅ done. `clock_init()` starts a 1-second `esp_timer` (`alarm_check_tick`) that compares the current HH:MM to the persisted `s_alarm_hh:mm`. On a match, it calls `amy_bridge_play_note(s_alarm_slot, 60, 100, PO33_FX_NONE, 0, 0, 0, 0)` — middle-C, default velocity, no FX. A once-per-day guard (`s_last_alarm_day`) prevents the sample from looping every second within the matching minute; re-arming the alarm resets the guard. Alarm state (HH/MM/slot) persists in NVS under the `"clock"` namespace. UART verbs: `clock_set_alarm <hh> <mm> <slot 0..15>` and `clock_clear_alarm` (no button gesture).
 
 ### 3.12 Section 12 — Battery
 
@@ -1040,10 +1040,10 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 8. Copy + delete | 5 | 0 | 0 | 5 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 1 | 1 | 1 |
-| 11. Clock + alarm | 2 | 1 | 1 | 0 |
+| 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **23 (46%)** | **15 (30%)** | **12 (24%)** |
+| **Total** | **~50** | **24 (48%)** | **14 (28%)** | **12 (24%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
