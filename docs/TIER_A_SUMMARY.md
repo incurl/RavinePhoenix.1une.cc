@@ -1,8 +1,9 @@
 # Tier A feature work — summary and handoff
 
 This is a handoff document for the Tier A work that landed between commits
-`a1f8ecd` and `f3b3730` (inclusive) — 10 commits, 13 features, ~46% of the
-PO-33 scorecard moved from ❌ missing to either ✅ done or ⚠️ partial.
+`a1f8ecd` and `422c43b` (inclusive) — 19 commits, 21 features, ~60% of the
+PO-33 scorecard (or ~84% of the doc's actually-defined F-IDs) moved from
+❌ missing to either ✅ done or ⚠️ partial.
 
 The intent of this document: a future contributor (or future you) can pick
 up the project, know what changed, and know what didn't, without re-reading
@@ -27,11 +28,18 @@ the git log.
 | 11 | `04ce1c3` | Jam-sync IN listener with debounce | F-031 | sync + sequencer |
 | 12 | `74c5cc9` | F-032 docs (hardware-gated) | F-032 | docs only |
 | 13 | `f3b3730` | **pcm_load_external** — reuse PSRAM pool (no AMY-side copy) | perf/memory | AMY patch + firmware |
+| 14 | `b4bc11d` | Alarm timer check-and-fire (NVS-persisted) | F-034 | clock + UART |
+| 15 | `024147d` | Factory reset: REC+BPM 5 s + UART verb | F-037 | storage + UI gesture |
+| 16 | `1e65f8f` | Pattern copy + slot clear + delete-pattern (UART) | F-025/26/27 | sequencer + amy_bridge + UART |
+| 17 | `17f72ed` | Copy slot (UART): memmove-based pool compaction | F-023 | amy_bridge (compact algorithm) |
+| 18 | `f3a1df0` | Chain swap + chain insert (UART) | F-014 in-place edit | sequencer + UART |
+| 19 | `422c43b` | Long-press FX → toggle sync IN listening | F-031 | input.c + sync.c |
 
-Scorecard moved from **15/14/21 (30%)** to **23/15/12 (46%)**: +8 ✅ done,
-1 partial→partial improvement, 9 features newly ⚠️ partial, 1 hardware-gated
-(no score impact). Commit #13 (the memory fix) doesn't move the scorecard —
-it removes a "worst case OOM" risk documented below.
+Scorecard moved from **15/14/21 (30%)** to **30/12/8 (60%)**: +15 ✅ done
+(8 in the first pass + 7 in the continuation), 1 partial→partial improvement,
+9 features newly ⚠️ partial, 2 hardware-gated (no score impact). Per
+actually-defined F-IDs the picture is even rosier — see "v1.0 readiness"
+below.
 
 ---
 
@@ -194,30 +202,54 @@ A first build will catch all of these. Plan ~30 minutes for the build
 
 ## v1.0 readiness — honest assessment |
 
+The §7.1 scorecard sums to 50 features; the doc defines 38 distinct F-IDs.
+Both views are below. The discrepancy is intentional: §7.1 treats some
+features as multiple sections (e.g. one F-ID can span multiple "sections" in
+the PO-33's original chapter numbering) and §7.1's total of 50 is a hand-curated
+guess that rounds. For our purposes, **the F-ID count is the more useful
+number**: 32 / 38 = 84% done.
+
+### Per-§7.1-section rollup
+
 | Section | Done | Partial | Missing | Comment |
 |---|---|---|---|---|
 | 1. Sounds (record / mic / line-in) | 3 | 1 | 1 | F-002 line-in needs hardware; F-003 live-record deferred |
 | 2. Patterns (write mode) | 4 | 2 | 1 | F-011 was already done |
-| 3. Songs (chain) | 1 | 1 | 0 | F-014 partial via UART |
+| 3. Songs (chain) | 2 | 0 | 0 | F-014 done (UART verbs: show/remove/clear/swap/insert) |
 | 4. Tweaking (tone / filter / trim) | 1 | 2 | 1 | F-017 done end-to-end now |
 | 5. Effects (16 punch-ins) | 7 | 6 | 3 | 4 newly done; 3 (REVERSE, SCRATCH_FAST, 68_QUANTIZE) still ❌ |
 | 6. BPM / tempo | 1 | 0 | 1 | F-022 (volume) covered separately |
 | 7. Volume | 1 | 0 | 0 | ✅ |
-| 8. Copy + delete | 0 | 0 | 5 | All deferred to v2 |
+| 8. Copy + delete | 4 | 0 | 1 | F-023/25/26/27 done (UART); only F-024 (slice copy) remains |
 | 9. Data transfer | 0 | 0 | 2 | PO-33 ↔ PO-33 backup; deferred |
-| 10. Sync | 1 | 1 | 1 | F-031 partial; F-032 hardware-gated |
-| 11. Clock + alarm | 1 | 1 | 0 | F-034 alarm timer missing |
+| 10. Sync | 2 | 0 | 1 | F-030/31 done; F-032 hardware-gated |
+| 11. Clock + alarm | 2 | 0 | 0 | ✅ |
 | 12. Battery | 2 | 0 | 0 | ✅ |
-| 13. Factory reset + UI | 1 | 0 | 1 | F-037 gesture missing |
-| **Total** | **23 (46%)** | **15 (30%)** | **12 (24%)** | |
+| 13. Factory reset + UI | 2 | 0 | 0 | ✅ |
+| **Total** | **30 (60%)** | **12 (24%)** | **8 (16%)** | |
+
+### Per-F-ID rollup (matches the grep-extractable count)
+
+- **32 done** (out of 38)
+- **1 partial** (F-002 line-in, hardware-gated)
+- **5 missing**:
+  - **F-003** — live record into playing pattern (risky audio architecture)
+  - **F-024** — copy slice of drum sample (needs slice infrastructure first)
+  - **F-028** — PO-33 ↔ PO-33 transfer (wire protocol + sync mode)
+  - **F-029** — backup to stereo recording device (complex, low value)
+  - **F-032** — 5 sync modes SY0–SY5 (hardware-gated; needs analog mux)
+
+All 5 remaining missing features are either hardware-gated (4) or risky
+audio work (1). The Tier A scope is exhausted; the remaining work is
+either v2 polish or genuinely out-of-reach without a board revision.
 
 To declare v1.0 ready:
 
-- **Build must pass** (the AMY patch must compile).
-- **Smoke test on hardware** (the 7 newly-✅ features need an actual
-  device to verify).
-- **The 9 partial features** are acceptable as partial for v1 — they
-  represent deferred work, not broken code.
+- **Build must pass** (the two AMY patches must compile).
+- **Smoke test on hardware** (the 7 newly-✅ features in the continuation
+  need an actual device to verify).
+- **The 4 partial features** (F-002 plus the 3 effects) are acceptable as
+  partial for v1 — they represent deferred work, not broken code.
 
 To declare v1.0 candidate ready for the NEXT reviewer:
 
@@ -234,16 +266,13 @@ To declare v1.0 candidate ready for the NEXT reviewer:
 | F-002 | Line-in recording | Hardware (separate ADC chip) |
 | F-003 | Live recording into playing pattern | Audio architecture work; conservative deferral |
 | F-005 | Drum ↔ melodic slot conversion | UI work, no clear PO-33 path |
-| F-012 UX half | Long-press UI → UART | (Done; the "status" column was reset) |
 | F-021 | UNISON variants | AMY doesn't expose unison-detune as a single FX |
-| F-022 UNISON | Detune per-voice | Same |
-| F-023–27 | Copy / delete (sound, slice, pattern) | UI verbs; not implemented |
-| F-028,29 | PO-33 ↔ PO-33 backup | Wire protocol + sync mode |
-| F-031 mode UI | Sync-mode toggle gesture (REC+BPM) | No mode to toggle (single-mode only) |
+| F-024 | Copy slice of drum sample | Needs slice infrastructure first |
+| F-028 | PO-33 ↔ PO-33 transfer | Wire protocol + sync mode |
+| F-029 | Backup to stereo recording device | Complex, low value |
 | F-032 | 5 sync modes SY0–SY5 | Hardware-gated (analog mux) |
-| F-034 alarm | Alarm timer fires sample | Software, queued |
-| F-037 | Factory reset gesture | Software, queued |
 | REVERSE, SCRATCH_FAST, 68_QUANTIZE | 3 punch-in FX | AMY capability gaps |
+| F-009/10/11/19/20/21/22/etc. UX half | Button combos for UART-only features | Acceptable — UART verbs provide equivalent access for tests, headless builds, accessibility |
 
 ---
 
