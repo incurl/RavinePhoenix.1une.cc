@@ -585,9 +585,9 @@ See §4 below for the per-effect deep dive.
 - **Manual ref:** §12
 - **Layman:** The PO-33 shows a small battery icon with bars indicating remaining charge. Press SOUND + BPM and the bars light up to indicate the level.
 - **PO-33 button combo:** SOUND + BPM.
-- **Our hardware combo:** The TFT top bar shows the battery voltage (planned — currently shows the clock).
-- **Code location:** `main/system/clock.c` → needs `battery_get_percent()` reading `BATTERY_ADC_CHANNEL`. Display hook in `main/ui/display.c` `display_tick()`.
-- **Status:** ❌ missing.
+- **Our hardware combo:** Always-on battery indicator in the top status bar at x=180 (replaces the clock, which moves to the picker screen footer at y=308). The PO-33's SOUND + BPM gesture is not wired -- the always-on display achieves the same intent with no gesture to remember. Format: 24×11 px outline + 2×5 cap + 4 internal bars (3 px wide each, 1 px gap) + integer percentage to the right.
+- **Code location:** `main/system/power_mgmt.{c,h}` → `power_mgmt_battery_get_percent()` reads `BATTERY_ADC_CHANNEL` (ADC1_CH3 / GPIO4), divides by `BATTERY_DIVIDER_RATIO` (2.0 from `config.h`), and maps the cell voltage onto a Li-ion discharge curve (piecewise-linear, 6 segments). Display hook: `main/ui/display.c` `render_main_screen()`.
+- **Status:** ✅ done. The "ERR" label is shown instead of a misleading percent when the ADC read fails (returns 0xFF). Read is throttled to one log per 5 s to avoid spamming when the display refreshes at 30 Hz.
 
 #### F-036 — Deep-sleep after 5 minutes idle
 
@@ -1040,9 +1040,9 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 1 | 0 | 2 |
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
-| 12. Battery | 2 | 1 | 0 | 1 |
+| 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **17 (34%)** | **13 (26%)** | **20 (40%)** |
+| **Total** | **~50** | **18 (36%)** | **13 (26%)** | **19 (38%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

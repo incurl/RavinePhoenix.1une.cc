@@ -9,6 +9,7 @@
 #include "audio/amy_bridge.h"
 #include "sketch/sketch_picker.h"
 #include "system/clock.h"
+#include "system/power_mgmt.h"
 #include "ui/input.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -302,10 +303,50 @@ static void render_main_screen(void)
         fb_draw_text(130, 4, label, 0x07FF);  /* cyan */
     }
 
-    uint16_t h, m;
-    clock_get_hhmm(&h, &m);
-    snprintf(s_buf, sizeof(s_buf), "%02u:%02u", h, m);
-    fb_draw_text(180, 4, s_buf, COLOR_STATUS_BAR_FG);
+    /* Battery indicator (F-035) at x=180. Replaces the clock on the
+     * main screen -- a portable device needs the battery visible;
+     * the clock still lives in the picker screen (where the user can
+     * also see it via the alarm UI). 5-bar glyph + percentage label.
+     *
+     *   ._____._____
+     *   |        .  |  <- battery outline with cap on the right
+     *   | ||||   85% |  <- 4 internal bars filled by percent
+     *   |_____._____|
+     *
+     * Outline: 24 wide x 10 tall starting at x=180, y=2. Cap: 2x4
+     * rectangle to the right. Bars: each 3 wide x 6 tall, gap 1 px,
+     * 4 bars total. Percentage label: at x=210, y=4. */
+    static const int batt_x = 180;
+    static const int batt_y = 3;
+    static const int batt_w = 24;
+    static const int batt_h = 11;
+    /* Outline (top + bottom + left + right) */
+    fb_fill_rect(batt_x,             batt_y,             batt_w, 1, COLOR_STATUS_BAR_FG);
+    fb_fill_rect(batt_x,             batt_y + batt_h - 1, batt_w, 1, COLOR_STATUS_BAR_FG);
+    fb_fill_rect(batt_x,             batt_y,             1, batt_h, COLOR_STATUS_BAR_FG);
+    fb_fill_rect(batt_x + batt_w - 1, batt_y,            1, batt_h, COLOR_STATUS_BAR_FG);
+    /* Cap on the right */
+    fb_fill_rect(batt_x + batt_w,     batt_y + 3,        2, 5, COLOR_STATUS_BAR_FG);
+
+    uint8_t pct = power_mgmt_battery_get_percent();
+    if (pct == 0xFF) {
+        /* ADC read failed -- render "ERR" instead of a misleading %. */
+        fb_draw_text(batt_x + batt_w + 4, batt_y + 2, "ERR", COLOR_TEXT_DIM);
+    } else {
+        /* 4 internal bars: filled when pct >= (i+1) * 25 (so 25/50/75/100). */
+        int bars = (pct >= 100) ? 4 :
+                   (pct >=  75) ? 3 :
+                   (pct >=  50) ? 2 :
+                   (pct >=  25) ? 1 : 0;
+        for (int i = 0; i < bars; i++) {
+            int bx = batt_x + 2 + i * 5;   /* 3 px bar + 2 px gap */
+            int by = batt_y + 3;           /* inside the outline */
+            fb_fill_rect(bx, by, 3, 5, COLOR_STATUS_BAR_FG);
+        }
+        /* Percentage label to the right of the cap. */
+        snprintf(s_buf, sizeof(s_buf), "%u", (unsigned)pct);
+        fb_draw_text(batt_x + batt_w + 4, batt_y + 2, s_buf, COLOR_STATUS_BAR_FG);
+    }
 
     /* 16 step grid */
     int step = sequencer_get_current_step();
@@ -401,7 +442,16 @@ static void render_picker_screen(void)
 
     /* Footer with rotate/click hint. */
     fb_draw_text(4, 308, "WRITE=exit", COLOR_TEXT_DIM);
-    fb_draw_text(170, 308, "tap step=load", COLOR_TEXT_DIM);
+
+    /* F-033 still applies -- but the clock was bumped off the main
+     * screen by the F-035 battery indicator. Show it in the picker
+     * footer so the user can still read HH:MM when picking a
+     * sketch. Right-aligned at x=190; the "tap step=load" hint that
+     * used to live here was off-screen at x>=170 anyway. */
+    uint16_t h, m;
+    clock_get_hhmm(&h, &m);
+    snprintf(s_buf, sizeof(s_buf), "%02u:%02u", (unsigned)h, (unsigned)m);
+    fb_draw_text(190, 308, s_buf, COLOR_TEXT_DIM);
 }
 
 /* F-022 volume-level overlay state.
