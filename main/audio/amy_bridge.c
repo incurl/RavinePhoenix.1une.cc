@@ -374,16 +374,41 @@ void amy_bridge_pump_capture(void)
 }
 
 /* ─── note trigger ─────────────────────────────────────────────── */
-static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2)
+static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2,
+                    uint32_t slot_len, uint32_t slot_start, uint32_t slot_end)
 {
     switch (fx) {
     case PO33_FX_NONE:
-    case PO33_FX_LOOP_16:
     case PO33_FX_LOOP_12:
-    case PO33_FX_LOOP_SHORT:
     case PO33_FX_LOOP_SHORTER:
-    case PO33_FX_RETRIGGER_PATTERN:
     case PO33_FX_68_QUANTIZE:
+        break;
+    case PO33_FX_LOOP_16:
+        /* Loop the last 1/16 of the sample for one note. */
+        if (slot_len > 0 && slot_end > slot_start) {
+            uint32_t span = slot_end - slot_start;
+            uint32_t slice = span / 16;
+            if (slice < 64) slice = 64;  /* floor at ~1.5 ms at 44.1 kHz */
+            e->loopstart = slot_end - slice;
+            e->loopend   = slot_end;
+        }
+        break;
+    case PO33_FX_LOOP_SHORT:
+        /* Loop a fixed short region at the end of the sample. */
+        if (slot_len > 0 && slot_end > slot_start) {
+            uint32_t slice = 4096;  /* ~93 ms at 44.1 kHz */
+            if (slice > slot_end - slot_start) slice = slot_end - slot_start;
+            if (slice < 64) slice = 64;
+            e->loopstart = slot_end - slice;
+            e->loopend   = slot_end;
+        }
+        break;
+    case PO33_FX_RETRIGGER_PATTERN:
+        /* Restart the sequencer from step 0. Posted to the sequencer
+         * task via a flag polled in on_step(); see input.c. apply_fx
+         * itself just records the intent on the event so we have a
+         * hook point. */
+        sequencer_request_retrigger();
         break;
     case PO33_FX_OCTAVE_UP:
         e->midi_note = (uint8_t)(e->midi_note + 12); break;
@@ -404,7 +429,26 @@ static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2)
         e->dist_clip = 1;
         break;
     case PO33_FX_STUTTER_4:
+        /* Loop a tiny region (1/16 of the slice) for one note -- sounds
+         * like a 4x stutter on a short burst. */
+        if (slot_len > 0 && slot_end > slot_start) {
+            uint32_t span = slot_end - slot_start;
+            uint32_t slice = span / 32;
+            if (slice < 64) slice = 64;
+            e->loopstart = slot_end - slice;
+            e->loopend   = slot_end;
+        }
+        break;
     case PO33_FX_STUTTER_3:
+        /* Same as STUTTER_4 but slightly longer loop region. */
+        if (slot_len > 0 && slot_end > slot_start) {
+            uint32_t span = slot_end - slot_start;
+            uint32_t slice = span / 24;
+            if (slice < 64) slice = 64;
+            e->loopstart = slot_end - slice;
+            e->loopend   = slot_end;
+        }
+        break;
     case PO33_FX_SCRATCH_FAST:
     case PO33_FX_REVERSE:
     default:
@@ -454,7 +498,10 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
         e.filter_type     = FILTER_LPF;
     }
 
-    apply_fx(&e, fx, fx_p1, fx_p2);
+    apply_fx(&e, fx, fx_p1, fx_p2,
+             use_sampler ? s_slots[slot].length_samples : 0,
+             s_slots[slot].start,
+             s_slots[slot].end);
     amy_add_event(&e);
 
     if (e.synth) {

@@ -48,6 +48,12 @@ uint8_t  sequencer_get_current_pattern(void);
  * only the step bindings are reset to empty. */
 void sequencer_clear_current_pattern(void);
 
+/* F-019 PO33_FX_RETRIGGER_PATTERN: request that the active pattern
+ * restart from step 0 on the next step tick. Posted (not immediate)
+ * so the call from amy_bridge is safe from any context -- it just
+ * sets a flag the sequencer's on_step() callback consumes. */
+void sequencer_request_retrigger(void);
+
 /* Pattern building helpers */
 void sequencer_set_step_slot(uint8_t pattern, uint8_t step,
                              uint8_t slot, uint8_t note);

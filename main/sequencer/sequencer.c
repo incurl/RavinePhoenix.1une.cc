@@ -30,6 +30,12 @@ static volatile uint16_t s_bpm   = DEFAULT_BPM;
 static volatile uint8_t s_active_slot = 0xFF;   /* 0xFF = none selected */
 static volatile uint8_t s_active_fx   = PO33_FX_NONE;
 
+/* F-019 PO33_FX_RETRIGGER_PATTERN: set true by amy_bridge when a
+ * retrigger-pattern note is played; on_step() consumes + clears it.
+ * The sequencer resets to step 0 (and resets the chain cursor) on the
+ * next step tick. */
+static volatile bool s_retrigger_requested = false;
+
 /* Swing level (0..SWING_LEVELS-1). Set by BPM-held + Knob A; consumed
  * by on_step() to delay off-beat 16th notes. */
 static volatile uint8_t s_swing = 0;
@@ -170,6 +176,13 @@ void sequencer_clear_current_pattern(void)
     ESP_LOGI(TAG, "pattern %u cleared", (unsigned)s_pattern);
 }
 
+void sequencer_request_retrigger(void)
+{
+    /* F-019 PO33_FX_RETRIGGER_PATTERN. Set the flag; on_step()
+     * consumes it on the next timer tick. Safe from any context. */
+    s_retrigger_requested = true;
+}
+
 uint16_t sequencer_get_bpm(void)         { return s_bpm; }
 uint8_t  sequencer_get_current_step(void){ return s_step; }
 uint8_t  sequencer_get_current_pattern(void){ return s_pattern; }
@@ -209,6 +222,17 @@ static void on_swing_fire(void *arg)
 static void on_step(void *arg)
 {
     (void)arg;
+
+    /* F-019 PO33_FX_RETRIGGER_PATTERN: a retrigger request was posted
+     * between the last tick and this one. Reset the step counter and
+     * the chain cursor so the pattern restarts from the top. The
+     * `if (g_chain_len > 0 ...)` logic further down already handles
+     * chain advancement from the new origin. */
+    if (s_retrigger_requested) {
+        s_retrigger_requested = false;
+        s_step = 0;
+    }
+
     step_t s;
     pattern_get_step(s_pattern, s_step, &s);
 

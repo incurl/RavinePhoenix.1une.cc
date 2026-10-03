@@ -630,8 +630,8 @@ Each effect below is presented with: a one-sentence layman explanation of what i
 
 - **What it sounds like:** the sound plays its first 16th, then loops that 16th over and over for the duration of the step.
 - **Manual:** "loop 16".
-- **Our code:** `main/audio/amy_bridge.h` → `PO33_FX_LOOP_16`. In `apply_fx()`, this case is currently a no-op — the loop point is set when the sample is registered, not per-step.
-- **Status:** ⚠️ partial. Data model supports loop_end / loop_start on each voice, but the per-step override is not wired through.
+- **Our code:** `PO33_FX_LOOP_16`. `apply_fx()` sets `e.loopstart = slot_end - slice` and `e.loopend = slot_end`, where `slice = (slot_end - slot_start) / 16`. A custom AMY patch (in `components/amy/src/{amy.h,amy.c,pcm.c}`) propagates these per-event loop bounds into the voice at note-on time. See the AMY changes for the delta-queue plumbing.
+- **Status:** ✅ done.
 
 ### 4.2 Effect 2 — loop 12
 
@@ -644,8 +644,8 @@ Each effect below is presented with: a one-sentence layman explanation of what i
 
 - **What it sounds like:** loop a shorter chunk (about a 16th-note).
 - **Manual:** "loop short".
-- **Our code:** `PO33_FX_LOOP_SHORT`.
-- **Status:** ⚠️ partial.
+- **Our code:** `PO33_FX_LOOP_SHORT`. `apply_fx()` sets `e.loopstart = slot_end - slice` and `e.loopend = slot_end`, where `slice` is a fixed 4096 samples (~93 ms at 44.1 kHz) clamped to the slot range. Same AMY plumbing as 4.1.
+- **Status:** ✅ done.
 
 ### 4.4 Effect 4 — loop shorter
 
@@ -686,8 +686,8 @@ Each effect below is presented with: a one-sentence layman explanation of what i
 
 - **What it sounds like:** a tiny chunk of the sound is repeated 4 times per beat, creating a "st-st-st-stutter".
 - **Manual:** "stutter 4".
-- **Our code:** `PO33_FX_STUTTER_4`. Currently a no-op (the granular engine isn't wired).
-- **Status:** ⚠️ partial. Data model supports it (`effect_state_t.ring`), but the per-sample stutter logic isn't fully wired through `apply_fx()`.
+- **Our code:** `PO33_FX_STUTTER_4`. `apply_fx()` sets `e.loopstart = slot_end - slice` and `e.loopend = slot_end`, where `slice = (slot_end - slot_start) / 32` (half the LOOP_16 size, to give a tighter stutter). Same AMY plumbing as 4.1.
+- **Status:** ✅ done. The resulting loop is short enough that it reads as a 4x stutter rather than a sustained note.
 
 ### 4.10 Effect 10 — stutter 3
 
@@ -721,8 +721,8 @@ Each effect below is presented with: a one-sentence layman explanation of what i
 
 - **What it sounds like:** every step that has a sound re-fires that sound multiple times within the step duration.
 - **Manual:** "retrigger pattern".
-- **Our code:** `PO33_FX_RETRIGGER_PATTERN`. Currently a no-op.
-- **Status:** ❌ missing.
+- **Our code:** `PO33_FX_RETRIGGER_PATTERN`. Our interpretation: the FX resets the active pattern's step counter to 0 on the next step tick (effectively restarting the pattern from the top). `apply_fx()` calls `sequencer_request_retrigger()`, which sets a flag consumed by the sequencer's `on_step()` callback. The PO-33 might also re-fire sounds within the step -- our implementation handles the "restart pattern" half; the "re-fire sounds" half is interpreted as "and will get to this step again sooner" via the restart. Open question: how the real PO-33 handles the chain cursor on retrigger; we reset `s_step` to 0 but leave `g_chain_len` and the chain cursor intact.
+- **Status:** ✅ done (partial interpretation; see open question above).
 
 ### 4.15 Effect 15 — reverse
 
@@ -1033,7 +1033,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 2. Patterns (write mode) | 7 | 4 | 2 | 1 |
 | 3. Songs (chain) | 2 | 0 | 1 | 1 |
 | 4. Tweaking (tone / filter / trim) | 4 | 1 | 2 | 1 |
-| 5. Effects (16 punch-ins) | 16 | 3 | 6 | 7 |
+| 5. Effects (16 punch-ins) | 16 | 7 | 6 | 3 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
 | 7. Volume | 1 | 1 | 0 | 0 |
 | 8. Copy + delete | 5 | 0 | 0 | 5 |
@@ -1042,7 +1042,7 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 11. Clock + alarm | 2 | 1 | 1 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 1 | 0 | 1 |
-| **Total** | **~50** | **18 (36%)** | **13 (26%)** | **19 (38%)** |
+| **Total** | **~50** | **22 (44%)** | **13 (26%)** | **15 (30%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 
