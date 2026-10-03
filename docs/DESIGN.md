@@ -1443,7 +1443,7 @@ The state diagram for a sketch:
 ```
                 +---------+    create    +----------+
                 |         | ----------> |          |
-                |  EMPTY  |             | CREATED  |  (no samples, no patterns, name = "New Sketch")
+                |  EMPTY  |             | CREATED  |  (no samples, no patterns; auto-named by §11.6a generator, e.g. "bebop_coltrane")
                 |         |             |          |
                 +---------+             +----------+
                                           |
@@ -1481,7 +1481,7 @@ The state diagram for a sketch:
 
 State transitions:
 
-- `EMPTY → CREATED`: the user picks "New Sketch" on the TFT. We allocate the next 4-hex ID from the counter, write a default `meta.json` (name = "New Sketch", label color = 1, timestamps = now), and add an entry to `sketches.lst`. The active sketch becomes this one and starts empty.
+- `EMPTY → CREATED`: the user picks "New Sketch" on the TFT. We allocate the next 4-hex ID from the counter, write a default `meta.json` (auto-named by the §11.6a Docker-style generator; e.g. "bebop_coltrane", "cool_davis", … label color = 1, timestamps = now), and add an entry to `sketches.lst`. The active sketch becomes this one and starts empty.
 - `CREATED → MODIFIED`: any recording, edit, or transport change. Pure RAM.
 - `MODIFIED → SAVED`: user picks "Save" on the TFT, or auto-save fires. We write `samples.bin`, `patterns/p*.bin`, `chain.bin`, and `meta.json` (with bumped last-modified-at) atomically. RAM == flash.
 - `SAVED → MODIFIED`: user edits anything. Pure RAM.
@@ -1497,7 +1497,8 @@ These are the new public functions. **Signatures only** — no implementation in
 
 typedef struct {
     char     id[5];            /* 4 hex chars + null terminator */
-    char     name[25];
+    char     name[25];         /* Docker-style "<genre>_<musician>"
+                                * (see §11.6a sketch-name convention). */
     uint8_t  label_color;      /* 0..7 */
     uint32_t created_at;       /* Unix timestamp */
     uint32_t modified_at;
@@ -1566,6 +1567,46 @@ All new functions are non-blocking for the audio path. The actual file I/O happe
 The PO-33's "one song, one chain" is preserved **within** a sketch. What we add is that the device can hold N sketches, each with its own chain. This is the same conceptual model as the Korg Electribe's "Pattern Set" or Ableton Live's "Live Set" — a higher-level container that owns a complete working state.
 
 > **Vocabulary note.** The PO-33 calls its unit of creative work a "song". We call it a **sketch**. The two refer to the same idea (samples + patterns + a chain + metadata); we just picked a shorter word that doesn't have pop-music connotations or clash with sampler vocabulary (we avoid "groove" because that word means *timing templates* in the rest of the music-software world). The 16-step chain *within* a sketch is unchanged from the PO-33's "song chain".
+
+### 11.6a Sketch-name convention (Docker-style, jazz-flavoured)
+
+The display name of a sketch follows a **Docker-style two-word convention**: `<genre>_<musician>`, all lowercase, ASCII letters only, with an optional `_N` collision suffix.
+
+**Why Docker-style?** The PO-33 names its songs sequentially ("Song 01", "Song 02") which is boring and not very evocative. We want names that are:
+1. **Human-memorable** — so a user scrolling through the sketch picker can find their work by feel.
+2. **Curated** — so the namespace doesn't degenerate into `sketch_x` / `my_sketch_v2_final_FINAL`.
+3. **Visually short** — the TFT picker shows ~16 chars per cell; we need to fit comfortably.
+4. **Plenty of headroom** — 192 unique canonical names cover 12× SKETCHES_MAX before any collision suffixes kick in.
+
+**The vocabulary** lives in `main/sketch/sketch_name.{c,h}`:
+
+| Field   | Count | Examples                                                                 |
+|---------|-------|--------------------------------------------------------------------------|
+| Genres  | 12    | bebop, cool, swing, hardbop, modal, bossa, fusion, free, latin, smooth, acid, nu |
+| Musicians | 16  | coltrane, davis, monk, parker, gillespie, evans, corea, wayne, basie, powell, blakey, jobim, coleman, tyner, dolphy, mingus |
+
+Every `<genre>_<musician>` combo fits in ≤ 17 bytes; plus the optional `_N` collision suffix (up to `_99`), every legal name is ≤ 20 bytes — comfortably inside `SKETCH_NAME_MAX = 24`.
+
+**Examples of canonical names** (no collision suffix):
+```
+bebop_coltrane    cool_davis        swing_basie
+hardbop_blakey    modal_evans       bossa_jobim
+fusion_corea      free_coleman      latin_powell
+smooth_monk       acid_tyner        nu_mingus
+```
+
+**Collision handling.** When a user creates a sketch and the generator's lex-first choice is already taken (e.g. `bebop_coltrane` already exists), the generator appends `_2`, `_3`, … up to `_99` before falling back to the next canonical pair. So a user might see `bebop_coltrane`, `bebop_coltrane_2`, `bebop_coltrane_3`, `bebop_davis`, … — the same convention Docker uses for container names. The total namespace is `12 × 16 × 99 = 19,008` unique names, which is ~1,200× the SKETCHES_MAX = 16 hard cap.
+
+**The four-byte sketch ID is independent** (`0000`…`FFFF`). It's the folder name on flash, the API key (`storage_sketch_switch(id)`), and the path inside `/sketches/`. The Docker-style name is purely the display name in `sketch_meta_t.name`. This decoupling is intentional: renaming a sketch (future feature) should never have to touch the filesystem layout.
+
+**Validation rules** (enforced by `sketch_name_is_valid()`):
+- Lowercase ASCII letters and digits only
+- Exactly one or two underscores (no `_` at start, no trailing `_`)
+- Non-empty `<genre>` and `<musician>` parts
+- Optional collision suffix is `_` followed by 1+ digits, with `_0` rejected (it would look confusingly like a canonical name)
+- Total length ≤ `SKETCH_NAME_TOTAL_MAX = 24`
+
+This rejects: `Bebop_Coltrane` (uppercase), `bebop-coltrane` (hyphen), `bebop coltrane` (space), `bebop_` (empty musician), `_coltrane` (empty genre), `bebop_coltrane_0` (zero suffix), `bebop_coltrane_2x` (non-digit suffix), 25-char names, etc.
 
 ### 11.7 Concurrency / atomicity
 

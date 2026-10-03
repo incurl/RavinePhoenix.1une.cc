@@ -16,6 +16,7 @@
 
 #include "esp_err.h"
 #include <stdint.h>
+#include "config.h"   /* SKETCH_NAME_MAX used by SKETCH_NAME_LEN alias */
 /* */
 
 #ifdef __cplusplus
@@ -34,7 +35,9 @@ esp_err_t storage_load_pattern(uint8_t idx);
 
 /* Multi-sketch (v2) APIs. */
 #define SKETCH_ID_LEN   4      /* "0000"..SKETCH_ID_MAX */
-#define SKETCH_NAME_LEN  16
+#define SKETCH_NAME_LEN  SKETCH_NAME_MAX  /* alias — name is now the
+                                          * Docker-style jazz string,
+                                          * see sketch/sketch_name.h */
 #define SKETCHES_MAX     16
 
 /* Read the sketches.lst index into out_ids. out_ids must point at

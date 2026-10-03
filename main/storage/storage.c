@@ -8,6 +8,7 @@
 #include "config.h"
 #include "sequencer/pattern.h"
 #include "audio/amy_bridge.h"
+#include "sketch/sketch_name.h"
 #include "esp_littlefs.h"
 #include "esp_log.h"
 #include <stdio.h>
@@ -210,7 +211,16 @@ esp_err_t storage_sketch_delete(const char *id_str)
  * safe semantics for v2; the docs note this as a future hardening).
  */
 
-#define SKETCH_META_LEN 16
+#define SKETCH_META_LEN SKETCH_NAME_MAX   /* alias to config.h's
+                                            * SKETCH_NAME_MAX (24). The
+                                            * on-flash sketches.lst
+                                            * format stores the
+                                            * Docker-style jazz name
+                                            * (e.g. "bebop_coltrane")
+                                            * in this slot. The
+                                            * display length and the
+                                            * wire-format length are
+                                            * the same now. */
 
 /* Allocate the next 4-hex ID by scanning sketches.lst for max(id)+1. */
 static int next_free_id(void)
@@ -410,13 +420,29 @@ esp_err_t storage_sketch_save_active(void)
     if (len > 0) fwrite(g_chain, 1, len, fc);
     fclose(fc);
 
-    /* Meta: auto-name "Sketch N" where N is the count + 1. */
+    /* Meta: auto-name via the Docker-style jazz generator.
+     * See main/sketch/sketch_name.h for the format. We collect the
+     * existing names as `taken` so the generator picks the
+     * lexicographically smallest free canonical name (and falls back
+     * to "_N" suffixes only if every canonical name is in use). */
     char name[SKETCH_META_LEN];
     uint8_t cur_count = 0;
     char ids[SKETCHES_MAX][SKETCH_ID_LEN + 1];
     char names[SKETCHES_MAX][SKETCH_META_LEN];
     read_index_full(&cur_count, ids, names);
-    snprintf(name, sizeof(name), "Sketch %d", cur_count + 1);
+
+    /* Build a flat array of C-string pointers into `names` so
+     * sketch_name_next_free() can iterate. */
+    const char *taken[SKETCHES_MAX];
+    for (uint8_t i = 0; i < cur_count; i++) taken[i] = names[i];
+    /* Sketch_name.h requires the array to end at `taken_count`, so
+     * any unused slots after `cur_count` are simply past the count. */
+
+    if (!sketch_name_next_free(name, sizeof(name), taken, cur_count)) {
+        /* Namespace exhausted (would need >19,008 sketches). */
+        ESP_LOGE(TAG, "sketch-name namespace exhausted");
+        return ESP_ERR_NO_MEM;
+    }
 
     FILE *fm = fopen(meta_path, "wb");
     if (fm) {
