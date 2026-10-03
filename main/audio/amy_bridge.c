@@ -3,10 +3,13 @@
  *
  * Sample pool:
  *   One contiguous PSRAM block partitioned into 16 slots.
- *   Each slot is also registered with AMY via pcm_load() (called from
- *   amy_bridge_register_slot and re-called from set_trim) so that
- *   play_note() actually plays the user's sample rather than falling
- *   through to AMY's ROM preset 0. See register_slot_with_amy().
+ *   Each slot is registered with AMY via pcm_load_external() (a local
+ *   AMY patch; see components/asm/src/amy.h). The pointer to the
+ *   sample inside s_pool is handed directly to AMY -- there is no
+ *   AMY-side copy. Lifetime is the firmware's: pcm_unload_preset()
+ *   frees only the per-preset metadata (~80 bytes), not the sample
+ *   buffer. So play_note(slot) actually plays the user's sample
+ *   rather than falling through to AMY's ROM preset 0.
  *
  * Recording:
  *   AMY exposes the mic DMA as an internal buffer; we copy that into the
@@ -132,11 +135,9 @@ esp_err_t amy_bridge_set_trim(uint8_t slot, uint32_t start, uint32_t end)
     s_slots[slot].start = start;
     s_slots[slot].end   = end;
     /* Trim affects AMY's loopstart/loopend -- re-register so playback
-     * honours the new bounds. Unloading first is important because
-     * pcm_load() allocates fresh memory; the previous allocation is
-     * orphaned if we don't. */
+     * honours the new bounds. pcm_load_external internally unloads
+     * any existing entry; clearing our mask bit lets it set it cleanly. */
     if (s_registered_mask & (1u << slot)) {
-        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + slot));
         s_registered_mask &= ~(1u << slot);
         (void)register_slot_with_amy(slot);
     }
@@ -149,16 +150,16 @@ esp_err_t amy_bridge_set_trim(uint8_t slot, uint32_t start, uint32_t end)
  *
  * Without this, play_note(slot) silently falls through to AMY's
  * ROM preset 0 -- a default sample the user never recorded. The
- * pcm_load() function copies the sample into AMY's own allocation
- * (in PSRAM, per the ram_caps_sample config); the source copy in
- * s_pool stays put for storage_save/load.
+ * pcm_load_external() takes a caller-owned pointer and registers
+ * the preset without copying. We hand it the address of the sample
+ * inside s_pool directly -- the recording pool also backs storage,
+ * so the firmware is the lifetime owner.
  *
- * Memory cost: a registered slot consumes an extra (length_samples *
- * 2) bytes in PSRAM for the AMY-side copy. With all 16 slots fully
- * loaded (3 s melodic + 2 s drum, the design's max), total AMY
- * allocations reach ~3.3 MB -- the 8 MB N16R27 PSRAM absorbs this
- * with ~4 MB headroom for the sample pool, AMY state, framebuffer,
- * and LittleFS working set. */
+ * Memory cost: a registered slot consumes only the AMY metadata
+ * (~80 bytes: linked-list node + memorypcm_preset_t). With 16 slots
+ * fully loaded, AMY-side metadata is ~1.3 KB total -- down from
+ * ~3.3 MB with the previous pcm_load approach. The 8 MB N16R8 PSRAM
+ * budget is fully recovered. */
 static esp_err_t register_slot_with_amy(uint8_t slot)
 {
     if (slot >= SLOT_COUNT) return ESP_ERR_INVALID_ARG;
@@ -166,31 +167,24 @@ static esp_err_t register_slot_with_amy(uint8_t slot)
 
     uint16_t preset = (uint16_t)(PO33_PRESET_BASE + slot);
 
-    /* pcm_load allocates fresh memory. If the preset is already
-     * registered (s_registered_mask bit set), we don't unload first
-     * because the caller (register_slot) handles the unload; here we
-     * just allocate the new copy. */
-    int16_t *ram = pcm_load(preset,
-                            s_slots[slot].length_samples,
-                            s_slots[slot].sample_rate_hz,
-                            1,            /* channels: mono */
-                            60.0f,        /* midinote: middle C */
-                            s_slots[slot].start,    /* loopstart */
-                            s_slots[slot].end);     /* loopend (>0 means
-                                                       not loop-whole) */
-    if (!ram) {
-        ESP_LOGE(TAG, "pcm_load failed for slot %u", slot);
-        return ESP_ERR_NO_MEM;
-    }
-    /* Copy the sample data into AMY's preset memory. pcm_load sets
-     * loopend = length - 1 when called with loopend = 0, so the
-     * "loop the whole sample" semantics are preserved when end == 0. */
-    const int16_t *src = s_pool + slot_offset_bytes(slot) / sizeof(int16_t);
-    memcpy(ram, src, s_slots[slot].length_samples * sizeof(int16_t));
+    /* Hand AMY our PSRAM pointer directly. pcm_load_external
+     * (a local AMY patch; see components/asm/src/amy.h) registers
+     * the preset without copying; pcm_unload_preset() does NOT free
+     * sample_ram (lifetime is the firmware's, not AMY's). */
+    int16_t *ram = s_pool + slot_offset_bytes(slot) / sizeof(int16_t);
+    pcm_load_external(preset,
+                      ram,
+                      s_slots[slot].length_samples,
+                      s_slots[slot].sample_rate_hz,
+                      1,            /* channels: mono */
+                      60.0f,        /* midinote: middle C */
+                      s_slots[slot].start,    /* loopstart */
+                      s_slots[slot].end);     /* loopend (>0 means
+                                                 not loop-whole) */
 
     s_registered_mask |= (1u << slot);
-    ESP_LOGI(TAG, "Slot %u registered with AMY (preset %u, %u samples, "
-                  "loop %u..%u)",
+    ESP_LOGI(TAG, "Slot %u registered with AMY (external, preset %u, "
+                  "%u samples, loop %u..%u)",
              slot, (unsigned)preset,
              (unsigned)s_slots[slot].length_samples,
              (unsigned)s_slots[slot].start,
@@ -220,12 +214,12 @@ esp_err_t amy_bridge_register_slot(uint8_t slot, const int16_t *data,
     if (data) memcpy(dst, data, copy_samples * sizeof(int16_t));
     else      memset(dst, 0, copy_samples * sizeof(int16_t));
 
-    /* If the slot was previously registered with AMY, unload first so
-     * the old allocation is freed before we allocate a new one. */
-    if (s_registered_mask & (1u << slot)) {
-        pcm_unload_preset((uint16_t)(PO33_PRESET_BASE + slot));
-        s_registered_mask &= ~(1u << slot);
-    }
+    /* pcm_load_external (called by register_slot_with_amy below)
+     * internally calls pcm_unload_preset() on any existing entry for
+     * this preset number, so we don't need to do it explicitly here.
+     * Just clear our mask bit so register_slot_with_amy can re-set it
+     * cleanly. */
+    s_registered_mask &= ~(1u << slot);
 
     s_slots[slot].in_use         = true;
     s_slots[slot].is_drum        = is_drum;
@@ -236,13 +230,15 @@ esp_err_t amy_bridge_register_slot(uint8_t slot, const int16_t *data,
                                                          : sample_rate_hz;
 
     /* Register with AMY so play_note(slot) actually plays this
-     * sample. pcm_load's loopend semantics -- if we pass loopend=0 it
-     * sets loopend=length-1 ("loop whole sample") -- line up with
-     * our default (end == length_samples). */
+     * sample. pcm_load_external (a local AMY patch; see
+     * components/asm/src/amy.h) takes a caller-owned pointer so
+     * there's no AMY-side sample allocation -- the metadata is ~80
+     * bytes per slot. Registration only fails on the metadata malloc,
+     * which on PSRAM is essentially impossible. */
     esp_err_t reg_err = register_slot_with_amy(slot);
     if (reg_err != ESP_OK) {
         /* Slot is in s_pool + s_slots; AMY-side registration failed.
-         * We can't unplay the in_use flag without leaving the pool in
+         * We can't unset the in_use flag without leaving the pool in
          * an inconsistent state. Log and return ESP_OK so the caller
          * doesn't think the recording failed; audio will fall back to
          * ROM preset 0 (the previous behaviour). */
