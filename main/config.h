@@ -210,7 +210,8 @@ enum {
  *   Knob A was reassigned from GPIO 20 to GPIO 2 to free the USB-OTG
  *   D+ line (GPIO 20) for the future USB-MIDI feature (§14). GPIO 2 is
  *   the only free ADC1 channel on the N16R8 module not already used by
- *   I2S / TFT / SD card / boot strapping.
+ *   I2S / TFT / boot strapping. (An SD card interface was considered
+ *   but declined — see HARDWARE.md §8.4 for the GPIO-budget analysis.)
  *
  *   ⚠️ GPIO 2 is a strapping pin: it must be floating or held HIGH at
  *   boot, otherwise the chip enters download-boot (esptool) mode. The

@@ -752,16 +752,42 @@ If you have an ESP32-S3 module without Octal PSRAM (e.g. the N4 variant with 4 M
 
 The firmware is designed around the assumption of **Octal PSRAM**. There is no graceful fallback.
 
-### 8.4 Adding an external SD card
+### 8.4 Storage expansion: SD card (deliberately not added)
 
-A microSD card adapter on SPI would let you store samples on a removable card instead of in flash. To do this:
+An SD card would let users store hundreds of sketches on swappable media and pull recordings onto a laptop by ejecting the card. **We deliberately do not add an SD card interface.** This section records the analysis so future contributors don't have to redo it.
 
-- Pick three free GPIO pins (anywhere except the GPIOs already used for I²S, TFT, and buttons).
-- Wire `CS`, `MOSI`, `MISO`, `SCK` to those pins.
-- Add the FAT filesystem component (`espressif/esp_littlefs` or `espressif/fatfs`) to `main/idf_component.yml`.
-- Modify `storage.c` to mount the SD card as the sample destination instead of the flash partition.
+**Why not?** GPIO budget. The ESP32-S3-WROOM-1-N16R8 has 49 module GPIOs (0–48). After the v1 pin assignments (counted from `main/config.h`):
 
-This is a v2 feature. The current firmware stores samples on the 16 MB flash chip via LittleFS, which works fine for the 40 s pool.
+| Used          | Count | For |
+|---------------|-------|-----|
+| I²S in/out    | 6     | audio codec + MEMS mic |
+| TFT           | 6     | ILI9341 SPI display |
+| Button matrix | 8     | 4×4 step matrix |
+| Dedicated buttons | 7 | SOUND / PATTERN / BPM / REC / FX / PLAY / WRITE |
+| LEDs          | 2     | REC + PLAY indicators |
+| Sync in/out   | 2     | jam-sync jack |
+| Knobs         | 2     | A (ADC1) + B (ADC1) |
+| Encoder       | 3     | A / B phases + click switch |
+| **Total used**| **36**| |
+
+Of the remaining 13 GPIOs: 7 are consumed by the octal PSRAM (GPIO 26–32, not bonded to pads on the N16R8 module), and 2 are deliberately reserved for the future USB-MIDI feature (GPIO 19 / 20, the USB-OTG D− / D+ lines). That leaves **0 truly free GPIOs**, plus 4 strapping-pin GPIOs (0, 1, 3, 45) that are unsafe to repurpose.
+
+**SD card interface options and their GPIO cost:**
+
+| Option                    | New GPIOs needed | Notes |
+|---------------------------|------------------|-------|
+| Shared SPI with TFT (CS + MISO) | 1–2 | Cheapest; reuses the existing SPI2 bus. Bus contention with display refresh is manageable but adds driver ordering work. |
+| Dedicated SPI bus (SPI3 / HSPI) | 4 | Clean separation; unaffordable. |
+| SDMMC 1-line              | 3               | Native protocol; would require dropping a feature (a button or LED) or fighting a strapping pin. |
+| SDMMC 4-line              | 6               | Fastest (~40 MB/s); impossible without a redesign. |
+
+**Even the cheapest SD path costs 1–2 GPIOs we don't have.** The realistic options for adding storage are:
+
+1. **Move to a non-PSRAM ESP32-S3 module** (e.g. ESP32-S3-WROOM-1-N16 = 16 MB flash, no octal PSRAM) to recover GPIO 26–32 = +7 GPIOs. Combined with the shared-SPI path, that's enough breathing room. **Cost: $0–$1 BOM delta, but the existing N16R8 modules already on hand cannot be re-used.**
+2. **Use USB-MSD instead of SD** when the future USB-MIDI commit lands (USB-MIDI consumes GPIO 19 / 20, and the USB-Serial/JTAG console on GPIO 1 / 3 will be repurposed). USB-MSD presents the device's flash as a USB drive when plugged into a laptop — gives the **same laptop-interchange benefit** as FAT32 on an SD card, with **zero new GPIOs**. Trade-off: USB-MSD and USB-MIDI can't coexist (single USB-OTG port), so this is an "either/or" choice.
+3. **Stay on flash only.** The 8 MB `sketches` partition holds ~5 typical sketches. Sufficient for the PO-33-style "one song at a time" workflow and the small multi-sketch picker UI (SKETCHES_MAX = 16). If the user later needs more, option 1 above is the path.
+
+**Verdict:** No SD card. The current build stays on flash only. If a future hardware revision frees the PSRAM GPIOs (option 1), revisit this decision — at that point a shared-SPI SD card becomes a half-day hardware add.
 
 ### 8.5 Replacing the AMY synth engine
 

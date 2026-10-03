@@ -1237,7 +1237,7 @@ Drawn from the official Teenage Engineering manual ([teenage.engineering/guides/
 | L9 | BPM levels | 3 presets (Hip Hop 80, Disco 120, Techno 140) + fine-tune | Manual §6 |
 | L10 | Headphone volume levels | 5 | Manual §7 |
 | L11 | Sync protocols | 5 modes (SY0–SY5) over 3.5 mm cable; ≤5 Vpp | Manual §10 |
-| L12 | Data transfer | 3.5 mm audio cable only; no WiFi, no Bluetooth, no USB, no MIDI, no SD card | Manual §9 |
+| L12 | Data transfer | 3.5 mm audio cable only; no WiFi, no Bluetooth, no USB, no MIDI | Manual §9 |
 | L13 | Storage | non-volatile internal only; no user-expandable storage | Manual §8 |
 | L14 | Recording sources | built-in microphone + 3.5 mm line-in | Manual §1 |
 | L15 | Polyphony | not stated explicitly; ~4 voices typical for the PO line | inferred |
@@ -1347,6 +1347,8 @@ The following are features we **could** ship if time permitted, ranked by (user 
 | 9 | **AI patch suggestions** | Suggest effect chains based on the audio. | Very high: needs ML model. | Out of scope for v3. |
 
 Honest note: items 1, 8, and 9 are aspirational. Items 2–7 are realistic on a one-month timeline for a single developer. Items 2 and 4 are what we would build first.
+
+> **Deferred: SD card support.** The earlier wishlist draft mentioned an SD card interface for swappable / unlimited storage. **Removed from the wishlist.** The ESP32-S3-WROOM-1-N16R8 module's GPIO matrix is fully allocated after the v1 pin assignments (see HARDWARE.md §8.4 for the full GPIO-budget analysis); adding an SD card would cost 1–6 new GPIOs depending on mode, and we have zero. The two practical paths forward are **(a)** a future hardware revision that drops the octal PSRAM to recover GPIO 26–32, or **(b)** using USB-MSD instead when the USB-MIDI commit lands (same laptop-interchange benefit, zero new GPIOs, but mutually exclusive with USB-MIDI). See HARDWARE.md §8.4 for the full options table.
 
 ---
 
