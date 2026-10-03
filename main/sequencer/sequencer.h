@@ -79,6 +79,7 @@ void sequencer_tick(void);
  * does NOT start the local esp_timer step clock; instead the listener
  * task (system/sync.c) drives sequencer_tick() per incoming pulse. */
 void sequencer_set_sync_in_active(bool active);
+bool    sequencer_is_sync_in_active(void);   /* read current state */
 
 /* F-019 PO33_FX_RETRIGGER_PATTERN: request that the active pattern
  * restart from step 0 on the next step tick. Posted (not immediate)

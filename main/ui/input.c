@@ -243,6 +243,13 @@ static int64_t s_rec_pattern_combo_started_us = 0;
  * casual contact. */
 static int64_t s_rec_bpm_combo_started_us = 0;
 
+/* F-031 sync-mode toggle: long-press FX (no other modifier held)
+ * for 2 seconds. Toggles sequencer_set_sync_in_active(). FX tap is
+ * tweak-mode cycle (separate); FX+step selects effect (also
+ * separate). 2 seconds is enough to avoid accidental triggers from
+ * a normal tap-then-hold gesture. */
+static int64_t s_fx_long_started_us = 0;
+
 /* ─── Write-mode (PO-33 F-009/F-010/F-011) state ──────────────── */
 
 /* True while the user has tapped WRITE to enter write mode. While
@@ -873,6 +880,34 @@ void input_drain(void)
         }
     } else if (!rec_bpm_held) {
         s_rec_bpm_combo_started_us = 0;
+    }
+
+    /* F-031 sync IN toggle: long-press FX (alone, no other modifier
+     * held) for 2 seconds. Toggles sequencer_set_sync_in_active().
+     * The 2-second gate is enough to avoid accidental triggers from
+     * a normal "tap and hold" gesture (which is < 600 ms anyway
+     * since ev.long_press fires at BTN_LONG_PRESS_MS). Latched like
+     * the other combos. */
+    bool fx_now_held = buttons_is_pressed(BTN_FX);
+    bool fx_alone_held = fx_now_held
+        && !rec_now_held && !pattern_now_held && !bpm_now_held;
+    if (fx_alone_held && s_fx_long_started_us == 0) {
+        s_fx_long_started_us = esp_timer_get_time();
+    } else if (s_fx_long_started_us > 0) {
+        int64_t elapsed_us = esp_timer_get_time() - s_fx_long_started_us;
+        if (elapsed_us >= 2LL * 1000 * 1000) {
+            /* Toggle. sequencer_set_sync_in_active() reads the current
+             * state via the implementation -- we don't track it here;
+             * the sequencer does. We just flip the boolean we read
+             * from sequencer_is_sync_in_active(). */
+            bool now = sequencer_is_sync_in_active();
+            sequencer_set_sync_in_active(!now);
+            ESP_LOGI(TAG, "FX held 2s -> sync IN %s",
+                     now ? "OFF" : "ON");
+            s_fx_long_started_us = -1;
+        }
+    } else if (!fx_alone_held) {
+        s_fx_long_started_us = 0;
     }
 
     /* Picker polling. Reads the encoder delta + click and routes

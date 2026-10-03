@@ -276,6 +276,11 @@ void sequencer_set_sync_in_active(bool active)
     ESP_LOGI(TAG, "sync IN %s", active ? "ENABLED" : "DISABLED");
 }
 
+bool sequencer_is_sync_in_active(void)
+{
+    return s_sync_in_active;
+}
+
 void sequencer_save_fx_to_pattern(uint8_t fx, uint8_t p1, uint8_t p2)
 {
     /* F-019 "save effect in pattern". Set the per-step effect on every

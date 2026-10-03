@@ -48,11 +48,14 @@ static void sync_in_task(void *arg)
     while (1) {
         /* Block until the ISR gives the semaphore. */
         if (xSemaphoreTake(s_in_sem, portMAX_DELAY) == pdTRUE) {
-            if (sequencer_is_playing()) {
+            /* F-031 toggle (long-press FX, 2 s): when sync IN is off,
+             * the sequencer runs on its local BPM clock; incoming
+             * pulses are ignored (consumed silently). This is the
+             * "I'm not chained to anything, don't kick me" mode. */
+            if (sequencer_is_playing() && sequencer_is_sync_in_active()) {
                 sequencer_tick();
             }
-            /* When stopped, just consume the pulse -- the next play
-             * will be aligned to fresh incoming pulses. */
+            /* When stopped, or sync IN is off, just consume the pulse. */
         }
     }
 }
