@@ -166,6 +166,40 @@ void sequencer_chain_clear(void)
     g_chain_len = 0;
 }
 
+void sequencer_chain_remove(uint8_t pattern)
+{
+    /* F-014: compact the buffer in place. O(N) sweep, expected N
+     * small (<= PATTERN_CHAIN_MAX = 128). */
+    size_t w = 0;
+    for (size_t r = 0; r < g_chain_len; r++) {
+        if (g_chain[r] != pattern) {
+            g_chain[w++] = g_chain[r];
+        }
+    }
+    g_chain_len = (uint8_t)w;
+    ESP_LOGI(TAG, "chain: removed pattern %u (len now %u)",
+             (unsigned)pattern, (unsigned)g_chain_len);
+}
+
+size_t sequencer_chain_count(uint8_t pattern)
+{
+    size_t n = 0;
+    for (size_t i = 0; i < g_chain_len; i++) {
+        if (g_chain[i] == pattern) n++;
+    }
+    return n;
+}
+
+uint8_t sequencer_chain_at(uint8_t index)
+{
+    return (index < g_chain_len) ? g_chain[index] : 0xFF;
+}
+
+uint8_t sequencer_chain_len(void)
+{
+    return g_chain_len;
+}
+
 void sequencer_clear_current_pattern(void)
 {
     /* F-012 (PO-33: "hold record + pattern to clear the active pattern").

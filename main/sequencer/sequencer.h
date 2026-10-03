@@ -23,6 +23,18 @@ void sequencer_set_pattern(uint8_t pattern);
 void sequencer_chain_append(uint8_t pattern);  /* PO-33 chain build */
 void sequencer_chain_clear(void);
 
+/* F-014: remove all occurrences of `pattern` from the chain. After
+ * this call, the chain plays as if pattern had never been appended.
+ * Cheap O(N) sweep over the chain buffer. */
+void sequencer_chain_remove(uint8_t pattern);
+
+/* F-014: number of chain entries currently pointing at `pattern`. */
+size_t sequencer_chain_count(uint8_t pattern);
+
+/* Read-only chain introspection (UART + tests). */
+uint8_t sequencer_chain_at(uint8_t index);  /* index < sequencer_chain_len() */
+uint8_t sequencer_chain_len(void);         /* current chain length */
+
 /* Active slot / active FX. Set by the SOUND / FX hold-+-number
  * dispatcher in ui/input.c, consumed by on_step() so that subsequent
  * triggers (sequencer or "press step without modifier after a SOUND

@@ -210,10 +210,31 @@ static void po33_shell_task(void *arg)
                 int p = atoi(line + 8);
                 if (p >= 0 && p < PATTERN_COUNT) {
                     sequencer_set_pattern((uint8_t)p);
-                    printf("pattern=%d\n", p);
+                    sequencer_chain_append((uint8_t)p);
+                    printf("pattern=%d (chain appended)\n", p);
                 } else {
                     printf("invalid pattern\n");
                 }
+            } else if (strcmp(line, "chain show") == 0) {
+                printf("chain: [");
+                for (size_t i = 0; i < sequencer_chain_len(); i++) {
+                    printf("%s%u", i ? "," : "",
+                           (unsigned)sequencer_chain_at(i));
+                }
+                printf("] (len %u)\n", (unsigned)sequencer_chain_len());
+            } else if (strncmp(line, "chain remove ", 13) == 0) {
+                int p = atoi(line + 13);
+                if (p >= 0 && p < PATTERN_COUNT) {
+                    size_t before = sequencer_chain_count((uint8_t)p);
+                    sequencer_chain_remove((uint8_t)p);
+                    printf("removed %u entr%s of pattern %d\n",
+                           (unsigned)before, before == 1 ? "y" : "ies", p);
+                } else {
+                    printf("invalid pattern\n");
+                }
+            } else if (strcmp(line, "chain clear") == 0) {
+                sequencer_chain_clear();
+                printf("chain cleared\n");
             } else if (strcmp(line, "sketch new") == 0 ||
                        strcmp(line, "sketch save") == 0) {
                 esp_err_t e = storage_sketch_save_active();
