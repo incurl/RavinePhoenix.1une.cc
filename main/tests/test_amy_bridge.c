@@ -34,9 +34,30 @@ TEST_CASE("register and trigger a slot", "[amy]")
     TEST_ASSERT_EQUAL(ESP_OK, e);
     TEST_ASSERT_EQUAL_size_t(n, amy_bridge_slot_len_samples(8));
 
-    e = amy_bridge_play_note(8, 60, 100, PO33_FX_NONE, 0, 0, 0, 0);
+    e = amy_bridge_play_note(8, 60, 100, PO33_FX_NONE, 0, 0, 0, 0, 0xFF);
     TEST_ASSERT_EQUAL(ESP_OK, e);
 
     /* AMY's bridge should still report no OOM after a single note. */
     TEST_ASSERT_EQUAL_UINT32(0, amy_get_oom_count());
+}
+
+TEST_CASE("auto-slice and auto-note helpers", "[amy]")
+{
+    /* The auto-note helper only fires on melodic slots (>=8); drum
+     * slots (<8) return 0. Step 0 of a melodic slot is C4 (60),
+     * step 15 is D#5 (75). */
+    TEST_ASSERT_EQUAL_UINT8(60, amy_bridge_auto_note_for_step(8,  0));
+    TEST_ASSERT_EQUAL_UINT8(61, amy_bridge_auto_note_for_step(8,  1));
+    TEST_ASSERT_EQUAL_UINT8(75, amy_bridge_auto_note_for_step(8, 15));
+    TEST_ASSERT_EQUAL_UINT8(0,  amy_bridge_auto_note_for_step(0,  5));   /* drum */
+    TEST_ASSERT_EQUAL_UINT8(0,  amy_bridge_auto_note_for_step(99, 5));   /* invalid */
+
+    /* The auto-slice helper returns false on invalid/drum/empty
+     * slots and writes no output. We test the false branch first;
+     * a recorded-slot test would require actually registering a
+     * recording, which the slot 8 test above already exercises. */
+    uint32_t s = 0, e = 0;
+    TEST_ASSERT_FALSE(amy_bridge_auto_slice_for_step(0, 5, &s, &e));   /* drum */
+    TEST_ASSERT_FALSE(amy_bridge_auto_slice_for_step(8, 5, &s, &e));   /* melodic */
+    TEST_ASSERT_FALSE(amy_bridge_auto_slice_for_step(99, 5, &s, &e));  /* invalid */
 }

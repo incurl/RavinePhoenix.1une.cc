@@ -546,7 +546,8 @@ static void play_active_slot(uint8_t step_index_0_to_15)
     }
     amy_bridge_play_note(slot, note, velocity,
                          (po33_fx_t)sequencer_get_active_fx(), 0, 0,
-                         filter_cutoff, filter_resonance);
+                         filter_cutoff, filter_resonance,
+                         step_index_0_to_15);
 }
 
 /* Find the first press-bound modifier currently being held, or NULL.

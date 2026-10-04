@@ -149,6 +149,50 @@ uint8_t amy_bridge_auto_note_for_step(uint8_t slot, uint8_t step_index)
     return (uint8_t)(60 + step_index);
 }
 
+/* F-024 drum auto-slicing. Returns true iff *loopstart and *loopend
+ * were populated. Returns false for empty slots, non-drum slots, or
+ * invalid slots -- in those cases the caller should NOT set the AMY
+ * event's loopstart/loopend fields (leaves them at AMY's default of
+ * "loop the whole sample", which is the right thing for melodic and
+ * empty slots).
+ *
+ * Slice math: split the slot's *trimmed* region (start..end) into 16
+ * equal pieces. step_index 0 -> first piece (start..start+piece),
+ * step_index 15 -> last piece (end-piece..end). Each piece is at
+ * least 64 samples (~1.5 ms at 44.1 kHz) so very short recordings
+ * still play something audible instead of one cycle of silence.
+ *
+ * Floor and ceiling are both inclusive: the last sample of slice N
+ * is sample (N+1)*piece-1, and slice N+1 starts at sample (N+1)*piece.
+ * That keeps the slices contiguous (no gaps, no overlap) which is
+ * what the real PO-33 does.
+ *
+ * Why we honour the trim: if the user has trimmed the slot to play a
+ * specific portion (e.g., a one-shot kick where the trim removes the
+ * silence at the end), slicing should respect the trim and slice
+ * within the trimmed region, not the full recording.
+ */
+bool amy_bridge_auto_slice_for_step(uint8_t slot, uint8_t step_index,
+                                    uint32_t *loopstart, uint32_t *loopend)
+{
+    if (slot >= SLOT_COUNT)        return false;   /* invalid */
+    if (slot >= SLOT_DRUM_COUNT)   return false;   /* melodic: not a drum */
+    if (!s_slots[slot].in_use)     return false;   /* empty slot */
+    if (step_index >= 16)          step_index = 0;
+    uint32_t span = s_slots[slot].end - s_slots[slot].start;
+    if (span < 64) return false;   /* too short to slice meaningfully */
+    uint32_t piece = span / 16;
+    if (piece < 64) piece = 64;    /* floor each piece at ~1.5 ms */
+    uint32_t off = (uint32_t)step_index * piece;
+    if (off > span) off = span;
+    *loopstart = s_slots[slot].start + off;
+    *loopend   = s_slots[slot].start + off + piece;
+    if (*loopend > s_slots[slot].end) *loopend = s_slots[slot].end;
+    /* Guarantee loopstart < loopend even for pathological cases. */
+    if (*loopend <= *loopstart && *loopstart > 0) *loopend = *loopstart + 1;
+    return true;
+}
+
 size_t amy_bridge_slot_max_bytes(uint8_t slot)
 {
     if (slot >= SLOT_COUNT) return 0;
@@ -610,7 +654,8 @@ static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2,
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
                               po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2,
-                              uint8_t filter_cutoff, uint8_t filter_resonance)
+                              uint8_t filter_cutoff, uint8_t filter_resonance,
+                              uint8_t step_index_0_to_15)
 {
     if (slot >= SLOT_COUNT) return ESP_ERR_INVALID_ARG;
     bool use_sampler = s_slots[slot].in_use;
@@ -647,6 +692,29 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
         e.filter_freq     = (float)filter_cutoff * 8000.0f / 255.0f;
         e.filter_resonance = 1.0f + (float)filter_resonance / 51.0f;
         e.filter_type     = FILTER_LPF;
+    }
+
+    /* F-024 drum auto-slicing. Set the loop bounds BEFORE apply_fx()
+     * so that FX which touch loopstart/loopend (LOOP_16, LOOP_SHORT,
+     * STUTTER_3, STUTTER_4) can clobber the auto-slice -- the same
+     * precedence pattern as the F-017 filter above. The user has the
+     * final say: choose an FX that wants different loop bounds, and
+     * the FX wins. Default (PO33_FX_NONE) lets the auto-slice stand.
+     *
+     * Only applies to recorded drum slots -- melodic slots play the
+     * whole sample at the chosen pitch (no slicing); empty slots
+     * fall through to AMY's default synth (no PCM preset, so
+     * loopstart/loopend are not used). The caller passes 0xFF to
+     * disable slicing (e.g., the alarm-clock path which fires a
+     * sample regardless of pad context). */
+    if (use_sampler && slot < SLOT_DRUM_COUNT
+        && step_index_0_to_15 != 0xFF) {
+        uint32_t slice_start = 0, slice_end = 0;
+        if (amy_bridge_auto_slice_for_step(slot, step_index_0_to_15,
+                                            &slice_start, &slice_end)) {
+            e.loopstart = slice_start;
+            e.loopend   = slice_end;
+        }
     }
 
     apply_fx(&e, fx, fx_p1, fx_p2,

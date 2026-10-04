@@ -90,11 +90,21 @@ void      amy_bridge_clear_slot(uint8_t slot);
  * races the memmove. */
 esp_err_t amy_bridge_copy_slot(uint8_t dst, uint8_t src);
 
-/* Note trigger from sequencer. */
+/* Note trigger from sequencer.
+ *
+ * `step_index_0_to_15` enables the F-024 auto-slice behaviour for
+ * recorded drum slots: when the slot is a drum slot with a recording
+ * and the per-event FX is PO33_FX_NONE, the loopstart/loopend fields
+ * of the AMY event are set to the Nth 1/16th slice of the slot's
+ * trimmed region (N = step_index_0_to_15). Pass 0xFF to disable the
+ * auto-slice (loopstart/loopend left at AMY's default of "play the
+ * whole sample"). Melodic slots and empty slots ignore this value
+ * either way. */
 esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               uint8_t velocity,
                               po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2,
-                              uint8_t filter_cutoff, uint8_t filter_resonance);
+                              uint8_t filter_cutoff, uint8_t filter_resonance,
+                              uint8_t step_index_0_to_15);
 
 /* F-005 auto-mapping (the real PO-33 behaviour). When a melodic slot is
  * played with the user's explicit note = 0 ("not set"), the pad/step
@@ -113,6 +123,27 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
  *
  * See DESIGN.md F-005 (auto-mapping). */
 uint8_t amy_bridge_auto_note_for_step(uint8_t slot, uint8_t step_index);
+
+/* F-024 / F-005 drum auto-slicing (the real PO-33 behaviour). When a
+ * drum slot is played with the user not having selected a per-step
+ * effect that overrides loop bounds (LOOP_16, LOOP_SHORT, etc.), the
+ * pad/step index alone determines which 1/16th of the recording to
+ * play. Pad 1 = first 1/16th (samples 0..len/16-1), pad 2 = second
+ * 1/16th, ..., pad 16 = last 1/16th.
+ *
+ * Writes the slice bounds into *loopstart and *loopend. The bounds
+ * are derived from the slot's length_samples and the current trim
+ * (start, end). For empty slots or non-drum slots, returns false
+ * and writes nothing. Caller should pass the result into the AMY
+ * event's loopstart/loopend fields before apply_fx() -- FX that
+ * touch loop bounds (LOOP_16, LOOP_SHORT, STUTTER_*) will clobber
+ * the auto-slice, which is the desired behaviour (FX always wins).
+ *
+ * step_index is 0..15 (0-based). Out-of-range inputs are clamped to 0.
+ *
+ * See DESIGN.md F-024 (auto-slicing). */
+bool amy_bridge_auto_slice_for_step(uint8_t slot, uint8_t step_index,
+                                     uint32_t *loopstart, uint32_t *loopend);
 
 /* Master volume level (PO-33 F-022: hold BPM + 1..5 sets the level).
  * Level 0 (silent) is also accepted. Internally scales the velocity

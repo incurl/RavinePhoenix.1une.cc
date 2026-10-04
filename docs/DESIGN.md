@@ -267,10 +267,15 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §1.1
 - **Layman:** Slots 1–8 are for short percussive sounds (drums). Slots 9–16 are for longer sounds that you want to pitch-shift around the musical scale (melodic). Drums play at their recorded pitch; melodic slots play pitched up or down based on which step of the pattern triggers them.
 - **PO-33 button combo:** Slots are just numbered 1–16; the type is implicit.
-- **PO-33 detail — pad-to-note auto-mapping:** the real PO-33 maps the 16 pads to a chromatic scale one octave wide when the active slot is melodic. Pad 1 plays C4 (MIDI 60), pad 2 plays C#4 (61), ..., pad 13 plays C5 (72), pad 16 plays D#5 (75). Pad-to-slice auto-mapping for drum slots (where each pad triggers 1/16th of the recording) is **not** in v1 firmware — see F-024 (❌ missing).
+- **PO-33 detail — pad-to-note auto-mapping:** the real PO-33 maps the 16 pads to a chromatic scale one octave wide when the active slot is melodic. Pad 1 plays C4 (MIDI 60), pad 2 plays C#4 (61), ..., pad 13 plays C5 (72), pad 16 plays D#5 (75). **Implemented** — see helper `amy_bridge_auto_note_for_step(slot, step_index)` below.
+- **PO-33 detail — pad-to-slice auto-mapping:** when the active slot is a recorded drum slot, the real PO-33 splits the recording into 16 equal slices and each pad triggers 1/16th of it. Pad 1 plays samples 0..len/16-1, pad 16 plays the last 1/16th. **Implemented** — see helper `amy_bridge_auto_slice_for_step(slot, step_index, *loopstart, *loopend)` below. The slice bounds are set on the AMY event BEFORE `apply_fx()` so that any FX which touches loopstart/loopend (LOOP_16, LOOP_SHORT, STUTTER_3, STUTTER_4) overrides the auto-slice — the user's FX choice always wins.
 - **Our hardware combo:** Same.
-- **Code location:** `main/config.h` → `SLOT_DRUM_COUNT 8`. `main/audio/amy_bridge.c` → `apply_fx()` uses `e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : 4`. Auto-mapping helper `amy_bridge_auto_note_for_step(slot, step_index)` lives in `main/audio/amy_bridge.{c,h}`; called from `main/ui/input.c::play_active_slot()` (no-modifier step press) and `main/sequencer/sequencer.c::on_step()` (sequencer playback) when the user has not overridden the pitch via tweak Tone and the per-step note is 0.
-- **Status:** ✅ done. **Auto-mapping** (the melodic pad → chromatic note half) is now implemented. Drum auto-slicing remains v2 — F-024.
+- **Code location:** `main/config.h` → `SLOT_DRUM_COUNT 8`. `main/audio/amy_bridge.c` → `apply_fx()` uses `e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : 4`. Two auto-mapping helpers live in `main/audio/amy_bridge.{c,h}`:
+  - `amy_bridge_auto_note_for_step(slot, step_index)` — melodic-slot chromatic mapping. Returns 0 for drum slots and 60..75 for melodic slots.
+  - `amy_bridge_auto_slice_for_step(slot, step_index, *loopstart, *loopend)` — drum-slot slice bounds. Returns false (no slicing) for melodic slots and empty slots. Honours the slot's trim region.
+
+  Both helpers are called from `main/ui/input.c::play_active_slot()` (no-modifier step press) and `main/sequencer/sequencer.c::on_step()` (sequencer playback). `play_active_slot()` now takes a `step_index_0_to_15` argument; `on_step()` uses the existing `s_step` global; `amy_bridge_play_note()` takes a `step_index_0_to_15` argument that flows through `pending_note_t` for the swing-fire path. Pass `0xFF` to disable both mappings (e.g., the alarm clock fires the whole recording regardless of pad).
+- **Status:** ✅ done. Both halves of the PO-33 pad-to-note + pad-to-slice auto-mapping are now implemented. FX still wins for users who want a different loop behaviour.
 
 ### 3.2 Section 2 — Patterns (sequencing)
 
@@ -482,11 +487,11 @@ See §4 below for the per-effect deep dive.
 
 - **Manual ref:** §8
 - **Layman:** Same as F-023 but only copies one slice (one of the 16 auto-sliced parts) to a new drum slot.
-- **PO-33 detail — slice concept:** the real PO-33 splits each drum-slot recording into 16 equal-length slices by default. Each pad (1–16) plays the corresponding 1/16th of the recording. This pad-to-slice mapping is **not** auto-applied in our v1 firmware; a drum slot plays its whole recording on every pad. Copying one slice is therefore also ❌ missing (without the slicing concept, there's nothing to copy). See F-005 (✅ done — auto-mapping for melodic slots is implemented; auto-slicing for drum slots is v2).
+- **PO-33 detail — slice concept:** the real PO-33 splits each drum-slot recording into 16 equal-length slices by default. Each pad (1–16) plays the corresponding 1/16th of the recording. This pad-to-slice mapping is **now auto-applied** in our v1 firmware via `amy_bridge_auto_slice_for_step()`; a recorded drum slot triggers the Nth 1/16th on the Nth pad. See F-005 for the cross-reference and the FX precedence rule (FX that touch loop bounds, like LOOP_16, override the auto-slice).
 - **PO-33 button combo:** WRITE + SOUND + 9–16 (drum slot) + slice number 1–16.
-- **Our hardware combo:** Not yet.
-- **Code location:** `main/audio/amy_bridge.c` → would need a `amy_bridge_copy_slice(src_slot, slice_index, dst_slot)` plus a `amy_bridge_slot_slice(slot, slice_index, *loopstart, *loopend)` helper that does the slicing math (slot_len / 16 per slice, clamped).
-- **Status:** ❌ missing.
+- **Our hardware combo:** Auto-slicing is automatic; the WRITE+SOUND+step "copy slice" button combo is not yet wired (the UART verb is also unimplemented).
+- **Code location:** Slicing helper: `main/audio/amy_bridge.{c,h}` → `amy_bridge_auto_slice_for_step(slot, step_index, *loopstart, *loopend)`; called from `amy_bridge_play_note()` when `slot < SLOT_DRUM_COUNT` and `step_index_0_to_15 != 0xFF`. Copy-slice verb: `main/audio/amy_bridge.c` → would need a `amy_bridge_copy_slice(src_slot, slice_index, dst_slot)` that registers a new (empty) drum slot, allocates a fresh PSRAM region of size `slot_len / 16`, copies the slice bytes into it, and re-registers the AMY preset.
+- **Status:** ⚠️ partial. **Auto-slicing is implemented.** Copying a slice to a new drum slot (the WRITE+SOUND+step button combo and its UART equivalent) is still ❌ missing — the helper exists for the playback path but not for the copy path.
 
 #### F-025 — Copy an entire pattern
 
@@ -1040,13 +1045,13 @@ The payoff: a user looking at the device can tell at a glance which sound is loa
 | 5. Effects (16 punch-ins) | 16 | 7 | 6 | 3 |
 | 6. BPM / tempo | 2 | 1 | 0 | 1 |
 | 7. Volume | 1 | 1 | 0 | 0 |
-| 8. Copy + delete | 5 | 4 | 0 | 1 |
+| 8. Copy + delete | 5 | 4 | 1 | 0 |
 | 9. Data transfer | 2 | 0 | 0 | 2 |
 | 10. Sync | 3 | 2 | 0 | 1 |
 | 11. Clock + alarm | 2 | 2 | 0 | 0 |
 | 12. Battery | 2 | 2 | 0 | 0 |
 | 13. Factory reset + UI | 2 | 2 | 0 | 0 |
-| **Total** | **~50** | **30 (60%)** | **12 (24%)** | **8 (16%)** |
+| **Total** | **~50** | **30 (60%)** | **13 (26%)** | **7 (14%)** |
 
 ### 7.2 The effect-list mismatch (v2 plan)
 

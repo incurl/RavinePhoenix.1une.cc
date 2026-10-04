@@ -97,9 +97,11 @@ static void alarm_check_tick(void *arg)
     s_last_alarm_day = day;
     ESP_LOGW(TAG, "ALARM firing: %02u:%02u slot %u", hh, mm, s_alarm_slot);
     /* Play the configured sample once. Middle-C, default velocity,
-     * no FX, no tweak-mode filter -- a clean "wake up" tone. */
+     * no FX, no tweak-mode filter -- a clean "wake up" tone. The
+     * step_index_0_to_15 = 0xFF disables the F-024 auto-slice; the
+     * alarm fires the whole recording rather than 1/16th of it. */
     amy_bridge_play_note(s_alarm_slot, 60, 100,
-                         PO33_FX_NONE, 0, 0, 0, 0);
+                         PO33_FX_NONE, 0, 0, 0, 0, 0xFF);
 }
 
 static void persist_offset(void)

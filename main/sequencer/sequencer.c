@@ -59,8 +59,9 @@ typedef struct {
     uint8_t     note;
     uint8_t     velocity;
     po33_fx_t   fx;
+    uint8_t     step_index;   /* for F-024 drum auto-slice on swing fires */
 } pending_note_t;
-static volatile pending_note_t s_pending_note = { 0xFF, 0, 0, PO33_FX_NONE };
+static volatile pending_note_t s_pending_note = { 0xFF, 0, 0, PO33_FX_NONE, 0xFF };
 static volatile bool           s_pending      = false;
 
 /* Forward decls. The swing timer fires on_swing_fire() to play a
@@ -324,14 +325,15 @@ static void on_swing_fire(void *arg)
     pending_note_t n;
     /* Read volatile struct once, then clear pending. Atomic on the
      * ESP32-S3 for a 4-byte aligned read. */
-    n.slot     = s_pending_note.slot;
-    n.note     = s_pending_note.note;
-    n.velocity = s_pending_note.velocity;
-    n.fx       = s_pending_note.fx;
-    s_pending  = false;
+    n.slot       = s_pending_note.slot;
+    n.note       = s_pending_note.note;
+    n.velocity   = s_pending_note.velocity;
+    n.fx         = s_pending_note.fx;
+    n.step_index = s_pending_note.step_index;
+    s_pending    = false;
     if (n.slot != 0xFF) {
         amy_bridge_play_note(n.slot, n.note, n.velocity, n.fx, 0, 0,
-                             0, 0);
+                             0, 0, n.step_index);
     }
 }
 
@@ -408,18 +410,20 @@ static void on_step(void *arg)
         if (slot != 0xFF) {
             amy_bridge_play_note(slot, s.note, s.velocity,
                                  fx, s.effect_p1, s.effect_p2,
-                                 s.filter_cutoff, s.filter_resonance);
+                                 s.filter_cutoff, s.filter_resonance,
+                                 s_step);
         }
     } else {
         /* Cancel any previous swing note that hasn't fired yet (e.g.
          * the user pressed BPM long-press while a previous off-beat
          * was in flight). The new off-beat replaces it. */
         if (s_swing_timer) esp_timer_stop(s_swing_timer);
-        s_pending_note.slot     = slot;
-        s_pending_note.note     = s.note;
-        s_pending_note.velocity = s.velocity;
-        s_pending_note.fx       = fx;
-        s_pending               = true;
+        s_pending_note.slot       = slot;
+        s_pending_note.note       = s.note;
+        s_pending_note.velocity   = s.velocity;
+        s_pending_note.fx         = fx;
+        s_pending_note.step_index = s_step;
+        s_pending                 = true;
         uint32_t delay_us = (s_period_us * (uint32_t)s_swing
                             * (uint32_t)SWING_MAX_PERCENT)
                             / (100U * (uint32_t)(SWING_LEVELS - 1));
@@ -431,7 +435,8 @@ static void on_step(void *arg)
             s_pending = false;
             amy_bridge_play_note(slot, s.note, s.velocity,
                                  fx, s.effect_p1, s.effect_p2,
-                                 s.filter_cutoff, s.filter_resonance);
+                                 s.filter_cutoff, s.filter_resonance,
+                                 s_step);
         }
     }
 
