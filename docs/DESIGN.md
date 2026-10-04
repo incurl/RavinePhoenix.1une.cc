@@ -1784,63 +1784,106 @@ This document is about a **digital** device — software running on a microcontr
 
 The two together give a complete picture. The book explains *what an oscillator is* and *why filters matter* — concepts that are buried under DSP jargon in most digital-music books. Our project shows the same concepts *expressed in code* — you can see an oscillator running and a filter sweeping, but you'd have a hard time figuring out why anyone bothered to write the code without the conceptual foundation.
 
-Pearson's book is from the **Dogbotic** studio in Berkeley, and is explicitly written for "total beginners" — "even the biggest electrophobes". It contains more than 40 hands-on projects and over 400 color photographs. Its final project, the **Dogbotophone MK1**, is described as "a massive electronic orchestra complete with multiple voices, drums, and self-patching sequencers" — which is exactly the spirit of what our PO-33 firmware aspires to be, just in silicon instead of solder.
+Pearson's book is from the **Dogbotic** studio in Berkeley, and is explicitly written for "total beginners" — "even the biggest electrophobes". It contains more than 40 hands-on projects, over 400 color photographs, and seven appendices. Its final project, the **Dogbotophone MK1** (chapter 14), is a 15-step build of "a massive electronic orchestra complete with multiple voices, drums, and self-patching sequencers" — which is exactly the spirit of what our PO-33 firmware aspires to be, just in silicon instead of solder.
 
-> ⚠️ **One honesty note.** I do not own a copy of this book. The chapter list and project descriptions in this section come from the publisher's page on Amazon and from the Dogbotic studio's own description ("Our Road Map") at [dogbotic.com/book](https://dogbotic.com/book). If the actual book has additional appendices, troubleshooting chapters, or online resources, my cliff's notes will be incomplete. The broad shape, however, is reliable because both sources are the author's own writing.
+**The full text of Pearson's book is included in this repository at `docs/Make_Electronic_Music.md`**, provided by the author for the purpose of producing this companion. All chapter summaries and project listings below come from that full text.
 
-### 12.1 The book in one paragraph each
+**A full 16 000-word companion study guide is at `docs/MAKERS_COMPANION.md`**. It pairs every chapter of Pearson's book with a UART shell exercise on our firmware. If you have a flashed device in front of you, start there.
 
-Here is every chapter in the book, condensed to a single sentence.
 
-1. **Musical Electricity for Electrophobes.** Corrects the lies you were taught in elementary school. Builds a working speaker out of household items; teaches you to listen to music through your bones; explains audio cables and how to use headphones as a microphone.
-2. **The Hello World Oscillator.** Builds the basic building block of a classical synthesizer: an oscillator circuit. Introduces the family of electronic components — resistors, capacitors, integrated circuits.
-3. **Amplifiers, Reverbs, and Talkboxes.** Builds a battery-powered amplifier you can take on the road, plus two silly fun projects that use one: a plate reverb and a talkbox.
-4. **Soldering, Enclosures, and UI.** Puts the oscillator from chapter 2 into a permanent home. This is where the project stops being a breadboard and starts being an instrument.
-5. **Chaining Oscillators.** Hooks one oscillator up to another, then another, then another. Builds a cricket-sounding circuit, a candle-controlled synth, and a chip that generates subharmonics.
-6. **Schematics and Mass Transit.** Teaches you to read those scary-looking circuit diagrams electricians use. Also the Rotterdam Metro.
-7. **Filters.** Uses your knowledge of impedance to build circuits that pass only certain frequencies. The "wah" effect on a guitar is a filter; so is the "telephone" EQ on a voice.
-8. **Harmonization.** Teaches integrated circuits some rudimentary music theory so you can harmonize with yourself. A harmonizer is what an autotune pedal does.
-9. **Modulation.** Builds little doodads that dynamically control aspects of a synth's sound: light-sensitive LFOs, an envelope generator with variable decay, and a stereo ping-pong tremolo.
-10. **Sequencers.** Builds a programmable circuit that plays back a series of voltages to play a melody, modulate a filter, or do anything else. Bonus: a circuit that composes interesting melodies automatically.
-11. **Electronic Percussion.** Builds a drum machine with kicks, snares, and cymbals.
-12. **Phase-Locked Loops.** Deep dive into the CD4046 PLL chip; multiplies frequencies, slews voltages, and makes a sample-and-hold module.
-13. **The Dogbotophone MK1.** The boss project: an electronic orchestra with multiple voices, drums, and self-patching sequencers that compose on the fly.
-14. **Thoughts on Automation.** A concluding essay on the politics of electronic music and capitalism.
-15. **Appendices.** Where to get parts; overview of the integrated circuits the book uses; a listening list.
+### 12.1 The book, one chapter at a time
+
+Below is every chapter of the book with its exact title, page range, and project list. The titles and page numbers are taken directly from Pearson's table of contents.
+
+**Part I: Electrical Music Fundamentals**
+
+1. **A People's History of Electronic Music** (pp. 2–15). The cultural history of the synthesizer — Cahill's Telharmonium, Theremin, Moog, the Ondioline, and the case for synths as folk instruments. No projects; essays only ("Nobody trusts electronic music", "Synthesizers as products", "The bane of learning electronics", "Our road map").
+2. **Musical Electricity for Electrophobes** (pp. 16–47). The basic physics of electricity as it applies to audio. Four experiments: The World's Simplest Speaker, Speaker-as-Microphone Identity Crisis, Piezomania, Sound Through Your Skull. Closes with "A Moment of Clarity" — voltage is potential, current is flow, resistance is pushback.
+
+**Part II: Smaller Circuits**
+
+3. **The Hello World Oscillator** (pp. 48–71). The centrepiece of the book. Introduces the breadboard, jumper wires, resistors, LEDs, potentiometers, capacitors, and integrated circuits. The main project is **My-First-Square-Wave-Oscillator™** — a 555 timer chip in astable mode with two resistors and a capacitor. Four variations: The Pinch-O-Matic (squishy resistor), Playing with Your Food (capacitor as a fruit), The Pencil-Pusher (graphite resistor), and A Photo Theremin (LDR replaces pot).
+4. **Amps, Reverbs, and Talkboxes** (pp. 72–89). Builds a battery-powered LM386 amplifier. Three projects: **A Breadboard Power Amp**, **Stereo Panning** (one pot splits audio between two speakers), **A Plate Reverb** (a metal plate vibrates, contact mics pick it up), and **A Talkbox** (a speaker plays into your mouth).
+5. **Soldering, Enclosures, and UI** (pp. 90–109). Lab equipment, soldering safety, and completing the Photo Theremin into a permanent instrument.
+6. **Chaining Oscillators** (pp. 110–135). Polyphony and signal routing. Projects: **Polyphonic Square Waves**, **Tremolo**, **The Electro-Cricket** (555 + 40106 hex inverter), **The Undertoner** (subharmonics), and three variations: **The Atari Punk Candle**, **The Gating Oscillator**, **The Vactrol Arpeggiator**.
+
+**Part III: Bigger Circuits**
+
+7. **Schematics and Mass Transit** (pp. 136–155). A literacy lesson in reading schematics, using the Rotterdam Metro as an analogy.
+8. **Filters** (pp. 156–173). The harmonic series, additive vs subtractive synthesis, and the theory of impedance. Projects: **The Passive Low-Pass Filter**, **The Passive High-Pass Filter**, **The Active High-Pass Filter**, **The Active Low-Pass Filter**, **The Active Band-Pass Filter** (using the LM741 op-amp).
+9. **Harmonization** (pp. 174–191). Circuits that generate harmonics or subharmonics of a fundamental. Projects: **Octave Harmonizer**, **Subharmonic Generator**, **10-Stage Wavetable Generator** (using the 4017 decade counter), **The FM Yodeler**.
+10. **Modulation** (pp. 192–207). Circuits that dynamically control other circuits. Projects: **The Vantastic Vactrol** (LED + LDR = light-controlled resistor), **Pulse-Width Modulation**, **PWM with Vactrols**, **A Button-Controlled VCA**, **An LFO-Pingable VCA**, **The Piezo Drum Trigger**, **Ring Modulation**, **Stereo Tremolo**.
+
+**The sequencer hub**
+
+11. **Sequencers** (pp. 208–229). The second-biggest chapter. Introduces the 4051 multiplexer and Boolean logic, then builds six projects: **The Disco Boole (Part I)**, **The Disco Boole (Part II)**, **The Standard Eight-Step Sequencer**, **A Pattern-Changing Sequencer**, **A First-Order Reset Harmonization Sequencer**, **A Second-Order Reset Harmonization Sequencer**. The chapter closes with a section on interconnections between voice parts.
+
+**Back to drums**
+
+12. **Electronic Percussion** (pp. 230–251). A drum machine from analog oscillators using the 40106. Sections: making **Inharmonic Sounds** (tambourines, crash cymbals), making **Harmonic Sounds** (kick drums, tom-toms), making **Noise** (snare drums), and **Percussion Sequencing** with examples **Bomba** and **Bossa Nova**.
+
+**Tuning and the boss fight**
+
+13. **Phase-Locked Loops** (pp. 252–267). The 4046 PLL chip and its uses. Projects: **The 4046 VCO**, **Portamento, Glide, and Glissando**, **VCO Switching**, **Sample and Hold**, **LFO Multiplication**, **Audio-Frequency Multiplication**.
+
+**Part IV: Putting It All Together**
+
+14. **The Dogbotophone MK1** (pp. 268–283). The boss fight. A 15-step build of a complete multi-voice orchestra: audio-rate oscillator → sequencer clock → overtone synth → 16-step sequencer for overtone → undertone synth → 16-step sequencer for undertone → drum sequencer → tunable square wave → twin-T voices (×2) → cymbal (XOR voice) → diode AND-gate reset → optocoupler-controlled sequencer → optional active HP/LP filters → op-amp mixer. Closes: "If you've made it this far, congratulations! Your room is likely a mess of wires, but you've done it."
+
+**Closing**
+
+15. **Thoughts on Automation** (pp. 284–289). An essay, not a chapter. Pearson recounts a Maker Faire encounter and argues that synthesizers have always been folk instruments, never job-replacement machines. Closes with: "Deep down, we really truly believe that instrument building is an important, empowering activity, and that the more experimentation there is in the world, the more aware and compassionate we all become."
+
+**Appendices**
+
+- **A1. The Components of a Classical Synthesizer** (p. 290).
+- **A2. Integrated Circuit Information** (p. 296).
+- **A3. Part Sourcing** (p. 310).
+- **A4. Electronics Formulas to Know** (p. 314).
+- **A5. Electronic Music You Should Know** (p. 318).
+- **A6. Seventy Great Synth Albums** (p. 324).
+- **A7. Glossary** (p. 328).
+
 
 ### 12.2 Chapter-to-feature map: which chapters give you intuition for which parts of our device
 
-If you read the book alongside building our firmware, this table tells you which chapter to read *before* you tackle which part of our device. The intuition transfers even though the implementation is completely different (analog circuits vs. C code).
+If you read the book alongside building our firmware, this table tells you which chapter to read *before* you tackle which part of our device. The intuition transfers even though the implementation is completely different (analog circuits vs. C code). Chapter numbers are Pearson's, not the document's.
 
 | Book chapter | Builds intuition for these parts of our device | Why |
 |---|---|---|
-| **1. Musical Electricity** | §3.1 (recording, F-001–F-005), §6 (TFT screens) | Understanding sample rate, voltage, and signal flow is the foundation for everything else. The book's "use headphones as a mic" is exactly what our INMP441 I²S mic chip does, just digital. |
-| **2. Hello World Oscillator** | §3.5 (effects F-019), §4 (per-effect deep dive) | When the book says "oscillator", our firmware says "amy_event with `wave = SAW` or `wave = SINE`". Same idea, different medium. |
-| **3. Amplifiers, Reverbs, Talkboxes** | §3.5 (effects F-019), §7.3 (top-three missing features) | The plate reverb the book builds is a *physical* reverb (a metal plate vibrating). Our firmware's `amy_config_t.ram_caps_delay` is a *digital* reverb (a buffer of samples fed back on itself). Same effect; the math is nearly identical. |
-| **4. Soldering, Enclosures, UI** | §6 (the eight TFT screens) | The book chapter on UI is about how buttons and knobs and lights make an instrument feel real. Our equivalent is the four-by-four button matrix and the TFT. Same design problem. |
-| **5. Chaining Oscillators** | §3.1 (F-005, melodic vs drum slots), §2.12 (polyphony) | "Polyphony" in our firmware is just four oscillator instances playing in parallel. The book chapter on chaining is the analog version. |
-| **7. Filters** | §3.4 (F-017 tweak filter), §4.17 (`PO33_FX_FILTER_SWEEP`) | When the book talks about "low-pass filter" (pass the low frequencies, cut the high), AMY's `filter_type = FILTER_LPF` does the same thing in math. After reading the chapter, the code becomes obvious. |
-| **8. Harmonization** | §3.5 (effects F-019), §4.5 (unison) | "Unison" in our device = two oscillators playing the same note slightly out of phase. The book's "harmonize with yourself" is the same concept one step further. |
-| **9. Modulation** | §3.2 (sequencing, F-006–F-012) | The book's envelope generator (a circuit that "shapes" a sound over time) is the conceptual ancestor of our step sequencer. The step sequencer is a modulator that turns sounds on and off at exact moments. |
-| **10. Sequencers** | **§3.2 entirely**, §6.4 (pattern-edit screen), §6.6 (tweak screen) | **The book's chapter on sequencers is the closest analog to half of our firmware.** A step sequencer in hardware (a row of knobs and switches) and a step sequencer in code (a 16-element array of slots and notes) do the same thing. Read this chapter before reading our §3.2. |
-| **11. Electronic Percussion** | §3.1 (F-005, drum slots), §3.2 (F-006), §6.2 (sound-select screen) | The book's drum machine uses analog circuits to generate kick / snare / hat waveforms. Our device *records* real-world drum hits into slots and plays them back. The book teaches you what a "kick" actually is, in the analog sense. |
-| **12. Phase-Locked Loops** | Out of scope for our v1 firmware. PLLs are how analog synths tune oscillators. We don't need them because AMY's oscillators are digital and already in tune. | Mention only if you're curious about the history. |
-| **13. Dogbotophone MK1** | **The whole project.** Our device is a small, cheap, digital Dogbotophone. | After reading this chapter, the architecture of our firmware (sample pool + sequencer + effects) makes total sense. |
+| **1. People's History of Electronic Music** | The project as a whole | The book's argument — that synthesizers are folk instruments — is the entire reason this firmware exists. |
+| **2. Musical Electricity for Electrophobes** | §3.1 (recording, F-001–F-005), the I²S mic + DAC pipeline, §13.7 (sample rate, voltage = signed 16-bit integer) | The "speaker as microphone" symmetry maps 1:1 to our mic + DAC pipeline. Understanding voltage as a number is essential for understanding PCM audio. |
+| **3. Hello World Oscillator** | §3.5 (effects F-019), §3.4 (F-016 tweak Tone), §3 (all waveform/oscillator references) | When the book says "oscillator", our firmware says "amy_event with `wave = SAW` or `wave = SINE`". The four variations (Pinch-O-Matic, Food, Pencil-Pusher, Photo Theremin) map to velocity, recording-from-mic, raw synthesis, and Knob-A-as-LDR respectively. |
+| **4. Amps, Reverbs, and Talkboxes** | §3.5 (effects F-019), F-022 (volume level), the global reverb | The plate reverb the book builds is a *physical* reverb (a metal plate vibrating). AMY's reverb is a *digital* one (a buffer of samples fed back). Same effect; the math is nearly identical. |
+| **5. Soldering, Enclosures, and UI** | §6 (the eight TFT screens), the 4×4 button matrix design | The book chapter on UI is about how buttons, knobs, and lights make an instrument feel real. Our equivalent is the four-by-four button matrix and the TFT. Same design problem. |
+| **6. Chaining Oscillators** | §3.1 (F-005, melodic vs drum slots), §3 (polyphony), F-019 STUTTER_4 and LOOP_16 | Polyphony in our firmware is four oscillator instances per melodic slot (analog: chained 555s). STUTTER_4 is exactly the gating-oscillator variation. LOOP_16 is exactly the Vactrol Arpeggiator. |
+| **7. Schematics and Mass Transit** | §3 (reading our block diagrams), §11.5 (the side-by-side table) | Schematics literacy → block-diagram literacy. The vocabulary transfers. |
+| **8. Filters** | §3.4 (F-017 tweak Filter), §4.17 (`PO33_FX_FILTER_SWEEP`), F-019's filter punch-ins | When the book talks about "low-pass filter", AMY's `filter_type = FILTER_LPF` does the same thing in math. The book's active filters with the LM741 = our `filter_freq` + `filter_resonance` knobs. |
+| **9. Harmonization** | §3.4 (F-016 tweak Tone Knob A = pitch), §3.5 (effects F-019), AMY's FM synth | "Harmonize with yourself" = play the same note at two pitches; we do it with `note 9 60` then `note 9 72`. The FM Yodeler maps to AMY's `mod_source` / `mod_target` fields. |
+| **10. Modulation** | §3.2 (sequencing, F-006–F-012), F-019 modulation effects, F-031 (sync in/out) | The book's envelope generator (a circuit that shapes a sound over time) is the conceptual ancestor of our step sequencer. The step sequencer is a modulator that turns sounds on and off at exact moments. |
+| **11. Sequencers** | **§3.2 entirely**, §6.4 (pattern-edit screen), §6.6 (tweak screen), §3.13 (chain F-013/14), §3.7 (BPM F-020) | **The book's chapter on sequencers is the closest analog to half of our firmware.** A step sequencer in hardware (a row of knobs and switches) and a step sequencer in code (a 16-element array of slots and notes) do the same thing. The Standard Eight-Step Sequencer is exactly our pattern. Read this chapter before reading our §3.2. |
+| **12. Electronic Percussion** | §3.1 (F-005, drum slots), §3.2 (F-006 play a sound), §6.2 (sound-select screen) | The book's drum machine uses analog circuits to generate kick / snare / hat waveforms. Our device *records* real-world drum hits into slots and plays them back. The book teaches you what a "kick" actually is, in the analog sense; our firmware teaches you how to record one. |
+| **13. Phase-Locked Loops** | F-031 (jam-sync IN), F-032 (5 sync modes, deferred v2) | PLLs are how analog synths tune oscillators. We don't need them because AMY's oscillators are digital and already in tune. The 1-pulse-per-step sync is the only PLL analog we ship. |
+| **14. Dogbotophone MK1** | **The whole project.** | Our device is a small, cheap, digital Dogbotophone. The Dogbotophone's three sequencers = our chain; the Dogbotophone's six voices = our drum + melodic slots; the Dogbotophone's mixer = AMY's voice allocator; the Dogbotophone's active filters = our tweak Filter + FILTER_SWEEP FX. After reading this chapter, the architecture of our firmware (sample pool + sequencer + effects) is obvious. |
+| **15. Thoughts on Automation** | The politics of our project (the entire vibe) | The closing essay. Pearson argues synths are folk instruments; we argue the same by emulating one on open hardware. |
+
 
 ### 12.3 Recommended reading order
 
-There is no single right way to read the book. The order below matches how our document is structured, so the book and the doc reinforce each other.
+There is no single right way to read the book. The order below matches how our document is structured, so the book and the doc reinforce each other. Chapter numbers are Pearson's, not the document's.
 
-1. **Before you do anything else**, read the book's introduction and skim chapters 1, 2, and 4. The introduction sets the philosophy ("question the politics of your own creative practice"). Chapters 1 and 2 give you the vocabulary. Chapter 4 motivates the UI design.
-2. **Before you record a sample** (our §3.1, F-001), read the book's chapter 1 closely. It will make you understand *why* a microphone produces numbers instead of just sound.
-3. **Before you read our §3.5 (the 16 punch-in effects)**, read the book's chapters 3 (amplifier/reverb/talkbox) and 7 (filters). You will then know what those words *do*, which makes our effect list intelligible.
-4. **Before you read our §3.2 (sequencing)**, read the book's chapter 10 (sequencers) end-to-end. The book chapter is short but it grounds every term in our doc: step, pattern, loop, fill, retrigger.
-5. **Before you read our §3.1 on drum slots**, read the book's chapter 11 (electronic percussion). You will learn what a "kick" actually is, in the analog sense.
-6. **After you have the device working**, read the book's chapters 5 (chaining oscillators) and 9 (modulation). These give you deeper intuition for what our polyphony (F-005) and step sequencer (F-008) are doing mathematically.
-7. **Optional but inspiring**, read the boss chapter (13, Dogbotophone MK1). It will show you what a serious home-built instrument looks like. Our device is a baby Dogbotophone.
-8. **Read last**, the concluding chapter (14, Thoughts on Automation) and the appendices. These are not technical; they are about why any of this matters.
+1. **Before you do anything else**, read the book's introduction and skim chapters 1 ("A People's History") and 2 ("Musical Electricity"). The introduction sets the philosophy. Chapter 2 gives you the vocabulary. Chapter 1 motivates why this firmware exists.
+2. **Before you record a sample** (our §3.1, F-001), re-read the book's chapter 2 closely, especially the "Speaker as Microphone" and "A Moment of Clarity" sections. You will then understand *why* a microphone produces numbers instead of just sound.
+3. **Before you read our §3.5 (the 16 punch-in effects)**, read the book's chapters 3 ("Hello World Oscillator"), 4 ("Amps, Reverbs, Talkboxes"), 8 ("Filters"), 10 ("Modulation"), and 12 ("Electronic Percussion"). You will then know what those words *do*, which makes our effect list intelligible.
+4. **Before you read our §3.2 (sequencing)**, read the book's chapter 11 (sequencers) end-to-end. The book chapter is short but it grounds every term in our doc: step, pattern, loop, fill, retrigger. Chapter 11 is the most directly applicable chapter in the entire book.
+5. **Before you read our §3.1 on drum slots**, read the book's chapter 12 (electronic percussion). You will learn what a "kick" actually is, in the analog sense.
+6. **After you have the device working**, read the book's chapters 6 (chaining oscillators), 9 (harmonization), and 13 (PLLs). These give you deeper intuition for what our polyphony (F-005), FM synth, and jam-sync (F-031) are doing mathematically.
+7. **Optional but inspiring**, read the boss chapter (14, Dogbotophone MK1). It will show you what a serious home-built instrument looks like. Our device is a baby Dogbotophone.
+8. **Read last**, the concluding chapter (15, Thoughts on Automation) and the appendices. These are not technical; they are about why any of this matters.
 
 You do not need to *build* any of the book's circuits to benefit from reading it. Even just reading the chapter text and looking at the photos builds the mental model. If you do want to build along, the book has a companion kit (the "Dogbotic Labs DIY Synth Kit") that contains all the parts you need for the first several chapters.
+
+For a more detailed walk-through with concrete UART commands on our firmware, see `docs/MAKERS_COMPANION.md`. That companion book covers every chapter of Pearson's book with hands-on exercises you can run on a flashed device.
 
 ### 12.4 What the book does NOT cover — and our project does
 
@@ -1854,6 +1897,8 @@ Pearson's book is firmly **analog-first**. It does not teach:
 - **The PO-33 specifically**: this book is about *inventing* your own instrument, not about emulating someone else's. Our document is the opposite: it's about replicating a specific existing product.
 
 If the book is the question "how do electronic instruments work?", our project is the question "how do I make a specific electronic instrument I already love?". Reading both gives you a more complete answer than either alone.
+
+For the inverse — what our firmware does that the book doesn't — the answer is mostly **persistence** and **multi-device coordination**: our firmware saves patterns to flash, syncs over jam-sync cables, runs an alarm clock, monitors battery voltage, and ships a CLI over USB. None of these have analog equivalents in Pearson's book because they require a digital system.
 
 ### 12.5 Side-by-side concepts: analog → digital
 
