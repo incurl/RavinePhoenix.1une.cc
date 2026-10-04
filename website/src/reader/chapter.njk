@@ -1,0 +1,14 @@
+---
+layout: reader-base.njk
+eleventyExcludeFromCollections: true
+pagination:
+  data: collections.allChapters
+  size: 1
+  alias: ch
+permalink: "/reader/{{ ch.book }}/{{ ch.permalinkSlug }}/"
+---
+
+{# All sidebar / prev / next data is pre-computed in .eleventy.js and
+   attached to the chapter item. We just render the markdown body. #}
+
+{{ ch.content | markdown | safe }}

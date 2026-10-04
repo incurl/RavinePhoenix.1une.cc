@@ -1,0 +1,27 @@
+---
+layout: base.njk
+title: The PO-33 Musical Companion
+description: Beat, melody, groove, and genre for the novice operator.
+permalink: /reader/music-course/
+eleventyExcludeFromCollections: true
+---
+
+{% set chapter_list = [] %}
+{% for c in collections.musicCourseChapters %}
+  {% set _ = chapter_list.push({
+    title: c.chapterTitle,
+    url: "/reader/music-course/" + c.permalinkSlug + "/",
+    kind: c.kind
+  }) %}
+{% endfor %}
+
+{% set book = {
+  slug: "music-course",
+  title: "The PO-33 Musical Companion",
+  subtitle: "Beat, melody, groove, and genre for the novice operator.",
+  badge: "Music theory",
+  chapters: chapter_list,
+  first_chapter: chapter_list[0]
+} %}
+
+{% include "book-cover.njk" %}

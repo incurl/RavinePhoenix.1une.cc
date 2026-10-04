@@ -1,0 +1,56 @@
+---
+layout: base.njk
+title: Reader
+description: Long-form reading on the PO-33 K.O! — companion study guides and music courses.
+permalink: /reader/
+---
+
+<section class="pt-12 pb-8">
+  <h1 class="section-title">📖 Reader</h1>
+  <p class="section-lede">
+    Two long-form books that ship with the project. Each one is a separate
+    site-within-the-site: chapter list in the sidebar, keyboard
+    shortcuts, dark mode, mobile-friendly.
+  </p>
+</section>
+
+<section class="py-8 grid gap-6 md:grid-cols-2">
+  {% for book in books %}
+    <article class="card relative overflow-hidden">
+      <div class="absolute inset-x-0 top-0 h-2 bg-gradient-to-r {{ book.accent }}"></div>
+
+      <div class="flex items-start justify-between gap-3 mt-2">
+        <span class="badge">{{ book.badge }}</span>
+        <span class="text-3xl">{{ book.icon }}</span>
+      </div>
+
+      <h2 class="card-title mt-3 text-2xl">{{ book.title }}</h2>
+      <p class="text-sm italic text-slate-500 dark:text-slate-400 mb-3">
+        {{ book.subtitle }}
+      </p>
+      <p class="card-text">{{ book.blurb }}</p>
+
+      <div class="mt-5 flex items-center justify-between">
+        <span class="text-xs text-slate-500 dark:text-slate-400">
+          {{ book.chapters_expected }} pages
+        </span>
+        <a href="/reader/{{ book.slug }}/"
+           class="btn-primary text-sm">
+          Start reading →
+        </a>
+      </div>
+    </article>
+  {% endfor %}
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">About the reader</h2>
+  <ul class="space-y-2 text-slate-600 dark:text-slate-400">
+    <li>· Each chapter has its own URL — bookmarkable, deep-linkable.</li>
+    <li>· Keyboard shortcuts: <kbd>j</kbd> next, <kbd>k</kbd> previous, <kbd>[</kbd> toggle sidebar, <kbd>?</kbd> help.</li>
+    <li>· Progress bar at the top tracks your scroll within a chapter.</li>
+    <li>· Sidebar collapses on mobile; tap the ☰ button to open.</li>
+    <li>· Dark mode respects your <code>localStorage</code> theme preference.</li>
+    <li>· Source markdown lives in <code>docs/</code>; the build pipeline splits on chapter headings.</li>
+  </ul>
+</section>

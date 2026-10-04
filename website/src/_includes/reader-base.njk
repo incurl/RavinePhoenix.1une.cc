@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if ch.title %}{{ ch.title }} — {% endif %}{{ site.name }}</title>
+  <meta name="description" content="{{ ch.description or site.description }}">
+  <meta name="theme-color" content="#ea580c">
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="{{ site.canonical_url }}{{ page.url }}">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="{{ title or site.name }}">
+  <meta property="og:description" content="{{ description or site.description }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ site.canonical_url }}{{ page.url }}">
+
+  <link rel="stylesheet" href="/assets/css/main.css">
+
+  <!-- Inline theme bootstrap to avoid FOUC -->
+  <script>
+    (function () {
+      const saved = localStorage.getItem('po33-theme');
+      if (saved === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+</head>
+<body class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased"
+      data-prev="{% if ch.book_prev %}{{ ch.book_prev.url }}{% endif %}"
+      data-next="{% if ch.book_next %}{{ ch.book_next.url }}{% endif %}">
+
+  {% include "navbar.njk" %}
+
+  <!-- Reader shell: sidebar + content + progress bar.
+       The reader is a small SPA-ish UI: chapter list in the sidebar,
+       rendered markdown in <main>, prev/next buttons, keyboard
+       shortcuts (j / k / ? / [), and a scroll-progress bar.
+       All sidebar / nav data is pre-computed in .eleventy.js and
+       attached to the chapter item. The variables here (`book_*`)
+       come from the paginated page's data, not from the chapter
+       template's local scope. -->
+  <div class="reader-shell">
+
+    <div id="reader-progress"
+         class="fixed top-0 left-0 right-0 h-1 bg-po33-500 z-50 transition-[width] duration-75"
+         style="width: 0%"></div>
+
+    <button id="reader-sidebar-toggle"
+            class="md:hidden fixed bottom-4 right-4 z-40 p-3 rounded-full bg-po33-600 text-white shadow-lg"
+            aria-label="Toggle chapter list">
+      ☰
+    </button>
+
+    <aside id="reader-sidebar"
+           class="reader-sidebar fixed md:sticky top-16 left-0 h-[calc(100vh-4rem)] w-72 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto z-30 transition-transform md:translate-x-0 -translate-x-full">
+
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800">
+        <a href="/reader/" class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-po33-600">
+          ← All books
+        </a>
+        <h2 class="font-bold text-lg mt-1">{{ ch.book_title }}</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          {{ ch.book_chapter_index | ordinal }} of {{ ch.book_chapters_total }}
+          {% if ch.book_current_kind == "introduction" %}· introduction{% endif %}
+          {% if ch.book_current_kind == "front" %}· front matter{% endif %}
+          {% if ch.book_current_kind == "appendix" %}· appendix{% endif %}
+        </p>
+      </div>
+
+      <nav class="p-2">
+        <ol class="space-y-0.5 text-sm">
+          {% for nav_ch in ch.book_all_chapters %}
+            <li>
+              <a href="{{ nav_ch.url }}"
+                 class="block px-3 py-2 rounded-md transition-colors
+                        {% if nav_ch.url == page.url %}
+                          bg-po33-100 dark:bg-po33-900/40 text-po33-700 dark:text-po33-300 font-semibold
+                        {% else %}
+                          text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800
+                        {% endif %}">
+                <span class="text-xs text-slate-400 mr-1">{{ loop.index }}.</span>
+                {{ nav_ch.title }}
+              </a>
+            </li>
+          {% endfor %}
+        </ol>
+      </nav>
+
+      <div class="p-4 mt-2 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+        <details>
+          <summary class="cursor-pointer hover:text-po33-600">Keyboard shortcuts</summary>
+          <dl class="mt-2 space-y-1">
+            <div><kbd>j</kbd> next chapter</div>
+            <div><kbd>k</kbd> previous chapter</div>
+            <div><kbd>[</kbd> toggle sidebar</div>
+            <div><kbd>?</kbd> toggle this help</div>
+            <div><kbd>g</kbd> top of page</div>
+          </dl>
+        </details>
+      </div>
+    </aside>
+
+    <main class="reader-content flex-1 min-w-0 px-4 sm:px-6 lg:px-10 py-8 max-w-4xl">
+      <article class="prose-reader">
+        {{ content | safe }}
+      </article>
+
+      <nav class="reader-pager mt-12 pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+        {% if ch.book_prev %}
+          <a href="{{ ch.book_prev.url }}"
+             class="btn-secondary text-sm">
+            ← {{ ch.book_prev.title }}
+          </a>
+        {% else %}
+          <span></span>
+        {% endif %}
+
+        <a href="/reader/{{ ch.book_slug }}/" class="text-sm text-slate-500 hover:text-po33-600">
+          Chapter list
+        </a>
+
+        {% if ch.book_next %}
+          <a href="{{ ch.book_next.url }}"
+             class="btn-secondary text-sm">
+            {{ ch.book_next.title }} →
+          </a>
+        {% else %}
+          <span></span>
+        {% endif %}
+      </nav>
+    </main>
+  </div>
+
+  {% include "footer.njk" %}
+
+  <script src="/assets/js/theme.js" defer></script>
+  <script src="/assets/js/nav.js" defer></script>
+  <script src="/assets/js/reader.js" defer></script>
+</body>
+</html>

@@ -65,3 +65,123 @@ esp-web-install-button {
   @apply bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-sm
          text-po33-700 dark:text-po33-300;
 }
+
+/* ─── Reader shell layout ───────────────────────────────────── */
+.reader-shell {
+  display: flex;
+  align-items: flex-start;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding-left: 0;
+  padding-right: 0;
+}
+@media (min-width: 768px) {
+  .reader-sidebar {
+    position: sticky;
+    top: 4rem;
+    height: calc(100vh - 4rem);
+  }
+}
+
+/* ─── Reader typography (long-form books) ────────────────────── */
+.prose-reader {
+  @apply text-slate-800 dark:text-slate-200 leading-relaxed;
+  font-size: 1.0625rem; /* 17px — easier on the eye than 16px for long-form */
+}
+.prose-reader h1 {
+  @apply text-3xl md:text-4xl font-extrabold mt-2 mb-6
+         text-slate-900 dark:text-slate-100 tracking-tight;
+}
+.prose-reader h2 {
+  @apply text-2xl md:text-3xl font-bold mt-12 mb-4 pt-6
+         border-t border-slate-200 dark:border-slate-800
+         text-slate-900 dark:text-slate-100;
+}
+.prose-reader h3 {
+  @apply text-xl md:text-2xl font-semibold mt-8 mb-3
+         text-slate-900 dark:text-slate-100;
+}
+.prose-reader h4 {
+  @apply text-lg font-semibold mt-6 mb-2
+         text-slate-900 dark:text-slate-100;
+}
+.prose-reader p {
+  @apply my-4;
+}
+.prose-reader ul,
+.prose-reader ol {
+  @apply my-4 ml-6;
+}
+.prose-reader ul {
+  list-style: disc;
+}
+.prose-reader ol {
+  list-style: decimal;
+}
+.prose-reader li {
+  @apply my-1;
+}
+.prose-reader blockquote {
+  @apply border-l-4 border-po33-500 bg-slate-100 dark:bg-slate-800/50
+         pl-4 pr-4 py-2 my-6 italic text-slate-700 dark:text-slate-300;
+}
+.prose-reader code {
+  @apply font-mono text-sm bg-slate-100 dark:bg-slate-800
+         px-1.5 py-0.5 rounded text-po33-700 dark:text-po33-300;
+}
+.prose-reader pre {
+  @apply font-mono text-sm bg-slate-900 text-slate-100
+         p-4 rounded-md overflow-x-auto my-6;
+}
+.prose-reader pre code {
+  @apply bg-transparent text-slate-100 p-0;
+}
+.prose-reader table {
+  @apply w-full my-6 border-collapse text-sm;
+}
+.prose-reader th,
+.prose-reader td {
+  @apply border border-slate-300 dark:border-slate-700 px-3 py-2 text-left;
+}
+.prose-reader th {
+  @apply bg-slate-100 dark:bg-slate-800 font-semibold;
+}
+.prose-reader tr:nth-child(even) td {
+  @apply bg-slate-50 dark:bg-slate-900;
+}
+.prose-reader a {
+  @apply text-po33-600 dark:text-po33-400 hover:underline;
+}
+.prose-reader hr {
+  @apply my-8 border-slate-200 dark:border-slate-800;
+}
+.prose-reader img {
+  @apply rounded-md my-6 mx-auto;
+}
+.prose-reader kbd {
+  @apply font-mono text-xs bg-slate-100 dark:bg-slate-800
+         border border-slate-300 dark:border-slate-700
+         px-1.5 py-0.5 rounded shadow-sm;
+}
+.prose-reader strong {
+  @apply font-semibold text-slate-900 dark:text-slate-100;
+}
+
+/* First paragraph after an h1: slightly larger, drop-cap-ish */
+.prose-reader h1 + p {
+  @apply text-lg text-slate-700 dark:text-slate-300;
+}
+
+/* Make in-page anchors have scroll-margin so the fixed navbar doesn't
+   cover them when you jump to a heading. */
+.prose-reader :target {
+  scroll-margin-top: 5rem;
+}
+
+/* Anchor icon that appears on heading hover (Tailwind plugin
+   would normally do this; we keep it minimal here). */
+.prose-reader h2,
+.prose-reader h3,
+.prose-reader h4 {
+  scroll-margin-top: 5rem;
+}

@@ -1,0 +1,53 @@
+---
+layout: base.njk
+---
+
+<section class="pt-12 pb-8">
+  <a href="/reader/" class="text-sm text-slate-500 hover:text-po33-600">
+    ← All books
+  </a>
+  <h1 class="section-title mt-2">{{ book.title }}</h1>
+  <p class="section-lede">{{ book.subtitle }}</p>
+
+  <div class="flex flex-wrap gap-3 mt-4">
+    <span class="badge">{{ book.badge }}</span>
+    <span class="badge">{{ book.chapters | length }} pages</span>
+    {% if book.first_chapter %}
+      <a href="{{ book.first_chapter.url }}" class="btn-primary text-sm">
+        Start reading →
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="py-8 border-t border-slate-200 dark:border-slate-800">
+  <h2 class="text-2xl font-bold mb-4">Table of contents</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-6">
+    Click any chapter to begin reading. Each chapter is a separate URL —
+    bookmark, share, deep-link.
+  </p>
+
+  <ol class="space-y-1">
+    {% for ch in book.chapters %}
+      <li>
+        <a href="{{ ch.url }}"
+           class="block px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-po33-500 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+          <div class="flex items-baseline justify-between gap-3">
+            <div>
+              <span class="text-xs text-slate-400 mr-2">{{ loop.index }}.</span>
+              <span class="font-semibold text-slate-900 dark:text-slate-100">{{ ch.title }}</span>
+              {% if ch.kind == "introduction" %}
+                <span class="ml-2 text-xs italic text-slate-400">introduction</span>
+              {% elif ch.kind == "appendix" %}
+                <span class="ml-2 text-xs italic text-slate-400">appendix</span>
+              {% elif ch.kind == "front" %}
+                <span class="ml-2 text-xs italic text-slate-400">front matter</span>
+              {% endif %}
+            </div>
+            <span class="text-xs text-slate-400">→</span>
+          </div>
+        </a>
+      </li>
+    {% endfor %}
+  </ol>
+</section>
