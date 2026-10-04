@@ -8,6 +8,29 @@ A firmware that emulates the **Teenage Engineering PO-33 K.O!** micro-sampler on
 
 ---
 
+## 🌐 Project Website
+
+**👉 [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc)**
+
+The project ships with a full static website (Eleventy + Tailwind, deployed
+via GitHub Pages):
+
+- 📖 **Documentation hub** — the build guide, hardware pin map, UART shell
+  reference, and feature-to-implementation map, all linked from one place.
+- 🔥 **Browser firmware flasher** — flash the ESP32-S3 directly from
+  Chrome / Edge using [ESP Web Tools](https://esphome.github.io/esp-web-tools/).
+  No `idf.py`, no toolchain — just a USB cable.
+- 📚 **Reader app** — the two companion books (Makers' Companion + Music
+  Course) split into per-chapter pages with a sidebar, prev/next
+  navigation, and a font-size toggle.
+
+Source lives in [`website/`](website/) — see
+[`website/README.md`](website/README.md) for the dev workflow and
+[ADR-0001](docs/architecture-decisions.md#adr-0001--use-eleventy-11ty-for-the-static-website)
+for the static-site-generator decision.
+
+---
+
 ## ✨ Features
 
 | Spec | Implementation |
@@ -162,6 +185,7 @@ target_compile_definitions(amy PRIVATE
 - **[`docs/TIER_A_SUMMARY.md`](docs/TIER_A_SUMMARY.md)** — handoff doc for the 13 Tier A features (9 commits, scorecard 30% → 46%). Includes the AMY patch description, memory budget, build-verification checklist, and the explicit v1-out-of-scope list.
 - **[`hardware/HARDWARE.md`](hardware/HARDWARE.md)** — beginner build guide (~5 600 words). Bill of materials, pin map, 10-step build order, troubleshooting, and the no-solder alternative.
 - **[`hardware/README.md`](hardware/README.md)** — conventions for the `hardware/` folder (where future schematic / PCB / enclosure files go).
+- **[`website/`](website/)** — the static site at [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc). Includes a browser firmware flasher (`/download`) and a reader app for the two companion books (`/reader/`).
 
 ## 🧪 Tests
 
