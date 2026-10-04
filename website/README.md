@@ -4,6 +4,8 @@ Static site for [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc).
 Built with [Eleventy](https://www.11ty.dev/) + [Tailwind CSS](https://tailwindcss.com/),
 flashing powered by [ESP Web Tools](https://esphome.github.io/esp-web-tools/).
 
+> **Why Eleventy?** See [ADR-0001](../docs/architecture-decisions.md#adr-0001--use-eleventy-11ty-for-the-static-website).
+
 ## Develop
 
 ```bash
