@@ -267,9 +267,10 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §1.1
 - **Layman:** Slots 1–8 are for short percussive sounds (drums). Slots 9–16 are for longer sounds that you want to pitch-shift around the musical scale (melodic). Drums play at their recorded pitch; melodic slots play pitched up or down based on which step of the pattern triggers them.
 - **PO-33 button combo:** Slots are just numbered 1–16; the type is implicit.
+- **PO-33 detail — pad-to-note auto-mapping:** the real PO-33 maps the 16 pads to a chromatic scale one octave wide when the active slot is melodic. Pad 1 plays C4 (MIDI 60), pad 2 plays C#4 (61), ..., pad 13 plays C5 (72), pad 16 plays D#5 (75). Pad-to-slice auto-mapping for drum slots (where each pad triggers 1/16th of the recording) is **not** in v1 firmware — see F-024 (❌ missing).
 - **Our hardware combo:** Same.
-- **Code location:** `main/config.h` → `SLOT_DRUM_COUNT 8`. `main/audio/amy_bridge.c` → `apply_fx()` uses `e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : 4`.
-- **Status:** ✅ done.
+- **Code location:** `main/config.h` → `SLOT_DRUM_COUNT 8`. `main/audio/amy_bridge.c` → `apply_fx()` uses `e.num_voices = (slot < SLOT_DRUM_COUNT) ? 1 : 4`. Auto-mapping helper `amy_bridge_auto_note_for_step(slot, step_index)` lives in `main/audio/amy_bridge.{c,h}`; called from `main/ui/input.c::play_active_slot()` (no-modifier step press) and `main/sequencer/sequencer.c::on_step()` (sequencer playback) when the user has not overridden the pitch via tweak Tone and the per-step note is 0.
+- **Status:** ✅ done. **Auto-mapping** (the melodic pad → chromatic note half) is now implemented. Drum auto-slicing remains v2 — F-024.
 
 ### 3.2 Section 2 — Patterns (sequencing)
 
@@ -481,9 +482,10 @@ See §4 below for the per-effect deep dive.
 
 - **Manual ref:** §8
 - **Layman:** Same as F-023 but only copies one slice (one of the 16 auto-sliced parts) to a new drum slot.
+- **PO-33 detail — slice concept:** the real PO-33 splits each drum-slot recording into 16 equal-length slices by default. Each pad (1–16) plays the corresponding 1/16th of the recording. This pad-to-slice mapping is **not** auto-applied in our v1 firmware; a drum slot plays its whole recording on every pad. Copying one slice is therefore also ❌ missing (without the slicing concept, there's nothing to copy). See F-005 (✅ done — auto-mapping for melodic slots is implemented; auto-slicing for drum slots is v2).
 - **PO-33 button combo:** WRITE + SOUND + 9–16 (drum slot) + slice number 1–16.
 - **Our hardware combo:** Not yet.
-- **Code location:** `main/audio/amy_bridge.c` → would need a `amy_bridge_copy_slice(src_slot, slice_index, dst_slot)`.
+- **Code location:** `main/audio/amy_bridge.c` → would need a `amy_bridge_copy_slice(src_slot, slice_index, dst_slot)` plus a `amy_bridge_slot_slice(slot, slice_index, *loopstart, *loopend)` helper that does the slicing math (slot_len / 16 per slice, clamped).
 - **Status:** ❌ missing.
 
 #### F-025 — Copy an entire pattern

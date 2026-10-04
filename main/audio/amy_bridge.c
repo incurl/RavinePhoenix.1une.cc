@@ -119,6 +119,36 @@ bool amy_bridge_slot_has_sample(uint8_t slot)
     return amy_bridge_slot_len_samples(slot) > 0;
 }
 
+/* F-005 auto-mapping. The real PO-33 maps the 16 pads (when the active
+ * slot is melodic) to a chromatic scale one octave wide. Pad 1 = C4
+ * (MIDI 60), pad 2 = C#4 (61), ..., pad 13 = C5 (72), pad 16 = D#5
+ * (75). Drum slots return 0; the caller is responsible for not
+ * applying the auto-mapping to drum slots (which on the PO-33 are
+ * not pitch-mapped, only sliced, and slicing is v2 -- see DESIGN.md
+ * F-024).
+ *
+ * The 0-based step_index input matches our sequencer's internal
+ * numbering (0..15). Out-of-range inputs are clamped to 0 to keep
+ * the function total (no crashes from a misbehaving caller).
+ *
+ * Why C4..D#5 instead of, e.g., C3..D#4: the PO-33's melodic slots
+ * sit "above" the drum range, and Teenage Engineering centres the
+ * default mapping on C4 so the bass side (drum slots) and the
+ * melody side (melodic slots) are perceptually separated. C4 also
+ * matches our existing v1 default midi_note (60) for
+ * `play_active_slot`, which means a step with an explicit note=0
+ * falls back to the same C4 the user has been hearing all along.
+ * The user can always override with `step_set pattern N slot M
+ * note=K` or via tweak Tone (knob A). */
+uint8_t amy_bridge_auto_note_for_step(uint8_t slot, uint8_t step_index)
+{
+    if (slot >= SLOT_COUNT)        return 0;   /* invalid slot */
+    if (slot < SLOT_DRUM_COUNT)    return 0;   /* drum: no auto-map */
+    if (step_index >= 16)          step_index = 0;
+    /* MIDI 60 (C4) + step_index 0..15 = 60..75 (C4..D#5). */
+    return (uint8_t)(60 + step_index);
+}
+
 size_t amy_bridge_slot_max_bytes(uint8_t slot)
 {
     if (slot >= SLOT_COUNT) return 0;

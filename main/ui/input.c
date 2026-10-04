@@ -511,8 +511,20 @@ void tweak_apply_slot(uint8_t slot)
  * Trim-mode tweak: when in TWEAK_TRIM, the knob axes set the slot's
  * trim bounds (start, end) instead of triggering a note. This is the
  * PO-33 behaviour: in trim mode, the slot's trim is what gets
- * adjusted, not its playback parameters. */
-static void play_active_slot(void)
+ * adjusted, not its playback parameters.
+ *
+ * F-005 auto-mapping: `step_index_0_to_15` is the 0-based pad index
+ * that triggered this play (0..15). When the slot is melodic AND
+ * the user is not currently in TWEAK_TONE (which would override
+ * pitch via knob A), the pad index determines the MIDI note --
+ * pad 1 = C4 (60), pad 2 = C#4 (61), ..., pad 16 = D#5 (75).
+ * This matches the real PO-33.
+ *
+ * Passing step_index_0_to_15 = 0xFF ("unknown") disables the
+ * auto-mapping; the call falls back to the v1 default of midi_note
+ * = 60 for every pad, which is what happens, e.g., from the sketch
+ * picker or the write-mode path where the step id is not relevant. */
+static void play_active_slot(uint8_t step_index_0_to_15)
 {
     uint8_t slot = sequencer_get_active_slot();
     if (slot == 0xFF) return;
@@ -522,6 +534,16 @@ static void play_active_slot(void)
     }
     uint8_t note = 60, velocity = 100, filter_cutoff = 0, filter_resonance = 0;
     tweak_apply_step(&note, &velocity, &filter_cutoff, &filter_resonance);
+    /* F-005 auto-mapping. Only override the note when the user has
+     * NOT taken explicit control via TWEAK_TONE. tweak_apply_step()
+     * only touches `note` in TWEAK_TONE, so checking the mode is
+     * unambiguous (no false matches on note == 60 from a knob
+     * position that happens to land on C4). */
+    if (s_tweak_mode != TWEAK_TONE
+        && step_index_0_to_15 != 0xFF
+        && slot >= SLOT_DRUM_COUNT) {
+        note = amy_bridge_auto_note_for_step(slot, step_index_0_to_15);
+    }
     amy_bridge_play_note(slot, note, velocity,
                          (po33_fx_t)sequencer_get_active_fx(), 0, 0,
                          filter_cutoff, filter_resonance);
@@ -648,14 +670,20 @@ void input_drain(void)
                  * feedback. For now it's a no-op anyway. */
                 continue;
             }
+            /* F-005 auto-mapping: the no-modifier + step press path
+             * below falls through to play_active_slot(). We need the
+             * 0-based step index to drive the chromatic pad mapping,
+             * so compute it once here and reuse it after the
+             * write-mode intercept. */
+            uint8_t step_index_0_to_15 =
+                (uint8_t)(ev.btn_id - BTN_STEP1);
             /* Write mode (F-009/F-010/F-011): a step press binds the
              * currently-active slot to that step. Tap = toggle
              * (F-010), long-press = clear (F-011). Runs after the
              * picker intercept so the picker is read-only. */
             if (s_write_mode) {
-                uint8_t step_1_to_16 =
-                    (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
-                if (write_mode_apply_step(step_1_to_16, ev.long_press)) {
+                if (write_mode_apply_step((uint8_t)(step_index_0_to_15 + 1),
+                                          ev.long_press)) {
                     continue;
                 }
                 /* write_mode_apply_step returned false = no active
@@ -663,8 +691,12 @@ void input_drain(void)
                  * user still gets audible feedback. */
             }
             /* No modifier held + step pressed: PO-33 second-press
-             * play-the-selected-sound. No-op if nothing is selected. */
-            play_active_slot();
+             * play-the-selected-sound. No-op if nothing is selected.
+             *
+             * F-005 auto-mapping: pass the 0-based step index so
+             * play_active_slot() can apply the chromatic pad
+             * mapping when the active slot is melodic. */
+            play_active_slot(step_index_0_to_15);
             continue;
         }
 

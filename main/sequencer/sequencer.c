@@ -384,10 +384,24 @@ static void on_step(void *arg)
      * current knob readings. This is the PO-33 "select tweak
      * parameter, turn knobs" idiom (F-016 / F-017). Trim mode is
      * per-slot (handled by tweak_apply_slot() in play_active_slot),
-     * not per-step, so we don't apply it here. */
+     * not per-step, so we don't apply it here.
+     *
+     * F-005 auto-mapping: after the tweak override, if the user has
+     * NOT taken explicit control (we're not in TWEAK_TONE) AND the
+     * step's stored note is 0 ("not set"), apply the chromatic pad
+     * mapping -- step_index = 0..15 -> MIDI 60..75. This matches the
+     * real PO-33: a melodic slot played without an explicit per-step
+     * note auto-pitches to the pad's chromatic position. An explicit
+     * note always wins (user override). Drum slots (slot <
+     * SLOT_DRUM_COUNT) are skipped -- the PO-33 doesn't
+     * auto-pitch-shift drum hits. */
     if (slot != 0xFF) {
         tweak_apply_step(&s.note, &s.velocity,
                          &s.filter_cutoff, &s.filter_resonance);
+        if (s.note == 0 && tweak_get_mode() != TWEAK_TONE
+            && slot >= SLOT_DRUM_COUNT) {
+            s.note = amy_bridge_auto_note_for_step(slot, s_step);
+        }
     }
 
     if (!defer) {

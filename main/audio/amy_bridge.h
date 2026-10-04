@@ -96,6 +96,24 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
                               po33_fx_t fx, uint8_t fx_p1, uint8_t fx_p2,
                               uint8_t filter_cutoff, uint8_t filter_resonance);
 
+/* F-005 auto-mapping (the real PO-33 behaviour). When a melodic slot is
+ * played with the user's explicit note = 0 ("not set"), the pad/step
+ * index alone determines the pitch. The PO-33 maps the 16 pads to a
+ * chromatic scale one octave wide (C4..D#5) -- so pad 1 plays C4, pad
+ * 2 plays C#4, pad 16 plays D#5. Drum slots return 0 (no auto-map;
+ * the PO-33 does not auto-slice drums in v1 firmware).
+ *
+ * `step_index` is 0..15 (0-based). The return value is a MIDI note
+ * number 60..75 (C4..D#5). Caller decides what to do with it --
+ * usually: use it as `midi_note` when the user has not set an
+ * explicit note.
+ *
+ * Pre-condition: step_index in [0, 15]. Returns 60 if out of range.
+ * For drum slots (slot < SLOT_DRUM_COUNT), always returns 0.
+ *
+ * See DESIGN.md F-005 (auto-mapping). */
+uint8_t amy_bridge_auto_note_for_step(uint8_t slot, uint8_t step_index);
+
 /* Master volume level (PO-33 F-022: hold BPM + 1..5 sets the level).
  * Level 0 (silent) is also accepted. Internally scales the velocity
  * applied to subsequent play_note() calls. Levels map to multipliers:
