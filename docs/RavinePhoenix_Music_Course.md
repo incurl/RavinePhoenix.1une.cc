@@ -338,7 +338,7 @@ Slots are the cast of characters. Steps are the choreography. The same kick drum
 The PO-33 splits its 16 slots into two groups:
 
 - **Melodic slots** (slots 1–8): when you play these from the sequencer, the device chooses a **pitch** for you based on which step is playing. Pad 1 plays C4 (middle C), pad 2 plays C#4, pad 3 plays D4, ..., pad 8 plays G#4, pad 16 plays D#5 (the 16th pad triggers D#5 because the chromatic scale is one octave wide — 16 semitones — and pad 1 is C4). This is the **auto-mapping** feature (called F-005 in the RavinePhoenix firmware). It means that, by default, pressing different steps plays different notes — pad 1 is C, pad 8 is G#, pad 16 is D#.
-- **Drum slots** (slots 9–16): when you play these from the sequencer, the device plays a **slice** of the recording. Pad 9 plays the first 1/16th of slot 9's recording. Pad 16 plays the last 1/16th of slot 16's recording. This is the **auto-slicing** feature (F-024). If you record a 4-second break into slot 9, pressing pad 9 plays the first 0.25 seconds, pressing pad 10 plays the next 0.25 seconds, etc.
+- **Drum slots** (slots 9–16): when you play these from the sequencer, the device plays a **slice** of the recording. **Pad 1 plays the first 1/16th of the active drum slot's recording. Pad 16 plays the last 1/16th.** All 16 pads trigger 16 equal slices, so the entire recording is reachable — pads 1–16 cover slices 1–16. This is the **auto-slicing** feature (F-024). If you record a 4-second break into slot 9, pressing pad 1 plays the first 0.25 seconds, pressing pad 2 plays the next 0.25 seconds, ..., pressing pad 16 plays the last 0.25 seconds.
 
 The two halves are intentionally different. Melodic slots let you play melodies and chords. Drum slots let you play sliced breaks.
 
@@ -803,7 +803,7 @@ The PO-33 can record up to 10 seconds into a single slot. Most breaks are 2–4 
 4. Release REC.
 5. Press pad 9 to play the break back.
 
-The break is now in slot 9. Because slot 9 is a drum slot, the PO-33 will **auto-slice** it. When you play pad 9, you get the first 1/16th. When you play pad 10, you get the second 1/16th. When you play pad 16, you get the last 1/16th.
+The break is now in slot 9. Because slot 9 is a drum slot, the PO-33 will **auto-slice** it. **Pad 1 plays the first 1/16th, pad 2 plays the second, ..., pad 16 plays the last 1/16th.** All 16 pads cover the full recording — none of the sample is unreachable.
 
 ### Using the trim feature
 
