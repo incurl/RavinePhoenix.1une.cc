@@ -89,24 +89,30 @@ Imagine a small flat board, maybe 6 cm wide and 9 cm tall. Looking at the top fa
 There are **23 physical buttons** in total:
 
 - **16 step buttons** in a 4×4 matrix. The same physical buttons are *polymorphic* — their meaning depends on which modifier is held (just like the real PO-33):
-  - in **normal play**: step 1–16
-  - in **write mode**, after picking a slot: toggle step 1–16 for the armed slot
-  - with **SOUND** held (`SOUND + step_n`): sample slot 1–16
-  - with **PATTERN** held (`PATTERN + step_n`): pattern slot 1–16
-  - with **FX** held: effect 1–15 (16 = swing)
+  - **no modifier held**: play the **active slot** — the pad index picks the scale degree (melodic slot) or the 1/16 slice (drum slot); the slot itself was chosen earlier with `SOUND + pad`. It is *not* "pad N plays slot N" (see `CONTROL_REFERENCE.md` note A).
+  - in **write mode**: the pad is the **step** to toggle for the active slot
+  - with **SOUND** held (`SOUND + step_n`): **select** sample slot N
+  - with **PATTERN** held (`PATTERN + step_n`): **select** pattern N (and append it to the chain)
+  - with **FX** held: select effect 1–15 (**16 = "no effect"**)
+  - with **BPM** long-pressed and held: pads 1–5 set the volume level
 - **7 dedicated modifier buttons** wired to individual GPIOs (no matrix), laid
   out exactly like the PO-33's modifier row and column:
   - `SOUND` — hold + step 1–16 **selects** a sample slot (the PO-33's "S" key); press the same step with `SOUND` released to play it (strict two-step flow); tap and long-press alone are no-ops
   - `PATTERN` — hold + step 1–16 selects a pattern AND appends it to the song chain (PO-33 "⠛" key); tap and long-press alone are no-ops
-  - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press held: **Knob A = swing** (8 levels), **Knob B = fine BPM** (60–240)
-  - `REC` — hold + step 1-16 records into that slot; release stops recording (F-001)
-  - `FX` — **tap = tweak-mode cycle** (Tone / Filter / Trim, F-015); hold + step 1–15 = punch-in effect; step 16 = "no effect"
+  - `BPM` — tap cycles presets (Hip Hop / Disco / Techno); long-press held: **Knob A = swing** (8 levels), **Knob B = fine BPM** (60–240); held + step 1–5 = volume level
+  - `REC` — hold + step 1–16 records into that slot; release stops recording (F-001); `REC + PATTERN` held 600 ms clears the active pattern; `REC + BPM` held 5 s = factory reset
+  - `FX` — **tap = tweak-mode cycle** (Tone / Filter / Trim, F-015); hold + step 1–15 = punch-in effect; step 16 = "no effect"; held alone 2 s = toggle sync IN
   - `PLAY` — start/stop sequencer
-  - `WRITE` — enter / exit write mode (the PO-33's "·" key, handler queued)
+  - `WRITE` — tap = enter/exit write mode (the PO-33's "·" key); long-press = sketch picker
+
+  > The canonical, manual-checked table — with ✅/⚠️/➕/❌ labels for every
+  > gesture and a list of the RavinePhoenix-only extensions — lives in
+  > `docs/CONTROL_REFERENCE.md`. The list above is a summary; cite that file
+  > when precision matters.
 
 There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the PO-33). Each is a 10 kΩ linear potentiometer on an ADC pin (A = GPIO 2 / ADC1_CH1, B = GPIO 46 / ADC1_CH5). They return 0..255 and are debounced in software. On the PO-33 these same knobs are used for fine continuous control. The actual mapping (verified against the [lode/PO-33](https://github.com/lode/PO-33) verbatim manual):
 - **BPM row:** knob A = swing (8 discrete levels), knob B = fine tempo (continuous 60–240). Both wired in this commit.
-- **Tweak-mode (FX tapped to select):** knob A = pitch / filter cutoff / sample start (Tone / Filter / Trim), knob B = volume / resonance / sample length. Queued for v2.
+- **Tweak-mode (FX tapped to select):** knob A = pitch / filter cutoff / sample start (Tone / Filter / Trim), knob B = volume / resonance / sample length. Wired per §3.4 (F-016/F-017/F-018); filter resonance (knob B in Filter mode) is read but not yet stored as a per-step field.
 - (No "tempo level cycling" knob mapping — that was a confusion in earlier docs; tempo levels are BPM tap only.)
 
 ### 1.5 Where to go from here
@@ -408,11 +414,11 @@ This is the heart of the document. Every row is one feature of the real PO-33. F
 - **Manual ref:** §4.3 ("tri")
 - **Layman:** With Tweak = Trim, you pick where in the recording the playback actually starts (**Knob A**), and how long the playback lasts (**Knob B**). This is how you chop off silence at the start, or trim a long recording to a short snippet.
 - **PO-33 button combo:** Turn knob A = start, B = length.
-- **Our hardware combo:** Same knob GPIOs (A = GPIO 2, B = GPIO 46). Per-slot trim is already stored in `s_slots[slot].start` / `.end` and exposed via `amy_bridge_set_trim()` (UART). Knob → trim binding queued for v2.
+- **Our hardware combo:** Same knob GPIOs (A = GPIO 2, B = GPIO 46). Per-slot trim is stored in `s_slots[slot].start` / `.end`. In TWEAK_TRIM mode, Knob A sets the start and Knob B the end, via `tweak_apply_slot()` → `amy_bridge_set_trim()`.
 - **Code location:** `main/audio/amy_bridge.c` → `amy_bridge_set_trim(slot, start, end)`. `s_slots[slot].start` / `.end` are stored.
 - **Status:** ✅ done while `s_tweak_mode == TWEAK_TRIM`. `tweak_apply_slot(slot)` reads `knobs_get_a()`/`b()` → trim start/end (mapped to sample indices 0..slot_len-1 via `amy_bridge_slot_ptr()` + `amy_bridge_slot_len_samples()`) and calls `amy_bridge_set_trim()`. Triggered from `play_active_slot()`; the per-step sequencer path doesn't apply trim (no per-step trim field, and the user is expected to trim the active slot, not individual pattern steps).
 
-### 3.5 Section 5 — Effects (the 16 punch-ins)
+### 3.5 Section 5 — Effects (the 15 punch-ins + "no effect")
 
 See §4 below for the per-effect deep dive.
 
@@ -818,7 +824,7 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 **On a real PO-33:** Hold **PATTERN** (⠛) + number 1–16.
 
-**On our firmware:** Tap **PATTERN** to advance, long-press to step back. Or: `pattern 5` over the UART shell.
+**On our firmware:** **Hold `PATTERN` + step 1–16** to select (and append) a pattern; tap and long-press of `PATTERN` alone are no-ops. Or: `pattern 5` over the UART shell.
 
 ### 5.5 How do I apply an effect?
 
@@ -924,7 +930,7 @@ Implementation: red `fill_rect` background; green VU meter drawn frame-by-frame 
 
 ### 6.4 Screen 4 — Pattern edit (write mode)
 
-Triggered by the WRITE button (`BTN_WRITE`, GPIO 43) or by long-press on PLAY.
+Triggered by tapping the WRITE button (`BTN_WRITE`, GPIO 43).
 
 ```
 +-----------------------------------+
@@ -1136,7 +1142,7 @@ Each of these is roughly half a day of work for an experienced developer.
 
 ## 8. Cheat sheet — buttons at a glance
 
-A printable one-page reference. **P** = press, **H+P** = hold while pressing, **L+P** = long-press.
+A printable one-page reference. **P** = press, **H+P** = hold while pressing, **L+P** = long-press. This is a *summary*; `docs/CONTROL_REFERENCE.md` is authoritative and labels every gesture ✅/⚠️/➕/❌.
 
 | Action | Real PO-33 | Our firmware |
 |---|---|---|
@@ -1147,22 +1153,21 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Change pattern | H+PATTERN + number | H+`PATTERN` + step 1–16, or `pattern N` |
 | Change BPM (preset) | press BPM (cycle) | `BPM` tap cycles preset (Hip Hop → Disco → Techno → wrap), or `bpm N` |
 | Apply effect | H+FX + number (1–15) | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = "no effect" (PO33_FX_NONE). NOT a step-press: swing is BPM + Knob A. |
-| Enter / exit write mode | press WRITE (·) | `WRITE` button wired (GPIO 43); tap toggles write mode (F-009); long-press enters sketch picker (F-019) |
+| Enter / exit write mode | press WRITE (·) | `WRITE` tap toggles write mode (yellow `WRITE` label in the status bar); `WRITE` long-press enters the sketch picker (➕). In write mode a pad press binds/clears the active slot on that step (tap = toggle, long-press = clear). |
 | Select a sample slot | H+SOUND + number | H+`SOUND` + step 1–16 → active slot; press same step with no modifier = plays once |
 | Save pattern | auto on power-off | `save` over UART |
 | Load on boot | auto | `load` over UART |
 | Erase sound | H+REC + slot number | not yet |
-| Erase pattern | H+REC + PATTERN | not yet |
+| Erase pattern | H+REC + PATTERN | H+`REC` + `PATTERN` held 600 ms clears the active pattern |
 | Copy sound | H+WRITE + SOUND + number | not yet |
 | Copy pattern | H+WRITE + PATTERN + number | not yet |
 | Tweak tone/filter/trim | FX tap cycles; knobs A/B adjust | FX tap cycles Tone → Filter → Trim → Tone; knobs bind to per-step data (Tone/Filter) or slot trim (Trim) |
-| Enter / exit write mode | tap WRITE | `WRITE` tap toggles write mode (yellow `WRITE` label in status bar). Tap step in write mode → bind/clear active slot on that step (toggle on tap, clear on long-press). |
 | Pick slot to bind | H+SOUND + step 1-16 | `SOUND + step N` selects slot N-1 as the active slot for the next write-mode step press. |
 | Change swing | H+BPM + knob A | H+BPM + Knob A → 8 discrete levels (0=no swing, 7=max); release keeps the level |
 | Fine BPM | H+BPM + knob B | H+BPM + Knob B → continuous 60–240 BPM; release keeps the BPM |
 | Change volume | H+BPM + number (1-5) | H+BPM + step 1-5 → volume level 1..5 (5=max); multiplier applied per-note in amy_bridge_play_note() |
 | Sync out | always on | always on |
-| Sync in | H+REC + BPM cycles mode | partial |
+| Sync in | (no PO-33 button gesture) | ➕ hold `FX` 2 s toggles sync IN listening |
 | Show battery | SOUND + BPM | not yet (TFT will show) |
 
 ---
@@ -1237,7 +1242,7 @@ Drawn from the official Teenage Engineering manual ([teenage.engineering/guides/
 |---|---|---|---|
 | L1 | Total sample memory | 40 seconds across all 16 slots | Manual §1 |
 | L2 | Per-slot duration | uneven; the manual does not state a per-slot max — only a total | Manual §1 |
-| L3 | Number of sample slots | 16 total (slots 1–8 melodic, slots 9–16 drum) | Manual §1 |
+| L3 | Number of sample slots | 16 total (our firmware: slots 1–8 drum, slots 9–16 melodic — reversed vs the manual; see ADR-0002) | Manual §1 |
 | L4 | Steps per pattern | 16 | Manual §2 |
 | L5 | Patterns | 16 | Manual §2 |
 | L6 | Song length | up to 128 patterns chained | Manual §3 |

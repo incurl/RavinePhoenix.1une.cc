@@ -107,7 +107,7 @@ This book synthesizes concepts from three sources:
 2. ***Music Theory for Electronic Music Producers*** by J. Anthony Allen — the source for the chord-progression-as-MIDI-grid philosophy that runs through Part III and Part V.
 3. ***Music Theory for Computer Musicians*** by Michael Hewitt — the source for the rhythm fundamentals that run through Part II.
 
-Where the two theory books disagree, this book follows the more producer-friendly position. Where the firmware disagrees with the real PO-33 hardware, this book flags it in a sidebar and follows the firmware (since most readers will be using the RavinePhoenix board).
+Where the two theory books disagree, this book follows the more producer-friendly position. Where the RavinePhoenix firmware differs from the real PO-33, this book flags it in a sidebar. The firmware's only intentional UI deviation is the **slot-range swap** (ADR-0002); for that one, the book keeps the PO-33 order and notes the swap. Everywhere else the firmware follows the PO-33 operator manual (the authoritative interaction list is `docs/CONTROL_REFERENCE.md`).
 
 ---
 
@@ -244,26 +244,27 @@ To record a sound into slot 1:
 
 To play back the sound:
 
-1. Press **pad 1** without holding REC. The sound plays once.
-2. To play it repeatedly, hold **REC** again — actually no, that's record. To play it on a step, you write it into the sequencer. We'll do that in Chapter 2.
+1. Hold **SOUND** and press **pad 1**. This *selects* slot 1 as the active sound — the PO-33's two-step "select sound" flow.
+2. Release **SOUND**, then press **pad 1** (or any pad). The selected sound plays. Pressing different pads plays the *same* sound at different pitches/slices — the pads are a keyboard for the selected sound, **not** a "pad N = slot N" map.
+3. To make it repeat, write it into the sequencer. We'll do that in Chapter 2.
 
-> **Sidebar — RavinePhoenix firmware.** The RavinePhoenix firmware's button layout is identical to the real PO-33. REC is the star button on GPIO 9. Pad 1 is the top-left of the 4×4 grid. There is no functional difference for the operator.
+> **Sidebar — RavinePhoenix firmware.** The RavinePhoenix firmware's button layout is identical to the real PO-33. REC is the star button on GPIO 41. Pad 1 is the top-left of the 4×4 grid. There is no functional difference for the operator.
 
 ### Guided exercise: record and play back your first sound
 
 You will need: a PO-33, a quiet room, and one object that makes a sound.
 
-**Success criteria:** you have a recording in slot 1 that plays back when you press pad 1.
+**Success criteria:** you have a recording in slot 1, and — after selecting it with `SOUND + 1` — it plays back when you press a pad.
 
 1. Find a quiet room. The PO-33's built-in microphone will pick up everything, including your breathing. Hold the device about 15 cm from your mouth.
 2. Hold **REC**.
 3. Press **pad 1**.
 4. Say your name out loud. Keep it under 2 seconds.
 6. Release **REC**.
-7. Press **pad 1** (without holding REC). Your name should play back.
+7. Select the sound (hold **SOUND** + press **pad 1**), release SOUND, then press **pad 1**. Your name should play back.
 8. If it doesn't, check the trim — you may have recorded only silence. The PO-33 displays the recording's waveform; if it is flat, you didn't record anything.
 
-If your recording has silence at the start (because you pressed REC and then took a moment to start talking), trim it. The PO-33's trim feature is on the **Tweak Trim** mode: hold the FX button, tap it three times to cycle through Tone, Filter, Trim. Then turn Knob A to move the start point, Knob B to move the end point. We will return to trim in detail in Chapter 5.
+If your recording has silence at the start (because you pressed REC and then took a moment to start talking), trim it. The PO-33's trim lives in **Tweak Trim** mode: tap the **FX** button until the mode reads TRIM (each tap cycles Tone → Filter → Trim → Tone). Then turn Knob A to move the start point and Knob B to move the end point. We will return to trim in detail in Chapter 5.
 
 ### Creative challenge: record three contrasting sounds
 
@@ -290,7 +291,7 @@ Listen to **Madlib, "Accordion"** from *Madvillainy* (2004). The entire beat is 
 - A sampler records sound and plays it back.
 - The PO-33 has 40 seconds of memory, 16 slots, and 16 steps. These limits are creative tools.
 - The three BPM presets are 80 (Hip Hop), 120 (Disco), and 140 (Tencho). Fine-tune with Knob B.
-- Record by holding REC + a pad. Play by pressing the pad.
+- Record by holding REC + a pad. To play: select the sound (hold SOUND + a pad), then press a pad.
 
 **Self-check:**
 
@@ -342,61 +343,62 @@ The PO-33 splits its 16 slots into two groups:
 
 The two halves are intentionally different. Melodic slots let you play melodies and chords. Drum slots let you play sliced breaks.
 
+> **Sidebar — the ranges are swapped on RavinePhoenix (ADR-0002).** On the real PO-33 — and in the rest of this book — slots 1–8 are **melodic** and 9–16 are **drum**. The RavinePhoenix firmware deliberately **reverses** this: slots 1–8 are **drum** and 9–16 are **melodic**, so the device leads with drum beats. Everything else about the slots behaves the same. When you move between this book and a RavinePhoenix device, swap the numbers.
+
 > **Sidebar — PO-33 vs. RavinePhoenix.** The original PO-33 maps the 16 melodic pads to one octave of the chromatic scale. The RavinePhoenix firmware does the same. Drum auto-slicing was ❌ missing in our v1 firmware before October 2025; this book is written assuming auto-slicing works (v1.1 firmware and later). On a real PO-33, drum auto-slicing has always worked.
 
 ### PO-33 Playback: writing your first beat
 
-To write a single sound into the sequencer:
+To write a single sound into the sequencer, you use **write mode**. The
+flow mirrors the PO-33 manual's `fill pattern` step:
 
-1. Press **REC** + **pad 1** to record a sound into slot 1 (or use a sound you already recorded in Chapter 1).
-2. Press the **PLAY** button (a triangle symbol). The device will start counting through the 16 steps, light the current step on the grid, and play the BPM sound at each step.
-3. Press **pad 1**. The device will write slot 1 to the currently-playing step. Actually no — that's not how the PO-33 works either.
+1. (Optional) Select a pattern other than 1: hold **PATTERN** + a pad.
+2. Press **WRITE** to enter write mode. The screen shows a `WRITE` label.
+3. Select the sound you want to place: hold **SOUND** and press its pad
+   (for example `SOUND + pad 1` selects slot 1). Release SOUND. This is the
+   manual's "press the number of the sound to add".
+4. Now each pad press toggles that **step** for the selected sound. Press
+   **pad 1** to place the sound on step 1; press it again to remove it.
+   Press **pad 5** to place it on step 5, and so on.
+5. Press **WRITE** again to exit write mode.
 
-Let me start over with the correct flow:
+Two things to keep straight, because the same 16 pads do double duty:
 
-1. Press the **WRITE** button (the PO-33's "·" key) to enter write mode. The screen shows a writing symbol.
-2. Press the **PLAY** button to start the sequencer.
-3. Press **pad 1**. The slot 1 sample is armed — the device plays the note in slot 1 at every step until you change it.
-4. Press **pad 1** again. The slot 1 sample is removed from the current step.
-5. Wait for the next step. Press **pad 1**. Slot 1 is now playing on two steps.
+- **A pad means different things with and without SOUND held.** With
+  `SOUND` held, a pad *selects a sound*. With no modifier (and write mode
+  on), a pad *toggles a step*.
+- **The sound written is the *selected* sound, not "the pad you pressed".**
+  In step 4, pad 5 writes the *selected* sound to step 5 — it does not write
+  "slot 5".
 
-Actually, the correct flow is even simpler. The PO-33's sequencer has a "current sound" concept. When you enter write mode and press play:
+For your first beat: press **WRITE**, select the kick with `SOUND + pad 1`,
+then press **pad 1**, **pad 5**, **pad 9**, and **pad 13** to place that
+sound on those four steps. The pads are the *steps* here — 1, 5, 9, 13 are
+the four beats of the bar. Press **WRITE** to exit, then press **PLAY** to
+hear the four-on-the-floor kick. We'll build on it in Chapter 4.
 
-- The current sound is whatever you last played.
-- When the sequencer reaches a step that has a sound written to it, it plays the written sound (overriding the current sound).
-- When the sequencer reaches an empty step, it plays the current sound.
-- When you press a pad in write mode, you are writing that pad's slot to the next step that the sequencer hits.
-
-This is confusing. Let me describe the simplest possible workflow:
-
-**Workflow 1 — "Tap to write":**
-
-1. Enter write mode by pressing **WRITE**.
-2. Press **PLAY** to start the sequencer.
-3. Press **pad 1** four times in a row, with one tap per step. The PO-33 will write slot 1 to the next four steps. You now have a sound on every step.
-
-This is rarely what you want. Most of the time you want some steps empty, so you use **Workflow 2 — "Tap to toggle":**
-
-1. Enter write mode by pressing **WRITE**.
-2. Press **PLAY**.
-3. Press **pad 1** when the current step is one you want the sound on. The PO-33 toggles slot 1 on that step.
-4. Wait for the next step you want. Press **pad 1** again. The slot 1 sample is now on two steps.
-5. Continue until your pattern is complete. Press **WRITE** to exit write mode.
-
-You can also write a sound to every step in a range by holding the pad while the sequencer steps through that range:
-
-1. Enter write mode.
-2. Press **PLAY**.
-3. Hold **pad 1** for exactly 4 steps. The slot 1 sample is written to those 4 steps.
-4. Continue.
-
-For your first beat, use **Workflow 2**: enter write mode, press play, and tap pad 1 four times — on steps 1, 5, 9, and 13. That's the four-on-the-floor kick pattern. We'll build on it in Chapter 4.
+> **How the write-mode exercises in this book are written.** In write mode
+> the 16 pads are **steps**, and the sound being placed is whatever you most
+> recently selected with `SOUND + pad`. So an exercise line like
+>
+> > *Step 5: kick (slot 9).*
+>
+> expands to: hold `SOUND`, press `pad 9` (select slot 9), release `SOUND`,
+> then press `pad 5` (toggle step 5). The name in parentheses is the *sound*;
+> the step number is the *pad you actually press*. This is why the same pad
+> can mean "a sound" (while `SOUND` is held) or "a step" (with no modifier).
+>
+> Some exercises are written with a sound's pad number as shorthand, e.g.
+> *"step 1: pad 9 (kick)"*. Read the number in parentheses as the **sound**
+> (the kick, which lives in slot 9) and the *step* as the pad you press —
+> so "step 1: pad 9 (kick)" means: select the kick (`SOUND + pad 9`), then
+> press `pad 1`.
 
 ### The sequencer screen
 
 The PO-33's screen shows a **playhead** (the current step) and a **pattern**. The pattern is shown as a row of 16 dots or numbers. A filled dot means "a sound is written here". An empty dot means "nothing plays here". You can also see the **BPM**, the **FX** number, and the **swing** percentage on the screen.
 
-The RavinePhoenix firmware uses a small OLED screen that displays the same information. On the real PO-33 the screen is a smaller LCD. The information is the same.
+The RavinePhoenix firmware uses a 2.4″ colour **TFT** screen that displays the same information. On the real PO-33 the screen is a smaller LCD. The information is the same.
 
 ### Guided exercise: a one-sound, four-step beat
 
@@ -420,27 +422,28 @@ You have just written a four-on-the-floor pattern with a single sound. The sound
 To **remove** a sound from a step:
 
 1. Press **WRITE** to enter write mode.
-2. Press **PLAY** to start the sequencer.
-3. Wait for the step you want to remove. Press **pad 1** (or whatever slot is on that step). The sound toggles off.
+2. Select the sound that sits on that step (hold **SOUND** + its pad).
+3. Press that **step's pad** to toggle the sound off.
+4. Press **WRITE** to exit.
 
-To **change** the slot on a step:
+To **change** the sound on a step:
 
 1. Enter write mode.
-2. Start play.
-3. Wait for the step. Press the new pad. The old slot is replaced with the new slot.
+2. Remove the old sound (toggle it off as above).
+3. Select the new sound (hold **SOUND** + its pad), then press that step's pad to toggle the new sound on.
 
 To **erase the entire pattern**:
 
-1. Hold **WRITE** + the **erase** button (the PO-33's backspace key — on a real PO-33 it's the bottom-left key of the bottom row; on RavinePhoenix it's the same).
-2. Or, on a real PO-33: hold **REC** + **WRITE**. The pattern is wiped.
+1. Hold **REC** + **PATTERN** together for about 600 ms. The active pattern is wiped.
 
 ### Creative challenge: write three patterns with different densities
 
-Write three versions of the same sound:
+Write three versions of the same sound. In write mode, remember the order:
+select the sound first (`SOUND + pad`), then press the **step** pads.
 
-- **Sparse**: pad 1 only on steps 1 and 13. (2 hits per loop.)
-- **Medium**: pad 1 on steps 1, 5, 9, 13. (4 hits per loop.)
-- **Dense**: pad 1 on every odd step (1, 3, 5, 7, 9, 11, 13, 15). (8 hits per loop.)
+- **Sparse**: the kick on steps 1 and 13. (2 hits per loop.)
+- **Medium**: the kick on steps 1, 5, 9, 13. (4 hits per loop.)
+- **Dense**: the kick on every odd step (1, 3, 5, 7, 9, 11, 13, 15). (8 hits per loop.)
 
 Listen to each. Notice how the sparse pattern feels "open", the medium feels "regular", and the dense feels "busy". The PO-33 has 16 steps, but most music uses **between 2 and 8 hits per loop**. Empty steps are the most underused tool in beat-making.
 
@@ -457,8 +460,8 @@ Listen to **DJ Spinn, "Make Me Hollown"** (2014). The kick plays on every step. 
 **Key takeaways:**
 
 - A step is a sixteenth-note. There are 16 steps per loop.
-- A slot is a stored sound. There are 16 slots (8 melodic, 8 drum).
-- Write mode + PLAY writes a slot to a step. Tap a pad to toggle the current step.
+- A slot is a stored sound. There are 16 slots — 8 drum and 8 melodic (the range order differs between the PO-33 and RavinePhoenix; see the Chapter 2 sidebar).
+- In write mode, select a sound (`SOUND` + pad), then press a **step** pad to toggle it on that step.
 - Most beats use 2–8 hits per loop. Empty steps are a feature.
 
 **Self-check:**
@@ -557,7 +560,7 @@ You will need: the pattern from Chapter 2 (sound on steps 1, 5, 9, 13).
 2. Set the BPM to Hip Hop (80). Press PLAY. Listen for 30 seconds.
 3. Tap the BPM button to cycle to Disco (120). The pattern continues playing at the new speed. Listen for 30 seconds.
 4. Tap the BPM button to cycle to Tencho (140). Listen for 30 seconds.
-5. Cycle back to Hip Hop (80). Press WRITE to exit write mode.
+5. Cycle back to Hip Hop (80).
 
 You should hear the same four hits per loop but at three different feels. The pattern is identical; the tempo is different.
 
@@ -807,14 +810,14 @@ The break is now in slot 9. Because slot 9 is a drum slot, the PO-33 will **auto
 
 ### Using the trim feature
 
-The PO-33 has a **trim** feature (Tweak Trim mode, FX button triple-tap). Trim lets you set the **start** and **end** of the recording. This is essential for breaks: if you recorded 30 seconds, you probably only want to keep 4 seconds. Trim them down.
+The PO-33 has a **trim** feature (Tweak Trim mode, reached by tapping the FX button). Trim lets you set the **start** and **end** of the recording. This is essential for breaks: if you recorded 30 seconds, you probably only want to keep 4 seconds. Trim them down.
 
 **To trim:**
 
-1. Enter Tweak Trim mode (hold FX, triple-tap to cycle TONE → FILTER → TRIM).
+1. Enter Tweak Trim mode: tap the **FX** button until the mode reads TRIM (each tap cycles TONE → FILTER → TRIM → TONE).
 2. Turn **Knob A** to move the start point.
 3. Turn **Knob B** to move the end point.
-4. Press the FX button again to exit trim mode.
+4. Tap the **FX** button to move on (the mode cycles; there is no separate "exit").
 
 For a 4-second break, set the start to the first kick and the end to the last snare. The PO-33's screen shows a waveform; you can see the kicks and snares as big spikes.
 
@@ -824,14 +827,18 @@ For a 4-second break, set the start to the first kick and the end to the last sn
 
 To write a beat from a sliced break:
 
-1. Enter write mode. Press PLAY.
-2. On step 1: press pad 9 (first slice, usually the first kick).
-3. On step 5: press pad 11 (third slice, usually the first snare).
-4. On step 9: press pad 13 (fifth slice, usually the second kick).
-5. On step 13: press pad 15 (seventh slice, usually the second snare).
-6. Press WRITE to exit.
+1. Select the break: hold **SOUND** + **pad 9** (slot 9 becomes the active sound).
+2. Enter write mode: press **WRITE**.
+3. Place the break on the steps you want. On a drum slot, **the slice you
+   hear on a step is that step's number** — step 1 plays slice 1, step 5
+   plays slice 5, step 9 plays slice 9, and so on. So press **pad 1**,
+   **pad 5**, **pad 9**, and **pad 13** to put slices 1, 5, 9, and 13 on
+   the four beats.
+4. Press **WRITE** to exit.
 
-You have just written a four-on-the-floor kick-snare pattern out of a sliced break. The kick and snare are not separate recordings — they are **slices of the same break**. This is how producers made beats in the 1990s.
+You have just built a beat from a single recorded break — the hits are not
+separate recordings, they are **slices of the same break**. This is how
+producers made beats in the 1990s.
 
 ### Guided exercise: build a beat from a 4-second break
 
@@ -842,9 +849,9 @@ You will need: a recorded break in slot 9 (or you can record one in this exercis
 1. Find or create a 4-second break. (Sing "boom, tss, boom, tss, boom, tss, boom, tss" into the mic for 4 seconds. That's a break.)
 2. Hold REC + pad 9. Record 4 seconds of the break. Release REC.
 3. Trim the recording: enter Tweak Trim mode, set start to the first kick, end to the last snare.
-4. Press WRITE. Press PLAY.
-5. Press pad 9 on step 1 (first slice). Press pad 11 on step 5 (third slice). Press pad 13 on step 9 (fifth slice). Press pad 15 on step 13 (seventh slice).
-6. Press WRITE to exit.
+4. Select the break: hold **SOUND** + **pad 9**. Then press **WRITE**.
+5. Press **pad 1**, **pad 5**, **pad 9**, and **pad 13** to place slices 1, 5, 9, and 13 on those steps.
+6. Press **WRITE** to exit.
 
 You have built a beat from a sliced break. The same break could be sliced differently to make different beats.
 
@@ -1102,7 +1109,7 @@ You have just written "Twinkle Twinkle Little Star" into the PO-33. The pattern 
 
 The PO-33's **Tweak Tone** mode lets you adjust the **pitch** and **volume** of a melodic slot. By default, the slot plays at its recorded pitch (C4 if you sang a C, A4 if you sang an A). You can shift the pitch up or down by an octave with Knob A or B.
 
-To enter Tweak Tone mode: hold FX, single-tap to enter TONE mode (the first mode after power-up). Knob A adjusts pitch (up/down by semitone). Knob B adjusts volume. The screen shows the current pitch in semitones.
+To enter Tweak Tone mode: tap the **FX** button until the mode reads TONE (TONE is the default after power-up). Knob A adjusts pitch (up/down by semitone). Knob B adjusts volume. The screen shows the current pitch in semitones.
 
 > **Sidebar — pitch shifting.** If you recorded a vocal at A3 (220 Hz) but you want it to play at A4 (440 Hz), shift the pitch up by 12 semitones (one octave). The PO-33 does pitch shifting via AMY's resampler. Quality degrades at extreme shifts (more than one octave), so keep shifts small.
 
@@ -1693,7 +1700,7 @@ The hi-hat is gone, but the kick-snare-bass-sample combo fills the same frequenc
 To write this:
 
 1. Set BPM to Hip Hop (80). Set swing to 2.
-2. Erase the existing pattern (hold WRITE + erase).
+2. Erase the existing pattern (hold **REC** + **PATTERN** for ~600 ms).
 3. Press WRITE, PLAY.
 4. Step 1: pad 9 (kick), pad 1 (bass), pad 1 (sample — same pad, same step; this is two voices triggered by one tap).
 5. Step 5: pad 10 (snare).
@@ -1955,7 +1962,7 @@ Techno's signature sound is the **acid bassline** — a squelchy, resonant synth
 
 1. Recording a short synth bass note into slot 2.
 2. Pitch-shifting it down (Tweak Tone mode, Knob A down by 12 semitones).
-3. Adding a low-pass filter (FX 1: low-pass filter). Hold FX + pad 1 to apply the filter.
+3. Adding a low-pass filter: switch to Tweak **Filter** mode (tap FX until it reads FILTER). Knob A is the cutoff.
 4. Twisting Knob A while the note plays to "sweep" the filter.
 
 For a sequence:
@@ -2014,11 +2021,11 @@ You should hear a clear techno groove. The bass moves. The kick is steady. The h
 
 ### Creative challenge: the filter sweep
 
-Apply the low-pass filter (FX 1) to the bassline. Hold FX + pad 1 while the bass plays. While the filter is engaged, turn Knob A from 0 to 255 over 4 bars (16 cycles of the pattern). This is the classic "filter sweep" — the bass starts muffled and opens up to full brightness.
+Apply a filter sweep to the bassline. Switch to Tweak **Filter** mode and turn **Knob A** gradually from low to high while the bass plays. This is the classic "filter sweep" — the bass starts muffled and opens up to full brightness.
 
-To do this on the PO-33 with chained patterns (Chapter 15), write the same pattern 4 times, with the filter cutoff increasing each time. Pattern 1: filter 0. Pattern 2: filter 64. Pattern 3: filter 128. Pattern 4: filter 192. Chain them.
+To bake the sweep into a song, use chained patterns (Chapter 15): write the same pattern several times with the cutoff set higher each time, then chain them.
 
-> **Sidebar — FX in Tweak mode.** The PO-33 has 16 punch-in FX. FX 1 (low-pass filter) is the most important for techno. FX 16 (swing) is global. FX 2 (reverb) is good for ambient tracks. The full list is in Appendix B.
+> **Sidebar — filtering vs. punch-in FX.** Filtering on the PO-33 is a **tweak** parameter, not a punch-in: tap `FX` until the mode reads FILTER, then Knob A is the cutoff (Knob B is resonance). The 16 *punch-in* FX (hold `FX` + a pad) are a separate list — `FX + 1` is `loop 16`, `FX + 15` is `reverse`, `FX + 16` is `no effect`. See Appendix B for the full punch-in list.
 
 ### Listening assignment
 
@@ -2042,7 +2049,7 @@ Listen to:
 
 - [ ] Can you write a four-on-the-floor at 140 BPM?
 - [ ] Can you write a rolling acid bassline?
-- [ ] Can you apply the low-pass filter to the bass?
+- [ ] Can you sweep the filter on the bass?
 - [ ] Do you understand why techno is "hypnotic"?
 
 If you answered "yes" to all four, move on to Chapter 14.
@@ -2071,7 +2078,7 @@ By the end of this chapter you will be able to:
 
 The PO-33 is, in some ways, the ultimate lo-fi instrument. Its sample memory is small, its effects are crunchy, and its polyphony is limited. Embrace the constraints.
 
-> **Sidebar — bitcrushing.** The PO-33 has a **bitcrush** effect (FX 14). Bitcrushing reduces the bit depth of a sample, making it sound "8-bit" or "videogame". This is the classic lo-fi effect.
+> **Sidebar — bitcrushing.** Bitcrushing reduces the bit depth of a sample, making it sound "8-bit" or "videogame". The stock PO-33 has **no** bitcrush punch-in (its punch-in list is `loop`, `unison`, `octave`, `stutter`, `scratch`, `6/8 quantize`, `retrigger`, `reverse`); the RavinePhoenix firmware adds a **bitcrush** effect (`PO33_FX_BITCRUSH`). On a stock PO-33, lo-fi crunch instead comes from short **loop** punch-ins (`FX + 1..4`) and aggressive trim.
 
 ### A lo-fi hip-hop beat
 
@@ -2080,7 +2087,7 @@ To build a lo-fi beat:
 1. Set BPM to Hip Hop (80). Set swing to 3.
 3. Record a jazz sample into slot 1 (a vinyl crackle, a piano loop, a vocal phrase).
 4. Record a soft kick into slot 9 (a "thud" rather than a "boom").
-5. Record a snare with reverb into slot 10 (use FX 2: reverb).
+5. Record a snare into slot 10.
 7. Record a closed hi-hat into slot 11.
 8. Press WRITE, PLAY.
 9. Step 1: pad 9 (kick), pad 11 (hat), pad 1 (sample at C4).
@@ -2091,7 +2098,7 @@ To build a lo-fi beat:
 14. Step 15: pad 11.
 15. Press WRITE to exit.
 
-Apply bitcrush (FX 14) to the sample (slot 1). Hold FX + pad 14. The sample should now sound "8-bit".
+Apply bitcrush to the sample (slot 1). (RavinePhoenix: `PO33_FX_BITCRUSH`; a stock PO-33 has no bitcrush punch-in.) The sample should now sound "8-bit".
 
 This is a lo-fi beat. The drums are sparse. The sample is degraded. The swing is heavy.
 
@@ -2101,7 +2108,7 @@ This is a lo-fi beat. The drums are sparse. The sample is degraded. The swing is
 
 - **Record a 30-second example**: pad the audio, push the device closer to a speaker to capture hum, sample your breathing.
 - **Pitch shift everything down**: in Tweak Tone mode, shift the melodic slots down by 12–24 semitones. The result sounds "deep" and "ambient".
-- **Apply reverse (FX 9)**: hold FX + pad 9 to reverse a sample. The result sounds "spooky".
+- **Apply reverse (`FX` + `pad 15`)**: hold FX + pad 15 to reverse a sample. The result sounds "spooky".
 - **Use the PO-33 as a guitar pedal**: route a guitar through the line-in, apply effects, record the output.
 - **Chain patterns with parameter locks** (Chapter 16): each pattern has a different filter cutoff, creating an evolving texture.
 - **Randomise everything**: write a beat by rolling dice and assigning pads to steps. Embrace chaos.
@@ -2126,7 +2133,7 @@ Some famous lo-fi and experimental artists who embrace the PO-33's constraints:
 1. Find or record a jazz sample (a piano loop, a vocal phrase, a sax note). Put it in slot 1.
 2. Record a soft kick, snare, and hi-hat. Put them in slots 9, 10, 11.
 3. Set BPM to 80. Set swing to 3.
-4. Apply bitcrush (FX 14) to slot 1. Hold FX + pad 14.
+4. Apply bitcrush to slot 1 (RavinePhoenix `PO33_FX_BITCRUSH`).
 5. Write a pattern: sample on steps 1, 9; kick on steps 1, 11; snare on 5, 13; hat every odd step.
 6. Press PLAY. Listen.
 
@@ -2134,7 +2141,7 @@ If it sounds too clean, increase the swing to 5. If it sounds too quiet, increas
 
 ### Creative challenge: the field recording
 
-Record a 10-second field recording — your street, your kitchen, a coffee shop — into slot 1. Use it as the "sample" in your beat. Apply FX 9 (reverse) to half the loop, FX 1 (low-pass) to the other half. You have just made a **hauntological** beat — a beat that sounds like a memory.
+Record a 10-second field recording — your street, your kitchen, a coffee shop — into slot 1. Use it as the "sample" in your beat. Apply reverse (`FX + 15`) to half the loop and a filter sweep (Tweak **Filter** mode) to the other half. You have just made a **hauntological** beat — a beat that sounds like a memory.
 
 The genre is "hauntology" (named by music critic Mark Fisher). It is built on degraded samples of the past. The PO-33 is the perfect instrument for it.
 
@@ -2145,21 +2152,21 @@ Listen to:
 - **Burial, "Archangel"** (2007). A chopped vocal sample ("Tell me I belong") over a slow garage beat. Heavy pitch-shifting. This is the PO-33's native genre.
 - **Madlib, "Movie Fight"** from *Madvillainy* (2004). Two samples layered: a horn stab and a vocal phrase. Minimal drums. The "less is more" approach.
 - **J Dilla, "Don't Cry"** from *Donuts* (2006). A jazz sample (the Pretty Things' "Don't Bring Me Down") pitched up, chopped, and looped. The Dilla aesthetic.
-- **Boards of Canada, "Olson"** (2002). A warped, degraded sample with heavy filter sweep. The PO-33's filter (FX 1) can do this.
+- **Boards of Canada, "Olson"** (2002). A warped, degraded sample with heavy filter sweep. The PO-33's filter (Tweak Filter mode) can do this.
 
 ### Summary and checkpoint
 
 **Key takeaways:**
 
 - Lo-fi music embraces low-quality audio as an aesthetic.
-- The PO-33's bitcrush (FX 14) is the lo-fi effect.
+- The PO-33's lo-fi crunch comes from bitcrushing (a RavinePhoenix firmware effect; the stock PO-33 uses short loop punch-ins and aggressive trim).
 - Experimental music uses the PO-33 in unintended ways: pitch-shifting, reversing, randomising.
 - The PO-33 is a "sketchpad" — capture an idea in 4 bars, then move to a DAW.
 
 **Self-check:**
 
 - [ ] Can you build a lo-fi beat with bitcrush and heavy swing?
-- [ ] Can you apply FX 9 (reverse) to a sample?
+- [ ] Can you apply reverse (`FX + 15`) to a sample?
 - [ ] Can you write an experimental beat using unusual sounds?
 - [ ] Do you understand why lo-fi and constraint go together?
 
@@ -2288,7 +2295,7 @@ This is "live arrangement" — you decide the song structure in real time.
 
 ### Creative challenge: a song with dynamics
 
-Make the chorus louder than the verse. In Tweak Volume mode (FX + triple-tap to TRIM, then triple-tap again to VOLUME — actually, on the PO-33, Volume mode is reached by triple-tapping FX, but our firmware doesn't have VOLUME mode; instead, you adjust velocity per step).
+Make the chorus louder than the verse. Adjust the per-step **velocity** in Tweak Tone mode (Knob B). (Our firmware has no separate "VOLUME" mode; the PO-33's per-sound volume is the Tweak *Tone* Knob B, and velocity can be set per step here.)
 
 To adjust velocity on the PO-33:
 
@@ -2343,7 +2350,7 @@ By the end of this chapter you will be able to:
 A **parameter lock** (often abbreviated **plock**) is a setting that overrides the default value of a parameter on a **single step**. For example:
 
 - Step 1: kick at velocity 100. Step 5: kick at velocity 120 (the plock). Step 9: kick at velocity 80.
-- Step 1: snare with no FX. Step 9: snare with FX 14 (bitcrush).
+- Step 1: snare with no FX. Step 9: snare with bitcrush.
 
 Parameter locks are how producers add variation to a beat without rewriting the whole pattern. J Dilla's beats are full of them — a slightly louder kick here, a slightly different snare there.
 
@@ -2480,9 +2487,9 @@ The PO-33 is essentially a groovebox that you "play" like an instrument. Each pe
 Let's perform a 4-minute live set with the patterns we wrote in Chapter 15:
 
 - **0:00–0:30**: Pattern 1 (intro). Slowly turn Knob A from 0 to 255 to open the filter on the sample.
-- **0:30–1:00**: Jump to pattern 2 (verse). Apply FX 1 (low-pass filter) to the bass.
+- **0:30–1:00**: Jump to pattern 2 (verse). Apply a low-pass filter to the bass (Tweak **Filter** mode).
 - **1:00–2:00**: Jump to pattern 3 (chorus). Remove the filter (twist Knob A back to 0).
-- **2:00–2:30**: Jump to pattern 4 (bridge). Apply FX 14 (bitcrush) to the sample.
+- **2:00–2:30**: Jump to pattern 4 (bridge). Apply bitcrush to the sample.
 - **2:30–3:30**: Jump to pattern 3 (chorus). Remove bitcrush.
 - **3:30–4:00**: Jump to pattern 1 (intro). Fade out by turning the master volume down (Tweak Volume mode, Knob B).
 
@@ -2641,7 +2648,7 @@ This glossary defines every musical term used in the book. Terms are listed in a
 
 **EQ (equalisation)**: adjusting the volume of specific frequencies.
 
-**FX (effects)**: modifications applied to a sound (reverb, delay, filter, bitcrush).
+**FX (effects)**: modifications applied to a sound. The PO-33 has two kinds: **punch-in FX** (hold `FX` + a pad; loop, unison, octave, stutter, scratch, 6/8 quantize, retrigger, reverse) and the **tweak** parameters (Tone / Filter / Trim). Reverb, delay, and bitcrush are *not* PO-33 punch-ins (the RavinePhoenix firmware adds bitcrush).
 
 **Filter**: an effect that removes certain frequencies. Low-pass = removes highs. High-pass = removes lows.
 
@@ -2794,30 +2801,33 @@ This appendix is a one-page reference for every button combination on the PO-33 
 | 13 | Step 13 / slot 13 | Slot 13 (drum) | FX 13 |
 | 14 | Step 14 / slot 14 | Slot 14 (drum) | FX 14 |
 | 15 | Step 15 / slot 15 | Slot 15 (drum) | FX 15 |
-| 16 | Step 16 / slot 16 | Slot 16 (drum) | FX 16 (swing) |
+| 16 | Step 16 / slot 16 | Slot 16 (drum) | FX 16 (no effect) |
 
-### FX list (1–16)
+### FX list (1–16, per the PO-33 manual)
+
+Punch-in effects are selected with `FX` **held** + a pad. Pads 1–15 pick an
+effect; pad 16 is "no effect".
 
 | FX | Effect |
 |---|---|
-| 1 | Low-pass filter |
-| 2 | Reverb |
-| 3 | Delay |
-| 4 | Chorus |
-| 5 | 6/8 quantise |
-| 6 | Loop 16 |
-| 7 | Loop shorter |
-| 8 | Loop short |
-| 9 | Reverse |
-| 10 | Octave down |
-| 11 | Octave up |
-| 12 | Unison |
-| 13 | Filter sweep |
-| 14 | Bitcrush |
-| 15 | Scratch fast |
-| 16 | Swing (global) |
+| 1 | loop 16 |
+| 2 | loop 12 |
+| 3 | loop short |
+| 4 | loop shorter |
+| 5 | unison |
+| 6 | unison low |
+| 7 | octave up |
+| 8 | octave down |
+| 9 | stutter 4 |
+| 10 | stutter 3 |
+| 11 | scratch |
+| 12 | scratch fast |
+| 13 | 6/8 quantize |
+| 14 | retrigger pattern |
+| 15 | reverse |
+| 16 | no effect |
 
-### Tweak modes (FX triple-tap)
+### Tweak modes (tap FX to cycle)
 
 | Mode | Knob A | Knob B |
 |---|---|---|
@@ -2940,7 +2950,7 @@ This appendix covers the most common problems you'll encounter on the PO-33 and 
 
 **Cause**: you held REC + pad, then took a moment to make the sound. The PO-33 recorded the silence.
 
-**Fix**: use Tweak Trim mode (FX triple-tap to TRIM). Turn Knob A to move the start point. Trim the silence off.
+**Fix**: use Tweak Trim mode (tap FX until it reads TRIM). Turn Knob A to move the start point. Trim the silence off.
 
 ### Problem: My beat sounds robotic.
 

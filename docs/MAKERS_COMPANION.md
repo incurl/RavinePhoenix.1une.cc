@@ -664,8 +664,9 @@ sharp. With Knob A turned down, flat.
 If you have a RavinePhoenix device in front of you, try:
 
 1. Hold `FX` and tap it (cycles tweak mode to **TONE**).
-2. Tap `SOUND + step 9` (or just `step 9` if write mode is on) to
-   pick slot 9.
+2. Press `SOUND + step 9` to pick slot 9 (this makes it the *active*
+   slot). Note: a bare `step 9` press plays the *active* slot at slice 9 —
+   it does **not** pick slot 9. Selection is always `SOUND + pad`.
 3. Press `PLAY`.
 4. Twist **Knob A** while slot 9 plays. The pitch glides up and
    down.
@@ -863,18 +864,20 @@ an instrument. The moment you put it in a case with a screen and
 buttons, it becomes an instrument.
 
 The TFT on our device is a 2.4-inch, 240×320-pixel colour display
-driven by an ILI9341 chip over SPI. It has 8 named "screens":
+driven by an ILI9341 chip over SPI. It has 8 named "screens". Only the
+first two exist in the current firmware; the rest are the v2 UI
+proposal (`docs/DESIGN.md` §6). They are listed so you can see the
+design intent:
 
 1. **Main / step grid** — the default screen, showing the 16 steps
-   of the active pattern with the current step highlighted.
-2. **Sound-select** — shows 16 slots, indicating which have audio.
-3. **Pattern-select** — shows 16 patterns, indicating which have steps.
-4. **Tweak** — shows the current tweak mode (TONE / FILTER / TRIM).
+   of the active pattern with the current step highlighted. *(implemented)*
+2. **Sound-select** — shows 16 slots, indicating which have audio. *(implemented as the sketch picker's slot view)*
+3. **Pattern-select** — shows 16 patterns, indicating which have steps. *(v2 proposal)*
+4. **Tweak** — shows the current tweak mode (TONE / FILTER / TRIM). *(the tweak label is shown in the main-screen status bar)*
 5. **Sketch picker** — long-press WRITE to enter this; lists all
-   saved sketches.
-6. **FX picker** — long-press FX (or FX + step N) to enter this;
-   lists all 16 punch-in effects.
-7. **Clock + alarm** — shows the wall-clock time and the alarm time.
+   saved sketches. *(implemented)*
+6. **FX picker** — *(not implemented in v1: `FX + step N` selects an effect directly, and `FX` long-press toggles sync IN)*
+7. **Clock + alarm** — shows the wall-clock time and the alarm time. *(v2 proposal)*
 8. **Battery / status** — a corner overlay always present.
 
 These are the closest thing we have to Pearson's knobs and switches.

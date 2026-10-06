@@ -158,7 +158,7 @@ Most PCM5102A boards also have an `OUT L+`, `OUT L-`, `OUT R+`, `OUT R-` for ana
 
 ### 4.5 The step-button matrix (4 rows × 4 cols) — 16 step buttons
 
-The 4×4 matrix holds the 16 polymorphic **step buttons** (numbered 1–16). On the real PO-33 these same physical buttons also mean "sample slot 1–16" when SOUND is held, "pattern 1–16" when PATTERN is held, "effect 1–15 (+16 = swing)" when FX is held, and so on. Our firmware uses the same matrix; whether a number means "step" or "slot" or "effect" depends on which modifier button is held.
+The 4×4 matrix holds the 16 polymorphic **step buttons** (numbered 1–16). On the real PO-33 these same physical buttons also mean "sample slot 1–16" when SOUND is held, "pattern 1–16" when PATTERN is held, "effect 1–15 (+16 = no effect)" when FX is held, and so on. Our firmware uses the same matrix; whether a number means "step" or "slot" or "effect" depends on which modifier button is held. Note that with **no** modifier held, a pad plays the **active slot** (the pad index selects the scale degree / slice) — it is not "pad N plays slot N". See `docs/CONTROL_REFERENCE.md` for the authoritative table.
 
 ```
          COL 0   COL 1   COL 2   COL 3
@@ -245,12 +245,12 @@ Each is a momentary tactile switch between the GPIO and GND (no matrix, no exter
 | `SOUND`   | **GPIO 11** | hold S + number selects a slot; press the same number to play | hold + step 1–16 = select slot; press same step with no modifier = plays once (strict PO-33 two-step) |
 | `PATTERN` | **GPIO 44** | hold + number 1–16 picks a pattern | no-op alone (tap / long-press); hold + step 1–16 = load that pattern |
 | `BPM`     | **GPIO 13** | tap = cycles 80/120/140; hold + knob A = swing; hold + knob B = fine tempo | tap = cycle preset; long-press + Knob A = swing (8 levels); long-press + Knob B = fine BPM (60–240) |
-| `REC`     | **GPIO 41** | record (hold + number records into that slot) | start / stop recording (handler queued) |
-| `FX`      | **GPIO 12** | tap = tweak-mode cycle (Tone / Filter / Trim); hold + 1-15 = effect; hold + 16 = "no effect" | tap = tweak-mode cycle (queued for v2); hold + step 1–15 = active FX; step 16 = PO33_FX_NONE ("no effect", the manual's 16th row) |
+| `REC`     | **GPIO 41** | record (hold + number records into that slot) | hold + step 1–16 = start recording; release = stop. `REC`+`PATTERN` (600 ms) clears the active pattern; `REC`+`BPM` (5 s) = factory reset |
+| `FX`      | **GPIO 12** | tap = tweak-mode cycle (Tone / Filter / Trim); hold + 1-15 = effect; hold + 16 = "no effect" | tap = tweak-mode cycle (Tone → Filter → Trim → Tone); hold + step 1–15 = active FX; step 16 = PO33_FX_NONE ("no effect"); ➕ held alone 2 s = toggle sync IN |
 | `PLAY`    | **GPIO 42** | play / stop pattern | start / stop sequencer |
 | `WRITE`   | **GPIO 43** | enter write mode (·) | enter / exit write mode |
 
-Why these GPIOs? All seven are general-purpose, none are strapping pins (GPIO 0–3 are strapping on the ESP32-S3 and we avoid them), and none conflict with I²S (8/9/10/15/16/17), the TFT (4/5/6/7/47/48), the button matrix (33/34/35/36/37/38/39/40), or the two knobs (20 and 46). **GPIO 45** — which used to carry `PAT ↓` — is now free for future expansion.
+Why these GPIOs? All seven are general-purpose, none are strapping pins (GPIO 0–3 are strapping on the ESP32-S3 and we avoid them), and none conflict with I²S (8/9/10/15/16/17), the TFT (4/5/6/7/47/48), the button matrix (33/34/35/36/37/38/39/40), or the two knobs (2 and 46). **GPIO 45** — which used to carry `PAT ↓` — is now free for future expansion.
 
 Each switch needs two wires:
 
@@ -423,7 +423,7 @@ The PO-33 names the knobs simply "A" and "B"; what they do depends on which twea
 | `BPM` held | fine tempo adjustment | cycle 3 tempo levels (Hip Hop / Disco / Techno) |
 | (no mode active) | repeats the last-set tweak | repeats the last-set tweak |
 
-In v1 firmware, only the "`BPM` held" row is wired through — knobs A and B move the tempo up/down by ±1 BPM per tick when the `BPM` modifier button is held. The tweak-mode rows are documented in `docs/DESIGN.md` §3.4 (F-016 / F-017 / F-018) and will be wired in a future revision; the data model already supports them.
+The `BPM` held row and the three tweak rows are all wired. When `BPM` is held, Knob A sets swing (8 discrete levels) and Knob B fine-tunes the tempo (60–240 BPM). In tweak mode (`FX` tapped to select Tone / Filter / Trim), Knobs A/B bind to the active parameter per the table above (see `docs/DESIGN.md` §3.4, F-016 / F-017 / F-018); filter resonance (Knob B in Filter mode) is read but not yet stored as a per-step field.
 
 #### Knob vs. modifier button: which is "right"?
 

@@ -16,9 +16,10 @@ permalink: /workflow/
   <h2 class="text-2xl font-bold mb-3">1. Record a sample</h2>
   <p class="text-slate-600 dark:text-slate-400 mb-3">
     Press and hold <span class="badge">REC</span>, tap a step button
-    (1–8 for drum slots, 9–16 for melodic slots), and the firmware
-    starts capturing mic input into that slot's PSRAM region. Press
-    <span class="badge">REC</span> again to stop.
+    (1–8 for drum slots, 9–16 for melodic slots on RavinePhoenix —
+    these ranges are swapped vs. a stock PO-33; see ADR-0002), and the
+    firmware starts capturing mic input into that slot's PSRAM region.
+    Release <span class="badge">REC</span> to stop.
   </p>
   <div class="terminal">
     <span class="text-po33-300">po33&gt;</span> rec 0
@@ -31,9 +32,13 @@ permalink: /workflow/
 <section class="py-6 border-t border-slate-200 dark:border-slate-800">
   <h2 class="text-2xl font-bold mb-3">2. Trim and slice</h2>
   <p class="text-slate-600 dark:text-slate-400 mb-3">
-    Each slot has a start and end point. Use the <span class="badge">SOUND</span>
-    + step buttons combo to nudge the start/end markers, or send raw
-    commands over UART.
+    Each slot has a start and end point. Select the slot with
+    <span class="badge">SOUND</span> + a step pad, then move the
+    start/end markers in Tweak Trim mode (tap
+    <span class="badge">FX</span> until it reads TRIM, then Knob A =
+    start, Knob B = end), or send raw commands over UART.
+    (<span class="badge">SOUND</span> + step <em>selects</em> a slot; it
+    does not move the trim markers.)
   </p>
   <p class="text-slate-600 dark:text-slate-400">
     Drum loops can be auto-sliced into 16 equal parts; melodic slots
@@ -44,7 +49,9 @@ permalink: /workflow/
 <section class="py-6 border-t border-slate-200 dark:border-slate-800">
   <h2 class="text-2xl font-bold mb-3">3. Sequence</h2>
   <p class="text-slate-600 dark:text-slate-400 mb-3">
-    Press step buttons to drop the recorded sample onto a step. Press
+    Press <span class="badge">WRITE</span> to enter write mode, select a
+    sound (<span class="badge">SOUND</span> + step), then press step pads
+    to place it on those steps. Press
     <span class="badge">PLAY</span> to start the sequencer. The 2.4″ TFT
     shows the playhead.
   </p>
@@ -60,8 +67,9 @@ permalink: /workflow/
 <section class="py-6 border-t border-slate-200 dark:border-slate-800">
   <h2 class="text-2xl font-bold mb-3">4. Apply punch-in FX</h2>
   <p class="text-slate-600 dark:text-slate-400 mb-3">
-    Hold <span class="badge">FX</span>, then press one of the 16 effect
-    buttons. The active effect name shows on the OLED. Some highlights:
+    Hold <span class="badge">FX</span>, then press one of the 15 effect
+    pads (pad 16 = "no effect"). The active effect name shows on the
+    TFT. Some highlights:
   </p>
   <ul class="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-1">
     <li><strong>Loop 16/12/Short/Shorter</strong> — different loop lengths</li>

@@ -289,3 +289,82 @@ We will revisit this ADR if any of the following become true:
 - Commit `4c1e971` — fixed an unrelated slicing-text bug in the
   Music Course chapter 2 that incorrectly described slicing as
   covering only pads 9–16. That bug is independent of this ADR.
+
+---
+
+## ADR-0003 — The PO-33 manual is the ground truth for UI interactions
+
+- **Status:** Accepted
+- **Date:** 2026-10-06
+- **Deciders:** Peter (project owner).
+
+### Context
+
+The modifier buttons (`SOUND`, `PATTERN`, `BPM`, `REC`, `FX`, `PLAY`,
+`WRITE`) and the 16 step pads are documented in four places — the design
+doc (`docs/DESIGN.md`), the hardware guide (`hardware/HARDWARE.md`), the
+two long-form books (`docs/MAKERS_COMPANION.md`,
+`docs/RavinePhoenix_Music_Course.md`), and the project website
+(`website/src/`). An audit found each surface described the same gestures
+differently, and several described behaviour the firmware does not have
+(or omitted behaviour it does). Root cause: no single source of truth.
+
+A second class of problem is conceptual: the pads do **not** map 1:1 to
+the 16 sample slots. The PO-33 manual defines two distinct verbs —
+`select sound` (hold `SOUND` + number) and `play a sound`
+(`[select sound]` press number) — and its definitions state that a melodic
+sound "plays whole sound on a scale" while a drum sound "plays slice of a
+sound". So after selecting a sound, the 16 pads are a *scale / slicer*
+for that one sound. Several documents instead said "pad N plays slot N",
+which is wrong.
+
+### Decision
+
+1. **The PO-33 operator manual is the specification for every UI
+   interaction.** The canonical mirror is
+   [lode/PO-33 README](https://raw.githubusercontent.com/lode/PO-33/main/README.md).
+   Where a document — or the firmware — disagrees with the manual, the
+   manual wins.
+2. **The only sanctioned deviations are the accepted ADRs.** In practice
+   that is ADR-0002 (the firmware swaps the melodic/drum slot ranges).
+   ADR-0001 (website templating) is not a UI interaction.
+3. **A single control reference is created and kept authoritative:**
+   `docs/CONTROL_REFERENCE.md`. Every other surface cites it instead of
+   restating gestures.
+4. **Deviations are labelled, not hidden.** The reference uses four
+   labels: ✅ (matches the manual), ⚠️ (sanctioned ADR-0002 deviation),
+   ➕ (RavinePhoenix-only gesture not in the manual), ❌ (manual feature
+   not implemented). Documents reproduce the labels rather than quietly
+   "fixing" the text to look conformant.
+
+### Rationale
+
+- Readers of the books arrive from a real PO-33; describing invented
+  gestures as if they were standard causes exactly the frustration the
+  books are meant to remove.
+- A single reference makes drift detectable — the previous four-way
+  divergence was only found by an ad-hoc audit.
+- Honest labelling of ➕/❌ items lets the firmware close gaps later
+  (or not) without the documentation having lied about them in the
+  meantime.
+
+### Consequences
+
+**Easier:** one file to update when a gesture changes; books and website
+can be checked against it mechanically; the pad-meaning confusion (Note A
+of the reference) is settled once.
+
+**Harder:** contributors must update `CONTROL_REFERENCE.md` *before* the
+prose surfaces; the reference will make the firmware's ➕/❌ gaps visible,
+which is intended.
+
+### Scope
+
+This ADR is a **documentation decision**. It does not change firmware
+behaviour. The ➕ gestures and ❌ gaps are recorded, not altered.
+
+### See also
+
+- `docs/CONTROL_REFERENCE.md` — the authoritative table.
+- `docs/architecture-decisions.md` ADR-0002 — the sanctioned slot-range swap.
+- `main/ui/input.c` — the dispatcher the reference is generated from.
