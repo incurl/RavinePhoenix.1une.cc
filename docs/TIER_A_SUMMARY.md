@@ -159,7 +159,7 @@ bash /home/peter/.espressif/v6.1/esp-idf/install.sh esp32s3
 
 # 3. Set up env, build
 source /home/peter/.espressif/v6.1/esp-idf/export.sh
-cd /home/peter/CLionProjects/RavinePhoenix.1une.cc
+cd /home/peter/CLionProjects/ravine.1une.cc
 idf.py set-target esp32s3
 idf.py build
 idf.py -C build test
