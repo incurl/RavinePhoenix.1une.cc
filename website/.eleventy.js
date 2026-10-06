@@ -94,8 +94,15 @@ module.exports = function (eleventyConfig) {
   /* Pass through binaries & assets that live under public/ */
   eleventyConfig.addPassthroughCopy({ "public": "." });
 
-  /* Watch CSS in dev */
+  /* Pass through CSS + JS from src/assets/. Without this, the CSS/JS
+   * the templates reference at /assets/... do not exist in _site and
+   * the mobile-nav toggle (and theme toggle) silently fail. */
+  eleventyConfig.addPassthroughCopy({ "src/assets/js": "assets/js" });
+  eleventyConfig.addPassthroughCopy({ "src/assets/css": "assets/css" });
+
+  /* Watch CSS/JS in dev */
   eleventyConfig.addWatchTarget("src/assets/css/");
+  eleventyConfig.addWatchTarget("src/assets/js/");
 
   /* Re-watch book source files so the reader rebuilds when content changes. */
   eleventyConfig.addWatchTarget("../docs/MAKERS_COMPANION.md");

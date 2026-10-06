@@ -17,7 +17,7 @@
 
       <div class="flex items-center gap-2">
         <button id="theme-toggle"
-                class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
+                class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-po33-500"
                 aria-label="Toggle dark mode">
           <span class="dark:hidden">🌙</span>
           <span class="hidden dark:inline">☀️</span>
@@ -25,18 +25,24 @@
         <a href="{{ site.repo_url }}"
            class="hidden sm:inline-flex btn-secondary text-sm"
            target="_blank" rel="noopener">GitHub ↗</a>
-        <button id="nav-toggle" class="md:hidden p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800"
-                aria-label="Open menu">☰</button>
+        <button id="nav-toggle" type="button"
+                class="md:hidden p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-po33-500"
+                aria-controls="nav-mobile" aria-expanded="false"
+                aria-label="Toggle navigation menu">
+          <span aria-hidden="true" id="nav-toggle-icon-open">☰</span>
+          <span aria-hidden="true" id="nav-toggle-icon-close" class="hidden">✕</span>
+        </button>
       </div>
     </div>
 
-    <div id="nav-mobile" class="hidden md:hidden pb-4 flex flex-col gap-2 text-sm">
-      <a href="/" class="py-2">Home</a>
-      <a href="/hardware/" class="py-2">Hardware</a>
-      <a href="/workflow/" class="py-2">Workflow</a>
-      <a href="/docs/" class="py-2">Docs</a>
-      <a href="/reader/" class="py-2">Reader</a>
-      <a href="/download/" class="py-2">Download</a>
+    <div id="nav-mobile"
+         class="md:hidden hidden pb-4 flex-col gap-2 text-sm border-t border-slate-200 dark:border-slate-800">
+      <a href="/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Home</a>
+      <a href="/hardware/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Hardware</a>
+      <a href="/workflow/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Workflow</a>
+      <a href="/docs/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Docs</a>
+      <a href="/reader/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Reader</a>
+      <a href="/download/" class="py-2 hover:text-po33-600 dark:hover:text-po33-400">Download</a>
     </div>
   </div>
 </header>
