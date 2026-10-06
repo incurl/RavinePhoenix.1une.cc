@@ -16,52 +16,178 @@ permalink: /hardware/
 
 <section class="py-8 border-t border-slate-200 dark:border-slate-800">
   <h2 class="text-2xl font-bold mb-4">Bill of materials</h2>
+  <p class="text-slate-600 dark:text-slate-400 mb-4">
+    The full, ordered-by-part-number list (with prices, retailers, and
+    required-vs-optional guidance) lives in
+    <code class="text-po33-600">hardware/HARDWARE.md</code> §3.
+    The table below is the one-page summary.
+  </p>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-100 dark:bg-slate-800">
         <tr>
+          <th class="text-left p-2">#</th>
           <th class="text-left p-2">Component</th>
           <th class="text-left p-2">Part</th>
-          <th class="text-left p-2">Notes</th>
+          <th class="text-left p-2">Required?</th>
+          <th class="text-right p-2">Qty</th>
+          <th class="text-right p-2">~Cost (USD)</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
-        <tr><td class="p-2">MCU</td>
-            <td class="p-2 font-mono">ESP32-S3-WROOM-1-N16R8</td>
-            <td class="p-2">16&nbsp;MB flash, 8&nbsp;MB Octal PSRAM</td></tr>
-        <tr><td class="p-2">DAC</td>
-            <td class="p-2 font-mono">PCM5102A</td>
-            <td class="p-2">I²S stereo DAC (we feed L=R mono)</td></tr>
-        <tr><td class="p-2">Mic</td>
-            <td class="p-2 font-mono">INMP441</td>
-            <td class="p-2">I²S MEMS mic, left channel</td></tr>
-        <tr><td class="p-2">Display</td>
-            <td class="p-2 font-mono">2.4″ TFT ILI9341</td>
-            <td class="p-2">240×320, SPI</td></tr>
-        <tr><td class="p-2">Buttons</td>
-            <td class="p-2 font-mono">23× 6&nbsp;mm tact</td>
-            <td class="p-2">16 in a 4×4 scan matrix + 7 PO-33 modifiers</td></tr>
-        <tr><td class="p-2">Status LEDs</td>
-            <td class="p-2 font-mono">2× 3&nbsp;mm LED</td>
-            <td class="p-2">REC + PLAY indicators</td></tr>
-        <tr><td class="p-2">Power</td>
-            <td class="p-2 font-mono">USB-C 5&nbsp;V</td>
-            <td class="p-2">Or single-cell LiPo + TP4056</td></tr>
-        <tr><td class="p-2">Optional amp</td>
-            <td class="p-2 font-mono">MAX98357A</td>
-            <td class="p-2">I²S class-D amp for built-in speaker</td></tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">1</td>
+          <td class="p-2">MCU dev board</td>
+          <td class="p-2 font-mono">ESP32-S3-WROOM-1-N16R8</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$5–$10</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">2</td>
+          <td class="p-2">Audio DAC (I²S out)</td>
+          <td class="p-2 font-mono">PCM5102A</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$2–$4</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">3</td>
+          <td class="p-2">I²S MEMS microphone</td>
+          <td class="p-2 font-mono">INMP441</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$2–$5</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">4</td>
+          <td class="p-2">2.4″ TFT display</td>
+          <td class="p-2 font-mono">ILI9341 (240×320, SPI)</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$4–$8</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">5</td>
+          <td class="p-2">4×4 button matrix</td>
+          <td class="p-2 font-mono">16 tactile switches</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">16</td>
+          <td class="p-2 text-right">$2–$4</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">5b</td>
+          <td class="p-2">Modifier buttons</td>
+          <td class="p-2 font-mono">7× 6 mm tactile switches</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">7</td>
+          <td class="p-2 text-right">< $1</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">7c</td>
+          <td class="p-2">Rotary encoder</td>
+          <td class="p-2 font-mono">Alps EC11E (24 detents, click)</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$0.50–$1</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">7b</td>
+          <td class="p-2">Analog knobs (10 kΩ lin.)</td>
+          <td class="p-2 font-mono">2× panel-mount pots + knobs</td>
+          <td class="p-2">Recommended</td>
+          <td class="p-2 text-right">2</td>
+          <td class="p-2 text-right">$1–$3</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">6</td>
+          <td class="p-2">Speaker</td>
+          <td class="p-2 font-mono">4 Ω or 8 Ω, 0.5–3 W</td>
+          <td class="p-2">Optional</td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$2–$5</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">7</td>
+          <td class="p-2">Class-D amp</td>
+          <td class="p-2 font-mono">MAX98357A (I²S)</td>
+          <td class="p-2">Optional</td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$6–$10</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">8</td>
+          <td class="p-2">Battery</td>
+          <td class="p-2 font-mono">Li-ion 18650 3.7 V 2800 mAh</td>
+          <td class="p-2">Recommended</td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$5–$12</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">9</td>
+          <td class="p-2">Battery charger</td>
+          <td class="p-2 font-mono">TP4056 module</td>
+          <td class="p-2">Optional (only w/ battery)</td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$1</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">10</td>
+          <td class="p-2">Status LEDs</td>
+          <td class="p-2 font-mono">2× 3 mm LED (REC + PLAY)</td>
+          <td class="p-2">Recommended</td>
+          <td class="p-2 text-right">2</td>
+          <td class="p-2 text-right">< $1</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">11</td>
+          <td class="p-2">Jumper wires</td>
+          <td class="p-2 font-mono">Dupont F-F, 10 cm, 40-pin ribbon</td>
+          <td class="p-2"><span class="badge">Required</span></td>
+          <td class="p-2 text-right">1 strip</td>
+          <td class="p-2 text-right">$1–$2</td>
+        </tr>
+        <tr>
+          <td class="p-2 font-mono text-slate-500">12</td>
+          <td class="p-2">Breadboard</td>
+          <td class="p-2 font-mono">830 tie points</td>
+          <td class="p-2">Optional (helpful)</td>
+          <td class="p-2 text-right">1</td>
+          <td class="p-2 text-right">$2–$5</td>
+        </tr>
       </tbody>
     </table>
   </div>
+  <p class="text-slate-600 dark:text-slate-400 mt-4 text-sm">
+    <strong>Total cost:</strong> minimal build (1–5, 5b, 7c, 11) ≈ $16–$26;
+    with speaker + amp ≈ $25–$40; with battery ≈ $30–$45;
+    everything ≈ $35–$60.
+    See <code class="text-po33-600">hardware/HARDWARE.md</code> §3.1.
+  </p>
 </section>
+
 
 <section class="py-8 border-t border-slate-200 dark:border-slate-800">
   <h2 class="text-2xl font-bold mb-4">Pin map</h2>
   <p class="text-slate-600 dark:text-slate-400 mb-6">
     All pins below are configured in
     <code class="text-po33-600">main/config.h</code>. Edit there if your
-    board differs.
+    board differs. Total in-use: <strong>17 GPIOs</strong> + 2 ADC channels
+    (matrix 8 + modifiers 7 + encoder 3 + knobs 2 + I²S 6 + TFT 6 +
+    sync 2 + LEDs 2 − shared I²S bus). The full GPIO-budget
+    analysis lives in <code class="text-po33-600">hardware/HARDWARE.md</code> §8.4.
   </p>
+  <div class="card mb-6 bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700">
+    <p class="text-sm text-amber-900 dark:text-amber-200">
+      <strong>Two pins are reserved for future USB-MIDI:</strong>
+      GPIO&nbsp;20 (was Knob&nbsp;A; moved to GPIO&nbsp;2) and GPIO&nbsp;19
+      (was Sync&nbsp;IN; moved to GPIO&nbsp;25).
+      <strong class="block mt-2">GPIO&nbsp;2 is a strapping pin:</strong>
+      it must be floating or HIGH at boot, otherwise the ESP32-S3 enters
+      download-boot mode. Keep Knob&nbsp;A turned away from its minimum
+      stop before power-cycling if you suspect a stuck bootloader.
+    </p>
+  </div>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div class="card">
@@ -137,6 +263,44 @@ permalink: /hardware/
           <tr><td class="py-1.5">LED PLAY</td><td class="py-1.5 text-right">GPIO14</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Rotary encoder (Alps EC11E)</h3>
+      <p class="card-text mt-2">
+        24-detent vertical-mount encoder with click-switch. Phase A/B
+        are consumed by ESP32-S3 PCNT unit 0; the click-switch is polled
+        and debounced. Used by the sketch picker.
+      </p>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">Phase A</td><td class="py-1.5 text-right">GPIO22</td></tr>
+          <tr><td class="py-1.5">Phase B</td><td class="py-1.5 text-right">GPIO23</td></tr>
+          <tr><td class="py-1.5">Click-switch</td><td class="py-1.5 text-right">GPIO24</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Class-D amp (MAX98357A) + battery monitor</h3>
+      <p class="card-text mt-2">
+        The MAX98357A shares the PCM5102A’s I²S bus (BCLK/LRCK/DIN
+        = GPIO&nbsp;9/10/8) — only one is driven at a time. Battery voltage
+        is read via ADC1_CH3 on GPIO&nbsp;4 (a 2:1 resistor divider halves
+        the cell voltage into the ADC’s 3.3 V range).
+      </p>
+      <table class="w-full text-sm font-mono mt-3">
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="py-1.5">MAX98357A BCLK</td><td class="py-1.5 text-right">GPIO9 (shared w/ DAC)</td></tr>
+          <tr><td class="py-1.5">MAX98357A LRCK</td><td class="py-1.5 text-right">GPIO10 (shared w/ DAC)</td></tr>
+          <tr><td class="py-1.5">MAX98357A DIN</td><td class="py-1.5 text-right">GPIO8 (shared w/ DAC)</td></tr>
+          <tr><td class="py-1.5">Battery ADC</td><td class="py-1.5 text-right">GPIO4 / ADC1_CH3</td></tr>
+        </tbody>
+      </table>
+      <p class="text-xs text-slate-500 mt-2">
+        In v1 firmware the amp is not driven (F-031 ❌ missing); the
+        battery monitor is optional and the ADC field is reserved.
+      </p>
     </div>
   </div>
 </section>
