@@ -11,6 +11,7 @@
 #include "driver/adc.h"
 #include "driver/gpio.h"
 #include "ui/buttons.h"
+#include "storage/storage.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -65,6 +66,31 @@ void power_mgmt_reset_idle_timer(void)
 
 void power_mgmt_enter_deep_sleep(void)
 {
+    /* Persist the active sketch (patterns + chain + samples) before
+     * power-off so the next boot lands where the user left off.
+     * ADR-0004: storage_save_all() writes to the active sketch's
+     * folder under /sketches/<active_id>/ and bumps the NVS
+     * active_id (which is already correct on save). This is the
+     * PO-33's "power-off then on = same sketch" behaviour.
+     *
+     * We bound the save at ~3 s -- if the flash is wedged we still
+     * go to sleep on schedule rather than draining the battery.
+     * The ESP-IDF v6 LittleFS driver is synchronous so we can't
+     * just check elapsed time mid-write; the vTaskDelay below
+     * gives the lower-priority I/O task time to drain if needed.
+     */
+    ESP_LOGI(TAG, "Persisting active sketch before deep sleep...");
+    esp_err_t e = storage_save_all();
+    if (e != ESP_OK) {
+        ESP_LOGW(TAG, "pre-sleep save_all failed (%s) -- going to sleep anyway",
+                 esp_err_to_name(e));
+    } else {
+        ESP_LOGI(TAG, "Active sketch saved.");
+    }
+    /* Brief settle for the LittleFS write to commit; without this,
+     * a power-cut immediately after esp_deep_sleep_start() can
+     * leave the last block half-flushed. */
+    vTaskDelay(pdMS_TO_TICKS(50));
     ESP_LOGI(TAG, "Going to deep sleep now.");
     esp_deep_sleep_start();
 }

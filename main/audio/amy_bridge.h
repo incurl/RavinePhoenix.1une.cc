@@ -61,6 +61,13 @@ size_t   amy_bridge_slot_max_bytes(uint8_t slot);
 bool     amy_bridge_slot_has_sample(uint8_t slot);  /* true iff slot has a recording (>0 samples) */
 esp_err_t amy_bridge_set_trim(uint8_t slot, uint32_t start, uint32_t end);
 
+/* Per-slot metadata accessors (used by storage.c to round-trip
+ * samples.bin). Return 0 / false if the slot is empty. */
+uint32_t amy_bridge_slot_sample_rate_hz(uint8_t slot);
+uint32_t amy_bridge_slot_start_sample  (uint8_t slot);
+uint32_t amy_bridge_slot_end_sample    (uint8_t slot);
+bool     amy_bridge_slot_is_drum       (uint8_t slot);
+
 /* Recording (mic → PSRAM). `rec_buf` should point at the active slot's PSRAM
  * region; amy_bridge pumps AMY's input buffer into it one block at a time. */
 esp_err_t amy_bridge_start_record(uint8_t slot);

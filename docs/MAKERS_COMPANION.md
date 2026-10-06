@@ -185,6 +185,13 @@ If you already have a flashed board and a working serial connection:
 3. Type `play` to start the empty pattern. Type `stop` to stop it.
 4. You're ready to begin Chapter 1.
 
+Your work is **auto-saved**: every 5 minutes of inactivity (and on
+the `sleep` UART verb) the firmware writes the active sketch's
+patterns + chain + samples to flash. The next boot brings them
+back automatically — the device is "where you left it". The
+explicit `save` / `load` verbs and `sketch new` / `sketch load
+<id>` are belt-and-braces; you don't need to think about saving.
+
 If anything goes wrong, the firmware has a `panic` log printed to the
 serial port. Copy-pasting the last 30 lines into a search engine or a
 GitHub issue is almost always enough to diagnose the problem.
@@ -218,6 +225,12 @@ you skim ahead, this table tells you what's available.
 | `note` | `<slot> <midi_note>` | Play a slot at a specific pitch (MIDI note number, 0–127) | Chapter 9 (octave harmonizer) |
 | `alarm_set` | `<HH> <MM> <slot>` | Schedule a sample to fire at a wall-clock time | Chapter 6 (timing circuits), bonus feature |
 | `sync_in_toggle` | (none) | Toggle whether incoming sync pulses drive the sequencer | Chapter 13 (PLL — same idea, different medium) |
+| `save` | (none) | Belt-and-braces: write the active sketch to flash (auto-save already covers this) | "Chapter 0" |
+| `load` | (none) | Belt-and-braces: re-read the active sketch from flash (boot already did this) | "Chapter 0" |
+| `sketch list` | (none) | List every saved sketch with its 4-hex id | "Chapter 0" |
+| `sketch new` | (none) | Save the active sketch under a new 4-hex id (becomes the new active sketch) | "Chapter 0" |
+| `sketch load` | `<4-hex id>` | Load a saved sketch into PSRAM; future boots land here | "Chapter 0" |
+| `sketch del` | `<4-hex id>` | Delete a sketch from flash (samples are in PSRAM only) | "Chapter 0" |
 | `status` | (none) | Dump everything the firmware knows | "Chapter 0" |
 
 Two of these verbs — `fx` and `tweak_filter` — are the most-used in this

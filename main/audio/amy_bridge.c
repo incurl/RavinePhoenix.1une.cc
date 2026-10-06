@@ -119,6 +119,32 @@ bool amy_bridge_slot_has_sample(uint8_t slot)
     return amy_bridge_slot_len_samples(slot) > 0;
 }
 
+/* Per-slot metadata accessors (ADR-0004: storage.c round-trips
+ * these through samples.bin so a sketch survives reboot). */
+uint32_t amy_bridge_slot_sample_rate_hz(uint8_t slot)
+{
+    if (slot >= SLOT_COUNT) return 0;
+    return s_slots[slot].sample_rate_hz;
+}
+
+uint32_t amy_bridge_slot_start_sample(uint8_t slot)
+{
+    if (slot >= SLOT_COUNT) return 0;
+    return s_slots[slot].start;
+}
+
+uint32_t amy_bridge_slot_end_sample(uint8_t slot)
+{
+    if (slot >= SLOT_COUNT) return 0;
+    return s_slots[slot].end;
+}
+
+bool amy_bridge_slot_is_drum(uint8_t slot)
+{
+    if (slot >= SLOT_COUNT) return false;
+    return s_slots[slot].is_drum;
+}
+
 /* F-005 auto-mapping. The real PO-33 maps the 16 pads (when the active
  * slot is melodic) to a chromatic scale one octave wide. Pad 1 = C4
  * (MIDI 60), pad 2 = C#4 (61), ..., pad 13 = C5 (72), pad 16 = D#5

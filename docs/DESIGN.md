@@ -836,7 +836,14 @@ po33> ...  # we don't have a shell command for this yet — see §7
 
 **On a real PO-33:** Patterns are saved automatically the moment you finish writing them. Sounds are saved automatically the moment you stop recording. Power-off and back on — everything is still there. (Backup to tape / another PO-33 is via the data transfer protocol described in 5.9.)
 
-**On our firmware:** Patterns auto-save on power-off is not yet implemented. Use the UART shell: `save` writes all 16 patterns and all 16 sample slots to LittleFS on flash. Use `load` to restore on the next boot.
+**On our firmware:** Patterns, samples, and the chain are saved
+automatically before deep sleep (idle timer + `sleep` UART verb)
+and restored on the next boot from the active sketch's folder
+under `/sketches/<id>/`. The active sketch is remembered in NVS
+key `sketches/active_id`; on a fresh device this defaults to
+sketch `0000`. The `save` / `load` UART verbs and `storage_save_all()` /
+`storage_load_all()` are still available as belt-and-braces
+explicit saves (see §11.2 and ADR-0004).
 
 ### 5.7 How do I trim a recording?
 
@@ -1155,8 +1162,8 @@ A printable one-page reference. **P** = press, **H+P** = hold while pressing, **
 | Apply effect | H+FX + number (1–15) | H+`FX` + step 1–15 → active FX (carried into next note); step 16 = "no effect" (PO33_FX_NONE). NOT a step-press: swing is BPM + Knob A. |
 | Enter / exit write mode | press WRITE (·) | `WRITE` tap toggles write mode (yellow `WRITE` label in the status bar); `WRITE` long-press enters the sketch picker (➕). In write mode a pad press binds/clears the active slot on that step (tap = toggle, long-press = clear). |
 | Select a sample slot | H+SOUND + number | H+`SOUND` + step 1–16 → active slot; press same step with no modifier = plays once |
-| Save pattern | auto on power-off | `save` over UART |
-| Load on boot | auto | `load` over UART |
+| Save pattern | auto on power-off + manual `save` | `save` over UART (also `storage_save_all()` before deep sleep) |
+| Load on boot | auto (last-active sketch from NVS `sketches/active_id`) | `load` over UART |
 | Erase sound | H+REC + slot number | not yet |
 | Erase pattern | H+REC + PATTERN | H+`REC` + `PATTERN` held 600 ms clears the active pattern |
 | Copy sound | H+WRITE + SOUND + number | not yet |
@@ -1397,45 +1404,70 @@ This section is the **design** for that system. It is a v2 proposal — v1 firmw
 
 ### 11.2 On-flash layout
 
-We currently have **one** LittleFS partition called `sketches` (256 KB in `partitions.csv`). It is large enough for ~32–64 sketches of average size, so we **reuse it** rather than add a new partition. The layout inside the existing `sketches` partition becomes:
+The `sketches` partition is mounted at `/sketches/` and is laid out
+as one folder per sketch plus a master index. The full sketch
+lifecycle is described in §11.4; the canonical C identifiers and
+APIs are listed in §11.5.
 
 ```
-/sketches/
-├── sketches.lst                       # index: one line per sketch
-│                                       #   format: <id4> <slot> <name>
-│                                       #   sorted by slot for stable UI ordering
-│
-├── a1b2/                              # sketch with ID "a1b2"
-│   ├── meta.json                      # sketch metadata (see §11.1)
-│   ├── samples.bin                    # raw 16-bit PCM, the sample pool
-│   ├── patterns/                      # 16 step-patterns, one file each
-│   │   ├── p00.bin
-│   │   ├── p01.bin
-│   │   │   ...
-│   │   └── p15.bin
-│   └── chain.bin                      # chain (up to 128 entries)
-│
-├── b3c4/                              # next sketch
-│   ├── meta.json
-│   ├── samples.bin
-│   ├── patterns/
-│   │   ...
-│   └── chain.bin
-│
-└── tmp/                                # staging area for atomic writes
-    ├── samples.bin.tmp
-    └── ...
+/sketches/                                   mount root (LittleFS)
+  sketches.lst                               master index, "<id>\t<name>\n"
+  <id>/
+    meta.bin                                 fixed 24-byte NUL-padded name
+    samples.bin                              256-B slot table + raw PCM
+                                              (see §11.2a for the format)
+    patterns.bin                             16 * sizeof(pattern_t) raw
+    chain.bin                                1-byte len + len bytes (entries)
+  tmp/                                       scratch for atomic writes
 ```
 
 Notes:
 
-- **4-hex ID folders.** The folder name is the sketch ID (`0000`, `0001`, …, `ffff`). Folders are flat at the `sketches/` root — no nesting — so LittleFS directory traversal stays cheap.
-- **Hex counter** — IDs are assigned sequentially: the next ID is `storage_next_free_id()`, which walks the `sketches.lst` and returns `max(ids) + 1`, formatted as 4 hex chars. If the device has never had a sketch, the first ID is `0000`. If the device has `0000` and `0003`, the next is `0004`.
-- **`sketches.lst` is the master index.** It is rewritten atomically on every sketch create / delete / rename. The UI's "Sketch" menu reads this file.
-- **`tmp/`** is a scratch area. Atomic-save writes to `tmp/<id4>.samples.bin.tmp` etc., then `rename()`s the file into place. A power loss during a write leaves the tmp file dangling; on boot we delete any leftover `*.tmp` files.
-- **No quota file.** Quotas (max N sketches, max total bytes per sketch) are enforced at runtime in `storage_sketch_save_active()` by checking free space first. LittleFS has a fixed partition size, so "free space" is `partition_size - used_bytes`.
+- **4-hex ID folders.** The folder name is the sketch ID
+  (`0000`, `0001`, …, `ffff`). Folders are flat at the `sketches/`
+  root — no nesting — so LittleFS directory traversal stays cheap.
+- **Hex counter.** IDs are assigned sequentially:
+  `storage_next_free_id()` walks `sketches.lst` and returns
+  `max(ids) + 1`, formatted as 4 hex chars. If the device has
+  never had a sketch, the first ID is `0000`. The `sketches.lst`
+  index records both id and display name.
+- **`sketches.lst` is the master index.** It is rewritten
+  atomically on every sketch create / delete / rename. The picker's
+  `storage_sketch_list()` reads it. Format: `# PO-33 K.O! sketch
+  index (auto-generated)` header line, then one `<id>\t<name>\n`
+  per sketch.
+- **Active-sketch pointer.** The currently-loaded sketch's ID lives
+  in NVS under namespace `sketches`, key `active_id` (a 4-hex
+  string). On first boot the value is the default `0000`; if the
+  pointed-to sketch doesn't exist (fresh flash, factory-reset
+  since last boot), `storage_load_all()` returns ESP_OK with RAM
+  empty -- behaves like a brand-new device. ADR-0004.
+- **Atomic write.** All sketch files are written to a sibling
+  `<path>.tmp`, fsync'd by `fclose()`, then `rename()`d into
+  place. Power loss mid-write leaves either the old or the new
+  file -- never a half-written one.
 
-> **Note.** We've renamed `project.lst` to `sketches.lst`, `storage_project_*` → `storage_sketch_*`, and the **partition label** `patterns` → `sketches` (see `partitions.csv` and `main/storage/storage.{h,c}`). **The v2 source code should match.** v1 firmware doesn't yet contain these symbols (the multi-sketch system is a v2 addition), so there's nothing in `main/` to rename today — when the v2 implementation lands, the identifiers above are the ones to use.
+#### 11.2a `samples.bin` on-disk format
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ slot_table[16]: 16 × 16-byte slot records (256 B total)  │
+├──────────────────────────────────────────────────────────┤
+│ pcm[]: raw int16 little-endian, each slot's samples back  │
+│        to back in slot order. Empty slots contribute 0 B. │
+└──────────────────────────────────────────────────────────┘
+
+struct slot_rec (16 bytes, packed, little-endian):
+
+  u32 length_samples     0 = empty (no PCM follows for this slot)
+  u32 sample_rate_hz
+  u32 start_sample        trim start (sample index into this slot)
+  u32 end_sample          trim end (sample index, exclusive)
+```
+
+This is the only place the on-disk sample format is defined; keep
+`storage_sketch_save_samples()` and `storage_sketch_load_samples()`
+in lockstep with this layout. ADR-0004.
 
 ### 11.3 On-RAM state
 
@@ -1501,72 +1533,48 @@ State transitions:
 - `CREATED → MODIFIED`: any recording, edit, or transport change. Pure RAM.
 - `MODIFIED → SAVED`: user picks "Save" on the TFT, or auto-save fires. We write `samples.bin`, `patterns/p*.bin`, `chain.bin`, and `meta.json` (with bumped last-modified-at) atomically. RAM == flash.
 - `SAVED → MODIFIED`: user edits anything. Pure RAM.
-- `ACTIVE → DELETED`: user picks "Delete sketch" on the TFT. We require confirmation. We then `unlink()` the sketch folder and rewrite `sketches.lst`. If it was the active sketch, the device falls back to an empty sketch (or another sketch if one exists).
+- `ACTIVE → DELETED`: user picks "Delete sketch" on the TFT. We require confirmation. We then `unlink()` the sketch folder and rewrite `sketches.lst`. If it was the active sketch, the device falls back to an empty sketch (or another sketch if one exists). The NVS `sketches/active_id` key is cleared if the deleted sketch was active; the next boot's `storage_load_all()` will default to `0000`.
 - `ACTIVE → EMPTY`: like DELETE but for the active sketch. The user is left with no active sketch until they pick or create one.
+- `SAVED → DEAD → ACTIVE` (power-cycle): when the device goes to deep sleep (`power_mgmt_enter_deep_sleep()` or the `sleep` UART verb), `storage_save_all()` first flushes the active sketch's `samples.bin`, `patterns.bin`, `chain.bin`, and `meta.bin` to flash under `/sketches/<id>/`. On the next boot, `app_main()` calls `storage_load_all()` after `amy_bridge_init()`; it reads the NVS `sketches/active_id`, opens `<id>/patterns.bin` + `<id>/chain.bin` + `<id>/samples.bin`, and registers the slots with AMY. The sketch is "exactly where the user left it" — the PO-33's "power-off then on = same sketch" behaviour. ADR-0004.
 
 ### 11.5 API additions
 
-These are the new public functions. **Signatures only** — no implementation in v1.
+These are the implemented public functions in `main/storage/storage.h`.
+"v1 transitional" entrypoints (`storage_load_all()`,
+`storage_save_all()`) keep their old names so the user-facing UART
+verbs (`save`, `load`) and the boot path didn't have to change.
 
 ```c
 /* In storage.h */
 
-typedef struct {
-    char     id[5];            /* 4 hex chars + null terminator */
-    char     name[25];         /* Docker-style "<genre>_<musician>"
-                                * (see §11.6a sketch-name convention). */
-    uint8_t  label_color;      /* 0..7 */
-    uint32_t created_at;       /* Unix timestamp */
-    uint32_t modified_at;
-    uint16_t bpm;              /* BPM at last save */
-    uint8_t  sample_count;     /* 0..16 */
-    uint8_t  chain_len;        /* 0..128 */
-    uint32_t total_samples;     /* playback duration in samples */
-} sketch_meta_t;
+/* Boot + user-facing save/load (v1 transitional names; sketch-scoped
+ * internally now -- ADR-0004). */
+esp_err_t storage_save_all(void);          /* save active sketch + bump NVS active_id */
+esp_err_t storage_load_all(void);          /* read NVS active_id, load sketch into PSRAM */
 
-#define SKETCHES_MAX 16          /* hard cap; see §11.8 capacity math */
-#define SKETCH_NAME_MAX 24
+/* Active-sketch identity (NVS-backed). */
+esp_err_t storage_get_active_sketch_id(char *out_id);
+esp_err_t storage_set_active_sketch_id(const char *id);
 
-esp_err_t storage_sketches_init(void);
-size_t      storage_sketches_count(void);
-esp_err_t storage_sketches_list(sketch_meta_t *out, size_t max);
-
-/* Returns the active sketch meta. */
-esp_err_t storage_get_active_sketch(sketch_meta_t *out);
-
-/* Create / switch / delete / rename. */
-esp_err_t storage_sketch_create(const char *name, sketch_meta_t *out_new);
-esp_err_t storage_sketch_switch(const char *id);   /* pages old to flash, loads new */
-esp_err_t storage_sketch_delete(const char *id);   /* requires confirmation flag */
-esp_err_t storage_sketch_rename(const char *id, const char *new_name);
-esp_err_t storage_sketch_save_active(void);         /* atomic write of active sketch */
-
-/* Duplicate — clones the active sketch under a new 4-hex ID and new name. */
-esp_err_t storage_sketch_duplicate(const char *new_name, sketch_meta_t *out_new);
-
-/* Export / import — exports one sketch as a .zip containing its folder. */
-esp_err_t storage_sketch_export(const char *id, const char *dest_path);
-esp_err_t storage_sketch_import(const char *src_path, sketch_meta_t *out_new);
-
-/* Internal helper: returns the next free 4-hex ID by scanning sketches.lst. */
-char       *storage_next_free_id(void);
+/* Multi-sketch APIs. */
+esp_err_t storage_sketch_list(uint8_t *out_count,
+                              char (*out_ids)[SKETCH_ID_LEN + 1]);
+esp_err_t storage_sketch_load           (const char *id_str);  /* patterns + chain */
+esp_err_t storage_sketch_load_samples   (const char *id_str);  /* sample pool only */
+esp_err_t storage_sketch_load_with_samples(const char *id_str); /* both */
+esp_err_t storage_sketch_save_samples   (const char *id_str);
+esp_err_t storage_sketch_create         (void);
+esp_err_t storage_sketch_save_active    (void);                /* atomic write + bump active_id */
+esp_err_t storage_sketch_delete         (const char *id_str);
 ```
 
-```c
-/* In sequencer.h — new function for live save-on-edit */
+Pending (not yet implemented; tracked as future work):
 
-esp_err_t sequencer_request_save(void);
-/* Posts a "save the active sketch" request to a queue that the
- * storage task drains. Returns ESP_OK immediately. The save happens
- * in the background to keep audio playback glitch-free. */
-```
-
-```c
-/* In main/ui/menu.h — new screen for sketch management */
-void ui_menu_sketch_picker(void);   /* shows the sketch list, lets user pick */
-```
-
-All new functions are non-blocking for the audio path. The actual file I/O happens in a dedicated low-priority task so the I²S render task (AMY) is never starved. We use FreeRTOS stream buffers to pass sample-pool chunks to the storage task.
+- `sketch_meta_t` struct (created_at / modified_at / label_color / bpm-at-save) — currently the on-disk meta.bin just holds the 24-byte name. Adding the rest is a half-day of work that doesn't change the sketch-lifecycle or boot path.
+- `storage_sketch_export` / `storage_sketch_import` (`.zip` over USB-MSD) — v3 per §11.6.
+- Debounced auto-save on edit (`sequencer_request_save()` queue + storage task) — v2 future hardening. Today, saves happen on the `save` UART verb and on deep sleep.
+- `storage_sketch_rename` / `storage_sketch_duplicate` — not needed yet (the sketch picker + delete + create covers the use case).
+- `ui_menu_sketch_picker` is now wired via `WRITE` long-press (`main/sketch/sketch_picker.c`), not via a menu screen — see CONTROL_REFERENCE.md for the gesture.
 
 ### 11.6 PO-33 parity vs. extension
 
@@ -1576,11 +1584,13 @@ All new functions are non-blocking for the audio path. The actual file I/O happe
 | Patterns | 16 | 16 | 16 per sketch, N sketches |
 | Pattern chain (the PO-33's "song chain") | up to 128 | up to 128 | up to 128 **per sketch**, N sketches |
 | # of sketches | 1 | 1 | N (bottleneck: flash size) |
-| Save | auto on power-off | manual `save` UART command | auto on edit (debounced) + manual |
+| Save | auto on power-off | manual `save` UART command + auto on deep sleep | auto on edit (debounced) + manual |
 | Back up | audio out to tape (slow, lossy) | `storage save` writes 1 set of files | export one sketch as .zip over USB-MSD (v3) |
 | Copy between devices | P2P audio cable | not implemented | USB-MSD export/import (v3) |
 
 The PO-33's "one song, one chain" is preserved **within** a sketch. What we add is that the device can hold N sketches, each with its own chain. This is the same conceptual model as the Korg Electribe's "Pattern Set" or Ableton Live's "Live Set" — a higher-level container that owns a complete working state.
+
+**Boot loads the last-active sketch.** On boot, `app_main()` calls `storage_load_all()` (after `amy_bridge_init()`); it reads NVS key `sketches/active_id`, opens the matching sketch folder, and registers the patterns + chain + samples with AMY and the sequencer. The "power-off then on" experience is the same sketch the user left. ADR-0004.
 
 > **Vocabulary note.** The PO-33 calls its unit of creative work a "song". We call it a **sketch**. The two refer to the same idea (samples + patterns + a chain + metadata); we just picked a shorter word that doesn't have pop-music connotations or clash with sampler vocabulary (we avoid "groove" because that word means *timing templates* in the rest of the music-software world). The 16-step chain *within* a sketch is unchanged from the PO-33's "song chain".
 

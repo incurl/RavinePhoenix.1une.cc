@@ -77,10 +77,16 @@ bool sketch_picker_on_step(uint8_t step_1_to_16)
         return false;
     }
     ESP_LOGI(TAG, "load sketch[%u] = %s", (unsigned)idx, s_ids[idx]);
-    /* Commit 3 will replace this stub with the real load. For now we
-     * just acknowledge and exit; the user's selection is logged so
-     * they can verify the binding works. */
-    storage_sketch_load(s_ids[idx]);   /* currently ESP_ERR_NOT_SUPPORTED */
+    /* Load patterns + chain + samples (ADR-0004: bring the PSRAM
+     * sample pool in sync with the new sketch's samples.bin). Also
+     * bump NVS active_id so the next boot lands here. */
+    esp_err_t e = storage_sketch_load_with_samples(s_ids[idx]);
+    if (e == ESP_OK) {
+        storage_set_active_sketch_id(s_ids[idx]);
+    } else {
+        ESP_LOGE(TAG, "load sketch[%u] = %s failed: %s",
+                 (unsigned)idx, s_ids[idx], esp_err_to_name(e));
+    }
     sketch_picker_exit();
     return true;
 }
@@ -109,7 +115,13 @@ void sketch_picker_tick(void)
     if (encoder_was_clicked() && s_count > 0) {
         ESP_LOGI(TAG, "click load highlight=%u (id=%s)",
                  (unsigned)s_highlight, s_ids[s_highlight]);
-        storage_sketch_load(s_ids[s_highlight]);
+        esp_err_t e = storage_sketch_load_with_samples(s_ids[s_highlight]);
+        if (e == ESP_OK) {
+            storage_set_active_sketch_id(s_ids[s_highlight]);
+        } else {
+            ESP_LOGE(TAG, "click load %s failed: %s",
+                     s_ids[s_highlight], esp_err_to_name(e));
+        }
         sketch_picker_exit();
     }
 }

@@ -368,3 +368,127 @@ behaviour. The ➕ gestures and ❌ gaps are recorded, not altered.
 - `docs/CONTROL_REFERENCE.md` — the authoritative table.
 - `docs/architecture-decisions.md` ADR-0002 — the sanctioned slot-range swap.
 - `main/ui/input.c` — the dispatcher the reference is generated from.
+
+---
+
+## ADR-0004 — Samples belong to their sketch; PSRAM holds at most one sketch's pool
+
+- **Status:** Accepted
+- **Date:** 2026-10-06 (commit `tbd` — pending)
+- **Deciders:** Peter (audit + patch)
+
+### Context
+
+The PO-33 is "one song = one sketch". RavinePhoenix v2 supports **N**
+sketches per device (per the original ADR-0002 / DESIGN.md §11
+multi-sketch system). Each sketch owns a sample pool of up to 3.37 MB
+(`SAMPLE_POOL_SIZE_BYTES`) plus 16 patterns (≈48 KB) plus a chain
+(≤128 B). The N16R8 module has 8 MB of PSRAM and ~3–4 MB of that is
+available for samples after the TFT framebuffer (150 KB), AMY
+runtime state, and a per-render scratch block.
+
+The audit ("check RavinePhoenix bootup logic", 2026-10-05) found
+that `storage_load_all()` historically loaded all 16 slots' worth
+of samples from a *flat* on-disk layout (`/sketches/s0.bin..s15.bin`)
+into PSRAM, conflating sketches and conflating "the device's samples"
+with "one sketch's samples". This blocked the multi-sketch system
+from being useful: switching sketches would overwrite the previous
+sketch's samples in PSRAM with no way to get them back.
+
+### Decision
+
+1. **Samples are owned by their sketch** and persisted under
+   `/sketches/<id>/samples.bin` (256-byte slot table + raw PCM).
+   The on-disk format is defined once, in `docs/DESIGN.md §11.2a`,
+   and `storage_sketch_save_samples()` / `storage_sketch_load_samples()`
+   round-trip it byte-for-byte.
+2. **PSRAM holds at most one sketch's sample pool at a time** — the
+   *active* sketch's. `amy_bridge.c`'s 3.37 MB pool is partitioned
+   into the 16 slots, all of which belong to the active sketch.
+3. **`storage_load_all()` is now sketch-scoped.** It reads NVS key
+   `sketches/active_id` (default `"0000"`) and brings only that
+   sketch's patterns + chain + samples into PSRAM. If the folder
+   doesn't exist (fresh flash, factory-reset since last boot),
+   `storage_load_all()` returns ESP_OK with RAM empty — the device
+   behaves like a brand-new one.
+4. **`storage_save_all()` writes to the active sketch's folder** and
+   bumps the NVS `sketches/active_id` so the next boot lands here.
+   It is called both by the `save` UART verb and automatically from
+   `power_mgmt_enter_deep_sleep()` before the chip sleeps.
+5. **NVS namespace `"sketches"`, key `"active_id"`** is the
+   canonical "which sketch is active right now" pointer. Boot reads
+   it; save and sketch-picker-load write it. `storage_factory_reset()`
+   clears it so the next boot starts fresh.
+
+### Rationale
+
+- **Sketch identity is preserved across power-off** (the PO-33
+  contract). Power-off + power-on lands the user on the same
+  sketch, with the same patterns, the same chain, and the same
+  samples — even trim settings, which round-trip through
+  `amy_bridge_set_trim()` after `amy_bridge_register_slot()`.
+- **Memory is bounded.** With the active sketch's pool ≤ 3.37 MB,
+  the device never asks for more PSRAM than the chip has — no
+  "loaded 4 sketches' worth of samples, OOM-killed the I²S render
+  task" failure mode.
+- **Sketch export / backup becomes a folder copy** (or a `.zip` in
+  v3) — a sketch is one self-contained directory. ADR-0004 is a
+  prerequisite for v3's `storage_sketch_export()`.
+- **The "16 MB flash > 8 MB PSRAM" framing is misleading**: the
+  issue is not total flash size but per-sketch sample-pool size
+  matching the PSRAM pool exactly. This decision matches the
+  existing `SAMPLE_POOL_SIZE_BYTES = 40 s × 44.1 kHz × 2 B`
+  budget and the existing 4 MB free-in-sketch math in DESIGN.md
+  §11.8.
+
+### Consequences
+
+**Easier:**
+- `app_main()` boot path can call `storage_load_all()` once after
+  `amy_bridge_init()` and the user wakes up where they left off —
+  zero manual steps.
+- Sketch picker (`WRITE` long-press) loads a chosen sketch by ID
+  and `storage_sketch_load_with_samples()` does the right thing
+  (load patterns + chain + samples + bump NVS).
+- The `samples.bin` format is intentionally a single contiguous
+  blob, not 16 per-slot files: one `fwrite()` per save instead of
+  16, and one `fread()` per load. Atomic via `<path>.tmp` +
+  `rename()`.
+
+**Harder:**
+- Switching sketches now means: save current sketch → load new
+  sketch → overwrite PSRAM pool. The previous sketch's samples are
+  only safe if it was just saved. (If the user edits then switches
+  without saving, the edit is lost. Mitigation: the deep-sleep path
+  auto-saves first; a debounced on-edit auto-save is v2 future
+  work tracked in §11.5.)
+- Switching sketches is *not* instant — `storage_sketch_load_samples()`
+  does one `fread()` of up to 3.37 MB + per-slot `memcpy` +
+  `amy_bridge_register_slot()` calls. At 44.1 kHz sample rate and
+  PSRAM bandwidth, this is bounded by the I²S render task sharing
+  the SPI bus with LittleFS — empirically < 100 ms for a typical
+  1.5 MB sketch. Future: move the load to a low-priority task to
+  avoid any I²S glitch.
+
+### Scope
+
+This ADR is a **firmware + filesystem decision**, not a
+documentation decision (unlike ADR-0003). It changes the public API
+of `storage.{h,c}` (adds `storage_get_active_sketch_id()`,
+`storage_set_active_sketch_id()`, `storage_sketch_load_samples()`,
+`storage_sketch_save_samples()`, `storage_sketch_load_with_samples()`,
+and changes the meaning of `storage_load_all()` / `storage_save_all()`
+from "all sketches" to "active sketch"). The user-facing UART verbs
+(`save`, `load`) keep their names — the wire protocol doesn't
+change.
+
+### See also
+
+- `docs/DESIGN.md §5.6`, §8, §11.2, §11.2a, §11.4, §11.5, §11.6 — updated
+  to match the implemented behaviour.
+- `main/storage/storage.{h,c}` — the implementation.
+- `main/system/power_mgmt.c::power_mgmt_enter_deep_sleep()` —
+  pre-sleep save.
+- `main/main.c::app_main()` — boot-time load (step 4a).
+- ADR-0002 — the drum/melodic slot-range swap (orthogonal).
+- ADR-0003 — UI-interaction ground truth (orthogonal).

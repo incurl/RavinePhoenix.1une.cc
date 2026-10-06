@@ -5,6 +5,7 @@
  *           UI (buttons + TFT), storage, power management, sync, clock.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -19,6 +20,7 @@
 #include "config.h"
 #include "audio/amy_bridge.h"
 #include "sequencer/sequencer.h"
+#include "sequencer/pattern.h"   /* pattern_copy() — F-025 */
 #include "ui/buttons.h"
 #include "ui/display.h"
 #include "ui/encoder.h"
@@ -60,6 +62,23 @@ void app_main(void)
 
     /* 4. Audio (all handled by AMY) */
     ESP_ERROR_CHECK(amy_bridge_init());
+
+    /* 4a. Boot-time sketch load (ADR-0004).
+     *     Reads NVS "sketches/active_id" (default "0000"), then
+     *     loads the patterns + chain + sample pool for that sketch
+     *     from LittleFS into PSRAM. If the sketch folder doesn't
+     *     exist (first-ever boot, factory reset since last boot),
+     *     returns ESP_OK with everything empty -- identical to
+     *     today's "fresh device" behaviour.
+     *     Must come after amy_bridge_init() because
+     *     storage_load_all() calls amy_bridge_register_slot(). */
+    {
+        esp_err_t boot_load = storage_load_all();
+        if (boot_load != ESP_OK) {
+            ESP_LOGW(TAG, "boot load_all failed (%s) -- continuing empty",
+                     esp_err_to_name(boot_load));
+        }
+    }
 
     /* 5. Sequencer */
     sequencer_init();
@@ -305,7 +324,7 @@ static void po33_shell_task(void *arg)
             } else if (strcmp(line, "clock_clear_alarm") == 0) {
                 clock_clear_alarm();
                 printf("alarm cleared\n");
-            } else if (strncmp(line, "sketch new", 10) == 0) {
+            } else if (strncmp(line, "sketch new", 10) == 0 ||
                        strcmp(line, "sketch save") == 0) {
                 esp_err_t e = storage_sketch_save_active();
                 if (e == ESP_OK) printf("sketch saved\n");
