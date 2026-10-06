@@ -10,7 +10,7 @@ module.exports = [
     slug: "makers",
     title: "The Maker's Companion",
     subtitle:
-      "A study guide for Make: Electronic Music from Scratch × RavinePhoenix",
+      "A study guide for Make: Electronic Music from Scratch × Ravine: Phoenix",
     blurb:
       "Fifteen chapters from the project's own study guide. Pairs the " +
       "Teenage Engineering PO-33 with the upstream makers book by the " +

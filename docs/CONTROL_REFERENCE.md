@@ -1,8 +1,8 @@
-# Control Reference — PO-33 manual vs RavinePhoenix firmware
+# Control Reference — PO-33 manual vs Ravine: Phoenix firmware
 
 This is the **single source of truth** for how the modifier buttons and the
 16 step pads behave. Every other document (`DESIGN.md`, `HARDWARE.md`,
-`MAKERS_COMPANION.md`, `RavinePhoenix_Music_Course.md`) and the project
+`MAKERS_COMPANION.md`, `Ravine_Phoenix_Music_Course.md`) and the project
 website should *cite this file* rather than restate a gesture, so the four
 surfaces cannot drift apart again.
 
@@ -29,7 +29,7 @@ surfaces cannot drift apart again.
 |---|---|
 | ✅ | Firmware matches the manual. |
 | ⚠️ | Sanctioned deviation (ADR-0002 slot ranges only). |
-| ➕ | RavinePhoenix-only gesture — **not in the PO-33 manual**. |
+| ➕ | Ravine: Phoenix-only gesture — **not in the PO-33 manual**. |
 | ❌ | Manual feature the firmware does not implement (yet). |
 
 ## The master table
@@ -89,7 +89,7 @@ Manual wording in the first column is quoted from the lode/PO-33 README.
 5. Write mode active → pad = toggle/clear the bind at **step N**.
 6. Otherwise → `play_active_slot()` (plays the active slot; pad index drives pitch/slice).
 
-## RavinePhoenix-only extensions (➕ — not in the manual)
+## Ravine: Phoenix-only extensions (➕ — not in the manual)
 
 These gestures exist in the firmware but have no PO-33 manual counterpart.
 They are documented so the operator is not surprised, and so a future
@@ -162,7 +162,7 @@ not implemented. See `DESIGN.md` F-020/F-022.
 
 This reversal is intentional (ADR-0002). Documents that describe the *device*
 should state the firmware order; documents that describe the *PO-33 concept*
-may keep the manual order, but must carry an "on RavinePhoenix the ranges are
+may keep the manual order, but must carry an "on Ravine: Phoenix the ranges are
 swapped" note. See `docs/architecture-decisions.md` ADR-0002.
 
 ## Maintenance

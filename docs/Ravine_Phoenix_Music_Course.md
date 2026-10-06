@@ -2,13 +2,13 @@
 
 ## Beat, Melody, Groove, and Genre for the Novice Operator
 
-*A self-study music course for the RavinePhoenix K.O! firmware and the real PO-33 K.O! Pocket Operator.*
+*A self-study music course for the Ravine: Phoenix K.O! firmware and the real PO-33 K.O! Pocket Operator.*
 
 ---
 
 ## Edition Notice
 
-This is **Edition 1** of *The PO-33 Musical Companion*. It is written to accompany the open-source **RavinePhoenix** firmware (an ESP32-S3 port of the Teenage Engineering PO-33 K.O! sampler), but every exercise in this book also works on a real PO-33 K.O! Pocket Operator. Where the two devices differ, the book flags the difference with a sidebar.
+This is **Edition 1** of *The PO-33 Musical Companion*. It is written to accompany the open-source **Ravine: Phoenix** firmware (an ESP32-S3 port of the Teenage Engineering PO-33 K.O! sampler), but every exercise in this book also works on a real PO-33 K.O! Pocket Operator. Where the two devices differ, the book flags the difference with a sidebar.
 
 ---
 
@@ -95,7 +95,7 @@ This book draws on two excellent open-source theory texts:
 
 Both books are paraphrased and adapted throughout. Where I have quoted a concept directly, I have tried to keep the quote short and the citation visible. The reader who wants the longer theoretical treatment is directed to those two books in Appendix E.
 
-The PO-33 hardware facts are drawn from the Teenage Engineering PO-33 K.O! manual and from the **RavinePhoenix** firmware design document (`docs/DESIGN.md` in the RavinePhoenix repository), both of which are freely available.
+The PO-33 hardware facts are drawn from the Teenage Engineering PO-33 K.O! manual and from the **Ravine: Phoenix** firmware design document (`docs/DESIGN.md` in the Ravine: Phoenix repository), both of which are freely available.
 
 ---
 
@@ -103,11 +103,11 @@ The PO-33 hardware facts are drawn from the Teenage Engineering PO-33 K.O! manua
 
 This book synthesizes concepts from three sources:
 
-1. **The PO-33 K.O! manual** — Teenage Engineering's official guide to the hardware. The RavinePhoenix firmware design document is the v1 reference for what our device does.
+1. **The PO-33 K.O! manual** — Teenage Engineering's official guide to the hardware. The Ravine: Phoenix firmware design document is the v1 reference for what our device does.
 2. ***Music Theory for Electronic Music Producers*** by J. Anthony Allen — the source for the chord-progression-as-MIDI-grid philosophy that runs through Part III and Part V.
 3. ***Music Theory for Computer Musicians*** by Michael Hewitt — the source for the rhythm fundamentals that run through Part II.
 
-Where the two theory books disagree, this book follows the more producer-friendly position. Where the RavinePhoenix firmware differs from the real PO-33, this book flags it in a sidebar. The firmware's only intentional UI deviation is the **slot-range swap** (ADR-0002); for that one, the book keeps the PO-33 order and notes the swap. Everywhere else the firmware follows the PO-33 operator manual (the authoritative interaction list is `docs/CONTROL_REFERENCE.md`).
+Where the two theory books disagree, this book follows the more producer-friendly position. Where the Ravine: Phoenix firmware differs from the real PO-33, this book flags it in a sidebar. The firmware's only intentional UI deviation is the **slot-range swap** (ADR-0002); for that one, the book keeps the PO-33 order and notes the swap. Everywhere else the firmware follows the PO-33 operator manual (the authoritative interaction list is `docs/CONTROL_REFERENCE.md`).
 
 ---
 
@@ -123,7 +123,7 @@ This book is a course. It will not list every button combination. It will list t
 
 This book is for you if any of the following are true:
 
-- You have a PO-33 (real or RavinePhoenix firmware) and you have not yet made a song you actually like.
+- You have a PO-33 (real or Ravine: Phoenix firmware) and you have not yet made a song you actually like.
 - You have made sounds on a PO-33 but they sounded stiff, lifeless, or random.
 - You tried to follow YouTube tutorials but they assumed you already knew what a "step" was, what a "chord progression" was, or what "swing" did.
 - You have never made music before and the PO-33 looks like the easiest possible entry point (it is, and this book will prove it).
@@ -198,7 +198,7 @@ A **sampler** is a musical instrument that records a sound and then lets you pla
 
 The PO-33 is a **pocket sampler**. It fits in your hand. It runs on two AAA batteries. It can record up to **40 seconds** of audio total, across all 16 slots. You record a sound, you store it in a slot, and then you play it back from the slot. The PO-33's distinctive feature — the thing that makes it different from earlier pocket samplers — is the **16-step sequencer**: 16 numbered buttons that you can use to play back your samples in a pattern, one step at a time, in a loop.
 
-This book assumes you have either a real PO-33 or a RavinePhoenix firmware running on an ESP32-S3 board. The buttons, the sequencer, and the audio quality are similar; the differences are flagged in sidebars.
+This book assumes you have either a real PO-33 or a Ravine: Phoenix firmware running on an ESP32-S3 board. The buttons, the sequencer, and the audio quality are similar; the differences are flagged in sidebars.
 
 ### The three BPM presets
 
@@ -206,7 +206,7 @@ The PO-33 has three preset tempos: **Hip Hop (80 BPM)**, **Disco (120 BPM)**, an
 
 The presets are not arbitrary. 80 BPM is the bottom of the comfortable walking tempo — slow enough to sway to, fast enough to feel motion. 120 BPM is exactly two beats per second — easy to count, the tempo of disco and most house. 140 BPM is fast — the tempo of techno, drum'n'bass (mostly), and "Tencho" (PO-33 slang for **techno slowed down enough that you can play it on the grid** — actually the PO-33 just calls it "Techno").
 
-> **Sidebar — PO-33 manual vs. RavinePhoenix firmware.** The real PO-33 calls them "HIP HOP", "DISCO", and "TENCHO" (with the typo, which is intentional, a Teenage Engineering joke). The RavinePhoenix firmware displays them the same way.
+> **Sidebar — PO-33 manual vs. Ravine: Phoenix firmware.** The real PO-33 calls them "HIP HOP", "DISCO", and "TENCHO" (with the typo, which is intentional, a Teenage Engineering joke). The Ravine: Phoenix firmware displays them the same way.
 
 You can also fine-tune the tempo anywhere from 60 to 240 BPM by holding the BPM button and turning **Knob B**. You will use this feature in Part IV when we explore genres outside the three presets.
 
@@ -248,7 +248,7 @@ To play back the sound:
 2. Release **SOUND**, then press **pad 1** (or any pad). The selected sound plays. Pressing different pads plays the *same* sound at different pitches/slices — the pads are a keyboard for the selected sound, **not** a "pad N = slot N" map.
 3. To make it repeat, write it into the sequencer. We'll do that in Chapter 2.
 
-> **Sidebar — RavinePhoenix firmware.** The RavinePhoenix firmware's button layout is identical to the real PO-33. REC is the star button on GPIO 41. Pad 1 is the top-left of the 4×4 grid. There is no functional difference for the operator.
+> **Sidebar — Ravine: Phoenix firmware.** The Ravine: Phoenix firmware's button layout is identical to the real PO-33. REC is the star button on GPIO 41. Pad 1 is the top-left of the 4×4 grid. There is no functional difference for the operator.
 
 ### Guided exercise: record and play back your first sound
 
@@ -338,14 +338,14 @@ Slots are the cast of characters. Steps are the choreography. The same kick drum
 
 The PO-33 splits its 16 slots into two groups:
 
-- **Melodic slots** (slots 1–8): when you play these from the sequencer, the device chooses a **pitch** for you based on which step is playing. Pad 1 plays C4 (middle C), pad 2 plays C#4, pad 3 plays D4, ..., pad 8 plays G#4, pad 16 plays D#5 (the 16th pad triggers D#5 because the chromatic scale is one octave wide — 16 semitones — and pad 1 is C4). This is the **auto-mapping** feature (called F-005 in the RavinePhoenix firmware). It means that, by default, pressing different steps plays different notes — pad 1 is C, pad 8 is G#, pad 16 is D#.
+- **Melodic slots** (slots 1–8): when you play these from the sequencer, the device chooses a **pitch** for you based on which step is playing. Pad 1 plays C4 (middle C), pad 2 plays C#4, pad 3 plays D4, ..., pad 8 plays G#4, pad 16 plays D#5 (the 16th pad triggers D#5 because the chromatic scale is one octave wide — 16 semitones — and pad 1 is C4). This is the **auto-mapping** feature (called F-005 in the Ravine: Phoenix firmware). It means that, by default, pressing different steps plays different notes — pad 1 is C, pad 8 is G#, pad 16 is D#.
 - **Drum slots** (slots 9–16): when you play these from the sequencer, the device plays a **slice** of the recording. **Pad 1 plays the first 1/16th of the active drum slot's recording. Pad 16 plays the last 1/16th.** All 16 pads trigger 16 equal slices, so the entire recording is reachable — pads 1–16 cover slices 1–16. This is the **auto-slicing** feature (F-024). If you record a 4-second break into slot 9, pressing pad 1 plays the first 0.25 seconds, pressing pad 2 plays the next 0.25 seconds, ..., pressing pad 16 plays the last 0.25 seconds.
 
 The two halves are intentionally different. Melodic slots let you play melodies and chords. Drum slots let you play sliced breaks.
 
-> **Sidebar — the ranges are swapped on RavinePhoenix (ADR-0002).** On the real PO-33 — and in the rest of this book — slots 1–8 are **melodic** and 9–16 are **drum**. The RavinePhoenix firmware deliberately **reverses** this: slots 1–8 are **drum** and 9–16 are **melodic**, so the device leads with drum beats. Everything else about the slots behaves the same. When you move between this book and a RavinePhoenix device, swap the numbers.
+> **Sidebar — the ranges are swapped on Ravine: Phoenix (ADR-0002).** On the real PO-33 — and in the rest of this book — slots 1–8 are **melodic** and 9–16 are **drum**. The Ravine: Phoenix firmware deliberately **reverses** this: slots 1–8 are **drum** and 9–16 are **melodic**, so the device leads with drum beats. Everything else about the slots behaves the same. When you move between this book and a Ravine: Phoenix device, swap the numbers.
 
-> **Sidebar — PO-33 vs. RavinePhoenix.** The original PO-33 maps the 16 melodic pads to one octave of the chromatic scale. The RavinePhoenix firmware does the same. Drum auto-slicing was ❌ missing in our v1 firmware before October 2025; this book is written assuming auto-slicing works (v1.1 firmware and later). On a real PO-33, drum auto-slicing has always worked.
+> **Sidebar — PO-33 vs. Ravine: Phoenix.** The original PO-33 maps the 16 melodic pads to one octave of the chromatic scale. The Ravine: Phoenix firmware does the same. Drum auto-slicing was ❌ missing in our v1 firmware before October 2025; this book is written assuming auto-slicing works (v1.1 firmware and later). On a real PO-33, drum auto-slicing has always worked.
 
 ### PO-33 Playback: writing your first beat
 
@@ -398,7 +398,7 @@ hear the four-on-the-floor kick. We'll build on it in Chapter 4.
 
 The PO-33's screen shows a **playhead** (the current step) and a **pattern**. The pattern is shown as a row of 16 dots or numbers. A filled dot means "a sound is written here". An empty dot means "nothing plays here". You can also see the **BPM**, the **FX** number, and the **swing** percentage on the screen.
 
-The RavinePhoenix firmware uses a 2.4″ colour **TFT** screen that displays the same information. On the real PO-33 the screen is a smaller LCD. The information is the same.
+The Ravine: Phoenix firmware uses a 2.4″ colour **TFT** screen that displays the same information. On the real PO-33 the screen is a smaller LCD. The information is the same.
 
 ### Guided exercise: a one-sound, four-step beat
 
@@ -460,7 +460,7 @@ Listen to **DJ Spinn, "Make Me Hollown"** (2014). The kick plays on every step. 
 **Key takeaways:**
 
 - A step is a sixteenth-note. There are 16 steps per loop.
-- A slot is a stored sound. There are 16 slots — 8 drum and 8 melodic (the range order differs between the PO-33 and RavinePhoenix; see the Chapter 2 sidebar).
+- A slot is a stored sound. There are 16 slots — 8 drum and 8 melodic (the range order differs between the PO-33 and Ravine: Phoenix; see the Chapter 2 sidebar).
 - In write mode, select a sound (`SOUND` + pad), then press a **step** pad to toggle it on that step.
 - Most beats use 2–8 hits per loop. Empty steps are a feature.
 
@@ -821,7 +821,7 @@ The PO-33 has a **trim** feature (Tweak Trim mode, reached by tapping the FX but
 
 For a 4-second break, set the start to the first kick and the end to the last snare. The PO-33's screen shows a waveform; you can see the kicks and snares as big spikes.
 
-> **Sidebar — Knob A and Knob B.** Knob A on the real PO-33 adjusts the **start** in Tweak Trim mode. Knob B adjusts the **end**. The RavinePhoenix firmware maps them the same way. The two knobs are wired to GPIO 2 and GPIO 46 on the ESP32-S3 board.
+> **Sidebar — Knob A and Knob B.** Knob A on the real PO-33 adjusts the **start** in Tweak Trim mode. Knob B adjusts the **end**. The Ravine: Phoenix firmware maps them the same way. The two knobs are wired to GPIO 2 and GPIO 46 on the ESP32-S3 board.
 
 ### Writing a break beat
 
@@ -1077,7 +1077,7 @@ The PO-33's melodic slots (1–8) play a chromatic scale one octave wide. Specif
 
 So pressing pads in sequence 1, 3, 5, 6, 8, 10, 13 plays the notes C, D, E, F, G, A, C — the C major scale in root position.
 
-> **Sidebar — the original PO-33 vs. RavinePhoenix.** The original PO-33 has the same mapping: pad 1 = C4, pad 16 = D#5. The RavinePhoenix firmware's `amy_bridge_auto_note_for_step()` helper implements this. We use MIDI note numbers 60 (C4) to 75 (D#5).
+> **Sidebar — the original PO-33 vs. Ravine: Phoenix.** The original PO-33 has the same mapping: pad 1 = C4, pad 16 = D#5. The Ravine: Phoenix firmware's `amy_bridge_auto_note_for_step()` helper implements this. We use MIDI note numbers 60 (C4) to 75 (D#5).
 
 ### Stepwise motion vs. leaps
 
@@ -2078,7 +2078,7 @@ By the end of this chapter you will be able to:
 
 The PO-33 is, in some ways, the ultimate lo-fi instrument. Its sample memory is small, its effects are crunchy, and its polyphony is limited. Embrace the constraints.
 
-> **Sidebar — bitcrushing.** Bitcrushing reduces the bit depth of a sample, making it sound "8-bit" or "videogame". The stock PO-33 has **no** bitcrush punch-in (its punch-in list is `loop`, `unison`, `octave`, `stutter`, `scratch`, `6/8 quantize`, `retrigger`, `reverse`); the RavinePhoenix firmware adds a **bitcrush** effect (`PO33_FX_BITCRUSH`). On a stock PO-33, lo-fi crunch instead comes from short **loop** punch-ins (`FX + 1..4`) and aggressive trim.
+> **Sidebar — bitcrushing.** Bitcrushing reduces the bit depth of a sample, making it sound "8-bit" or "videogame". The stock PO-33 has **no** bitcrush punch-in (its punch-in list is `loop`, `unison`, `octave`, `stutter`, `scratch`, `6/8 quantize`, `retrigger`, `reverse`); the Ravine: Phoenix firmware adds a **bitcrush** effect (`PO33_FX_BITCRUSH`). On a stock PO-33, lo-fi crunch instead comes from short **loop** punch-ins (`FX + 1..4`) and aggressive trim.
 
 ### A lo-fi hip-hop beat
 
@@ -2098,7 +2098,7 @@ To build a lo-fi beat:
 14. Step 15: pad 11.
 15. Press WRITE to exit.
 
-Apply bitcrush to the sample (slot 1). (RavinePhoenix: `PO33_FX_BITCRUSH`; a stock PO-33 has no bitcrush punch-in.) The sample should now sound "8-bit".
+Apply bitcrush to the sample (slot 1). (Ravine: Phoenix: `PO33_FX_BITCRUSH`; a stock PO-33 has no bitcrush punch-in.) The sample should now sound "8-bit".
 
 This is a lo-fi beat. The drums are sparse. The sample is degraded. The swing is heavy.
 
@@ -2133,7 +2133,7 @@ Some famous lo-fi and experimental artists who embrace the PO-33's constraints:
 1. Find or record a jazz sample (a piano loop, a vocal phrase, a sax note). Put it in slot 1.
 2. Record a soft kick, snare, and hi-hat. Put them in slots 9, 10, 11.
 3. Set BPM to 80. Set swing to 3.
-4. Apply bitcrush to slot 1 (RavinePhoenix `PO33_FX_BITCRUSH`).
+4. Apply bitcrush to slot 1 (Ravine: Phoenix `PO33_FX_BITCRUSH`).
 5. Write a pattern: sample on steps 1, 9; kick on steps 1, 11; snare on 5, 13; hat every odd step.
 6. Press PLAY. Listen.
 
@@ -2159,7 +2159,7 @@ Listen to:
 **Key takeaways:**
 
 - Lo-fi music embraces low-quality audio as an aesthetic.
-- The PO-33's lo-fi crunch comes from bitcrushing (a RavinePhoenix firmware effect; the stock PO-33 uses short loop punch-ins and aggressive trim).
+- The PO-33's lo-fi crunch comes from bitcrushing (a Ravine: Phoenix firmware effect; the stock PO-33 uses short loop punch-ins and aggressive trim).
 - Experimental music uses the PO-33 in unintended ways: pitch-shifting, reversing, randomising.
 - The PO-33 is a "sketchpad" — capture an idea in 4 bars, then move to a DAW.
 
@@ -2206,7 +2206,7 @@ Allen (*Music Theory for Electronic Music Producers*) calls this the **dance-mus
 
 Hewitt (*Music Theory for Computer Musicians*) describes the **classical song form** as ABAB or AABA: section A (verse), section B (chorus), section A again, section B again. The PO-33's pattern chaining gives you 16 patterns (A, B, C, D, ...), which is enough to build an AABA form.
 
-> **Sidebar — pattern capacity.** The PO-33 has **16 patterns** in memory. Each pattern is one bar (16 steps). So you can chain up to 16 bars in a song, or 16 different one-bar loops that you can arrange in any order. Real PO-33 songs are usually 16–64 bars long. RavinePhoenix firmware supports up to 16 patterns per project.
+> **Sidebar — pattern capacity.** The PO-33 has **16 patterns** in memory. Each pattern is one bar (16 steps). So you can chain up to 16 bars in a song, or 16 different one-bar loops that you can arrange in any order. Real PO-33 songs are usually 16–64 bars long. Ravine: Phoenix firmware supports up to 16 patterns per project.
 
 ### The four patterns of a song
 
@@ -2369,7 +2369,7 @@ The PO-33 supports parameter locks via **Knob A** and **Knob B** in WRITE mode:
 
 The plock is now set. When the pattern plays, that step will use the locked values.
 
-> **Sidebar — firmware support.** The RavinePhoenix firmware implements parameter locks for velocity and pitch. The real PO-33 also supports FX plocks (apply an FX to one step). We will add FX plocks in a future firmware version.
+> **Sidebar — firmware support.** The Ravine: Phoenix firmware implements parameter locks for velocity and pitch. The real PO-33 also supports FX plocks (apply an FX to one step). We will add FX plocks in a future firmware version.
 
 ### An example: a velocity-ramped kick
 
@@ -2648,7 +2648,7 @@ This glossary defines every musical term used in the book. Terms are listed in a
 
 **EQ (equalisation)**: adjusting the volume of specific frequencies.
 
-**FX (effects)**: modifications applied to a sound. The PO-33 has two kinds: **punch-in FX** (hold `FX` + a pad; loop, unison, octave, stutter, scratch, 6/8 quantize, retrigger, reverse) and the **tweak** parameters (Tone / Filter / Trim). Reverb, delay, and bitcrush are *not* PO-33 punch-ins (the RavinePhoenix firmware adds bitcrush).
+**FX (effects)**: modifications applied to a sound. The PO-33 has two kinds: **punch-in FX** (hold `FX` + a pad; loop, unison, octave, stutter, scratch, 6/8 quantize, retrigger, reverse) and the **tweak** parameters (Tone / Filter / Trim). Reverb, delay, and bitcrush are *not* PO-33 punch-ins (the Ravine: Phoenix firmware adds bitcrush).
 
 **Filter**: an effect that removes certain frequencies. Low-pass = removes highs. High-pass = removes lows.
 
@@ -2766,7 +2766,7 @@ This glossary defines every musical term used in the book. Terms are listed in a
 
 ## Appendix B — PO-33 Button Cheat Sheet
 
-This appendix is a one-page reference for every button combination on the PO-33 and the RavinePhoenix firmware.
+This appendix is a one-page reference for every button combination on the PO-33 and the Ravine: Phoenix firmware.
 
 ### Buttons
 
@@ -2938,7 +2938,7 @@ This is a structured 4-week plan that takes you from novice to competent PO-33 m
 
 ## Appendix D — Troubleshooting Common Issues
 
-This appendix covers the most common problems you'll encounter on the PO-33 and the RavinePhoenix firmware.
+This appendix covers the most common problems you'll encounter on the PO-33 and the Ravine: Phoenix firmware.
 
 ### Problem: My recording sounds distorted.
 
@@ -2986,7 +2986,7 @@ This appendix covers the most common problems you'll encounter on the PO-33 and 
 
 **Cause**: the firmware is locked. The PO-33 has a "key lock" feature that prevents accidental presses.
 
-**Fix**: hold the lock button (or any modifier) + tap the unlock sequence. On the RavinePhoenix firmware, the unlock is "hold WRITE for 2 seconds".
+**Fix**: hold the lock button (or any modifier) + tap the unlock sequence. On the Ravine: Phoenix firmware, the unlock is "hold WRITE for 2 seconds".
 
 ### Problem: My song doesn't loop properly.
 
@@ -3052,7 +3052,7 @@ For commercial release, you must clear every sample. For practice and learning, 
 #### PO-33-specific
 
 - **Teenage Engineering PO-33 K.O! Manual**. The official manual. Fold-out sheet of paper.
-- **RavinePhoenix DESIGN.md**. The firmware design document for the RavinePhoenix project (this is what you are reading this book alongside).
+- **Ravine: Phoenix DESIGN.md**. The firmware design document for the Ravine: Phoenix project (this is what you are reading this book alongside).
 - **Teenage Engineering YouTube channel**. Videos of PO-33 artists at work.
 
 #### Listening

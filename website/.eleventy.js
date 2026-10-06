@@ -106,7 +106,7 @@ module.exports = function (eleventyConfig) {
 
   /* Re-watch book source files so the reader rebuilds when content changes. */
   eleventyConfig.addWatchTarget("../docs/MAKERS_COMPANION.md");
-  eleventyConfig.addWatchTarget("../docs/RavinePhoenix_Music_Course.md");
+  eleventyConfig.addWatchTarget("../docs/Ravine_Phoenix_Music_Course.md");
 
   /* Expose each book's chapters as a collection that paginated pages
    * can iterate over. We need both per-book collections (for the
@@ -126,7 +126,7 @@ module.exports = function (eleventyConfig) {
   );
   const musicCourseChapters = splitBook(
     "music-course",
-    path.join(repoRoot, "docs", "RavinePhoenix_Music_Course.md"),
+    path.join(repoRoot, "docs", "Ravine_Phoenix_Music_Course.md"),
     { introAsPage: true }
   );
 
@@ -185,7 +185,7 @@ module.exports = function (eleventyConfig) {
   const makersAnnotated = annotate("makers", makersChapters, {
     title: "The Maker's Companion",
     subtitle:
-      "A study guide for Make: Electronic Music from Scratch × RavinePhoenix.",
+      "A study guide for Make: Electronic Music from Scratch × Ravine: Phoenix.",
     badge: "Hardware × music",
   });
   const musicCourseAnnotated = annotate(

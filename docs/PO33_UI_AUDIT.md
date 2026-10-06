@@ -9,7 +9,7 @@ manual interaction, what the code does and where the gaps are.
   whose "code behaviour" column was overtaken by the Tier-A work; see the
   resolution table below).
 - **Labels:** ✅ matches the manual · ⚠️ sanctioned deviation (ADR-0002 or a
-  longer gate) · ➕ RavinePhoenix-only gesture · ❌ manual feature not
+  longer gate) · ➕ Ravine: Phoenix-only gesture · ❌ manual feature not
   implemented.
 
 ## Status table (regenerated from current code)

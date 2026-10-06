@@ -1,6 +1,6 @@
 # PO-33 K.O! — project website
 
-Static site for [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc).
+Static site for [ravine.1une.cc](https://ravine.1une.cc).
 Built with [Eleventy](https://www.11ty.dev/) + [Tailwind CSS](https://tailwindcss.com/),
 flashing powered by [ESP Web Tools](https://esphome.github.io/esp-web-tools/).
 
@@ -25,13 +25,13 @@ npm run build    # outputs _site/
 
 Pushed to `main` → GitHub Actions builds and deploys `_site/` to GitHub Pages.
 
-DNS for `ravinephoenix.1une.cc`:
+DNS for `ravine.1une.cc`:
 ```
-CNAME  ravinephoenix.1une.cc  →  <your-github-username>.github.io
-A     ravinephoenix.1une.cc  →  185.199.108.153
-A     ravinephoenix.1une.cc  →  185.199.109.153
-A     ravinephoenix.1une.cc  →  185.199.110.153
-A     ravinephoenix.1une.cc  →  185.199.111.153
+CNAME  ravine.1une.cc  →  <your-github-username>.github.io
+A     ravine.1une.cc  →  185.199.108.153
+A     ravine.1une.cc  →  185.199.109.153
+A     ravine.1une.cc  →  185.199.110.153
+A     ravine.1une.cc  →  185.199.111.153
 ```
 
 HTTPS via Let's Encrypt is automatic.

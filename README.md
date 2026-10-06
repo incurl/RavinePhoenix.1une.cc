@@ -10,7 +10,7 @@ A firmware that emulates the **Teenage Engineering PO-33 K.O!** micro-sampler on
 
 ## 🌐 Project Website
 
-**👉 [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc)**
+**👉 [ravine.1une.cc](https://ravine.1une.cc)**
 
 The project ships with a full static website (Eleventy + Tailwind, deployed
 via GitHub Pages):
@@ -185,7 +185,7 @@ target_compile_definitions(amy PRIVATE
 - **[`docs/TIER_A_SUMMARY.md`](docs/TIER_A_SUMMARY.md)** — handoff doc for the 13 Tier A features (9 commits, scorecard 30% → 46%). Includes the AMY patch description, memory budget, build-verification checklist, and the explicit v1-out-of-scope list.
 - **[`hardware/HARDWARE.md`](hardware/HARDWARE.md)** — beginner build guide (~5 600 words). Bill of materials, pin map, 10-step build order, troubleshooting, and the no-solder alternative.
 - **[`hardware/README.md`](hardware/README.md)** — conventions for the `hardware/` folder (where future schematic / PCB / enclosure files go).
-- **[`website/`](website/)** — the static site at [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc). Includes a browser firmware flasher (`/download`) and a reader app for the two companion books (`/reader/`).
+- **[`website/`](website/)** — the static site at [ravine.1une.cc](https://ravine.1une.cc). Includes a browser firmware flasher (`/download`) and a reader app for the two companion books (`/reader/`).
 
 ## 🧪 Tests
 

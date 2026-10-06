@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 This document captures the significant architectural decisions made in the
-RavinePhoenix project. Each entry follows the lightweight
+Ravine: Phoenix project. Each entry follows the lightweight
 **ADR (Architecture Decision Record)** format proposed by Michael Nygard:
 
 - **Status** — `Accepted`, `Superseded`, or `Deprecated`.
@@ -28,7 +28,7 @@ record every micro-decision — only those that shape the project.
 
 The project ships firmware for an ESP32-S3 board that emulates the
 Teenage Engineering PO-33 K.O!. We needed a website at
-`ravinephoenix.1une.cc` that would:
+`ravine.1une.cc` that would:
 
 1. Host build instructions, hardware pinouts, a UART shell reference,
    and the project's two long-form companion books.
@@ -159,7 +159,7 @@ assigns its 16 sample slots as follows:
 - **Slots 9–16:** drum — auto-sliced into 16 equal pieces, one per
   pad.
 
-The RavinePhoenix firmware **reverses** this assignment:
+The Ravine: Phoenix firmware **reverses** this assignment:
 
 - **Slots 1–8:** drum (auto-slicing via F-024).
 - **Slots 9–16:** melodic (auto-mapping via F-005).
@@ -169,11 +169,11 @@ This is visible in `main/config.h` (`SLOT_DRUM_COUNT = 8`), in
 `amy_bridge_auto_note_for_step` and `amy_bridge_auto_slice_for_step`),
 and in the test suite (`main/tests/test_amy_bridge.c:49-53`).
 
-The Music Course book (`docs/RavinePhoenix_Music_Course.md`) describes
+The Music Course book (`docs/Ravine_Phoenix_Music_Course.md`) describes
 the **PO-33** convention in chapter 2 — drum = 9–16, melodic = 1–8 —
 because the book is written as a tutorial that assumes the user is
 coming from a PO-33 background. The Makers' Companion
-(`docs/MAKERS_COMPANION.md`) describes the **RavinePhoenix** convention
+(`docs/MAKERS_COMPANION.md`) describes the **Ravine: Phoenix** convention
 — drum = 1–8, melodic = 9–16 — because it is firmware-facing. The
 two books are inconsistent with each other, and the firmware is
 inconsistent with the Music Course.
@@ -189,7 +189,7 @@ firmware and the Music Course is intentional and should not be
 
 ### Rationale
 
-1. **RavinePhoenix should lead with drum beats.** Slots 1–8 are
+1. **Ravine: Phoenix should lead with drum beats.** Slots 1–8 are
    the first slots the user encounters (numerically, on the device,
    and in the on-screen UI). Treating them as drum slots means a
    user who picks up the device cold and starts tapping pads lands
@@ -197,7 +197,7 @@ firmware and the Music Course is intentional and should not be
    Putting melodic slots 1–8 would invert that.
 
 2. **Differentiation from the PO-33.** A user migrating from a real
-   PO-33 should immediately feel that RavinePhoenix is its own
+   PO-33 should immediately feel that Ravine: Phoenix is its own
    instrument, not a 1:1 clone. The slot-range swap is a small but
    visible "this is not the device you're used to" signal that
    encourages exploration rather than muscle-memory-driven
@@ -221,7 +221,7 @@ firmware and the Music Course is intentional and should not be
 **Easier:**
 - New users with a PO-33 background can read the Music Course and
   learn the musical concepts without learning a new vocabulary.
-- New users with no PO-33 background can pick up RavinePhoenix and
+- New users with no PO-33 background can pick up Ravine: Phoenix and
   start making beats immediately (slots 1–8 are drums, which is the
   intuitive starting point for beat-making).
 - The firmware can ship with a drum-first default state.
@@ -234,7 +234,7 @@ firmware and the Music Course is intentional and should not be
   documentation TODO).
 - `docs/DESIGN.md` line 1240 is itself inconsistent with the rest of
   DESIGN.md (it says "slots 1–8 melodic, slots 9–16 drum", which
-  describes PO-33, not RavinePhoenix). This is a separate bug.
+  describes PO-33, not Ravine: Phoenix). This is a separate bug.
 - Future contributors will be tempted to "fix" one side or the
   other. This ADR is the reason not to.
 
@@ -255,7 +255,7 @@ If we decide to reverse the firmware (back to PO-33 convention:
 
 If we decide to align the book to the firmware:
 
-- Rewrite chapter 2 of `docs/RavinePhoenix_Music_Course.md` (lines
+- Rewrite chapter 2 of `docs/Ravine_Phoenix_Music_Course.md` (lines
   312, 340, 341, ~20 other places).
 - Update Part III's "melodic slots (slots 1–8)" framing.
 - Estimated effort: ~2 hours.
@@ -274,11 +274,11 @@ We will revisit this ADR if any of the following become true:
 
 ### See also
 
-- `docs/RavinePhoenix_Music_Course.md` chapter 2 (lines 312, 340–341)
+- `docs/Ravine_Phoenix_Music_Course.md` chapter 2 (lines 312, 340–341)
   — describes PO-33 convention.
 - `docs/MAKERS_COMPANION.md` lines 580–581, 2333 — describes
-  RavinePhoenix convention (matches firmware).
-- `docs/DESIGN.md` line 140, 892–893 — RavinePhoenix convention
+  Ravine: Phoenix convention (matches firmware).
+- `docs/DESIGN.md` line 140, 892–893 — Ravine: Phoenix convention
   (matches firmware). Line 1240 — PO-33 convention (a bug, separate
   from this ADR).
 - `main/config.h` lines 23–25 — `SLOT_DRUM_COUNT = 8`.
@@ -304,7 +304,7 @@ The modifier buttons (`SOUND`, `PATTERN`, `BPM`, `REC`, `FX`, `PLAY`,
 `WRITE`) and the 16 step pads are documented in four places — the design
 doc (`docs/DESIGN.md`), the hardware guide (`hardware/HARDWARE.md`), the
 two long-form books (`docs/MAKERS_COMPANION.md`,
-`docs/RavinePhoenix_Music_Course.md`), and the project website
+`docs/Ravine_Phoenix_Music_Course.md`), and the project website
 (`website/src/`). An audit found each surface described the same gestures
 differently, and several described behaviour the firmware does not have
 (or omitted behaviour it does). Root cause: no single source of truth.
@@ -333,7 +333,7 @@ which is wrong.
    restating gestures.
 4. **Deviations are labelled, not hidden.** The reference uses four
    labels: ✅ (matches the manual), ⚠️ (sanctioned ADR-0002 deviation),
-   ➕ (RavinePhoenix-only gesture not in the manual), ❌ (manual feature
+   ➕ (Ravine: Phoenix-only gesture not in the manual), ❌ (manual feature
    not implemented). Documents reproduce the labels rather than quietly
    "fixing" the text to look conformant.
 
@@ -379,7 +379,7 @@ behaviour. The ➕ gestures and ❌ gaps are recorded, not altered.
 
 ### Context
 
-The PO-33 is "one song = one sketch". RavinePhoenix v2 supports **N**
+The PO-33 is "one song = one sketch". Ravine: Phoenix v2 supports **N**
 sketches per device (per the original ADR-0002 / DESIGN.md §11
 multi-sketch system). Each sketch owns a sample pool of up to 3.37 MB
 (`SAMPLE_POOL_SIZE_BYTES`) plus 16 patterns (≈48 KB) plus a chain
@@ -387,7 +387,7 @@ multi-sketch system). Each sketch owns a sample pool of up to 3.37 MB
 available for samples after the TFT framebuffer (150 KB), AMY
 runtime state, and a per-render scratch block.
 
-The audit ("check RavinePhoenix bootup logic", 2026-10-05) found
+The audit ("check Ravine: Phoenix bootup logic", 2026-10-05) found
 that `storage_load_all()` historically loaded all 16 slots' worth
 of samples from a *flat* on-disk layout (`/sketches/s0.bin..s15.bin`)
 into PSRAM, conflating sketches and conflating "the device's samples"

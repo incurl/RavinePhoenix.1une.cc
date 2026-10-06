@@ -1,6 +1,6 @@
 # The Maker's Companion to the PO-33 ESP32-S3 Firmware
 
-## A study guide for *Make: Electronic Music from Scratch* × RavinePhoenix.1une.cc
+## A study guide for *Make: Electronic Music from Scratch* × Ravine: Phoenix
 
 > **Audience:** complete novices. Every technical term is defined the first
 > time it appears. If you've never written a line of code or soldered a
@@ -104,14 +104,14 @@ skim to the **Quick start** at the end.
      `/dev/ttyUSB0` (Linux) or `/dev/tty.usbserial-*` (macOS).
    - **Windows:** PuTTY, Tera Term, or the built-in Windows Terminal.
    - **Browser-based:** the one-click web flasher on
-     [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc) can open a
+     [ravine.1une.cc](https://ravine.1une.cc) can open a
      serial terminal in your browser. This is the easiest option.
 4. **(Optional) Headphones or an external speaker.** The ESP32-S3 dev
    board has no built-in speaker; the firmware outputs audio via the I²S
    pins. Our hardware guide (`hardware/HARDWARE.md`) shows how to wire a
    $2 PCM5102A DAC chip to the board and connect it to a 3.5 mm jack.
 
-If you bought a fully assembled **RavinePhoenix.1une.cc device** rather
+If you bought a fully assembled **Ravine: Phoenix device** rather
 than building your own, you can skip the hardware steps entirely. The
 firmware already works on the off-the-shelf hardware.
 
@@ -159,7 +159,7 @@ something like this scroll by:
 I (312) boot:  ESP-IDF v6.1.2 2nd stage bootloader
 I (421) cpu_start: Pro cpu start user code
 ...
-I (1024) main: RavinePhoenix PO-33 firmware v0.6.0 starting.
+I (1024) main: Ravine: Phoenix PO-33 firmware v0.6.0 starting.
 I (1025) amy: AMY 1.0 ready.
 I (1026) main: >
 ```
@@ -308,7 +308,7 @@ Open a serial terminal and type:
 The firmware prints something like:
 
 ```
-Firmware:    RavinePhoenix PO-33 v0.6.0
+Firmware:    Ravine: Phoenix PO-33 v0.6.0
 Free heap:   92 KB
 Free PSRAM:  6.4 MB
 Active pat:  1
@@ -674,7 +674,7 @@ parameter, which adjusts the pitch of the next triggered note. With
 Knob A turned up, the firmware plays the slot one or two semitones
 sharp. With Knob A turned down, flat.
 
-If you have a RavinePhoenix device in front of you, try:
+If you have a Ravine: Phoenix device in front of you, try:
 
 1. Hold `FX` and tap it (cycles tweak mode to **TONE**).
 2. Press `SOUND + step 9` to pick slot 9 (this makes it the *active*

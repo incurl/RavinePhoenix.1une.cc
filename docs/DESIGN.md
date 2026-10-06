@@ -47,7 +47,7 @@ Our firmware does **not** make the board behave 1-for-1 like a PO-33. As of v1, 
 
 We did not write the audio engine ourselves. We use **[AMY](https://github.com/shorepine/amy)** — a free, MIT-licensed, fixed-point music synthesizer library written by Brian Whitman and the Dogbotic team. AMY already knows how to play back PCM samples, generate oscillators (sine, saw, square), and add chorus, echo, reverb and filters. Our firmware is mostly a thin "shell" that turns PO-33 button presses into AMY commands. AMY runs its own rendering task on the ESP32-S3's second core, so audio doesn't compete with our button-scan or display tasks.
 
-The full source lives in this repository; the project website with one-click browser flashing lives at [ravinephoenix.1une.cc](https://ravinephoenix.1une.cc) (see §1.5 and the website pages).
+The full source lives in this repository; the project website with one-click browser flashing lives at [ravine.1une.cc](https://ravine.1une.cc) (see §1.5 and the website pages).
 
 ### 1.3 What does "ESP32-S3" + "AMY" + "TFT" mean?
 
@@ -106,7 +106,7 @@ There are **23 physical buttons** in total:
   - `WRITE` — tap = enter/exit write mode (the PO-33's "·" key); long-press = sketch picker
 
   > The canonical, manual-checked table — with ✅/⚠️/➕/❌ labels for every
-  > gesture and a list of the RavinePhoenix-only extensions — lives in
+  > gesture and a list of the Ravine: Phoenix-only extensions — lives in
   > `docs/CONTROL_REFERENCE.md`. The list above is a summary; cite that file
   > when precision matters.
 
@@ -119,9 +119,9 @@ There are **2 analog knobs**, also called "Knob A" and "Knob B" (just like the P
 
 Once you have read §1, you have a mental model of the device. There are three things you might want to do next, and the rest of this document supports all three:
 
-- **Build the device.** Go to the [project website](https://ravinephoenix.1une.cc), where you can flash our firmware onto your board with one click in Chrome / Edge / Firefox over USB. The *Hardware* page there gives a full bill of materials and pin map.
+- **Build the device.** Go to the [project website](https://ravine.1une.cc), where you can flash our firmware onto your board with one click in Chrome / Edge / Firefox over USB. The *Hardware* page there gives a full bill of materials and pin map.
 - **Read the rest of this document.** §2 covers every term used in the project. §3 maps every PO-33 feature to a piece of code with an honest done / partial / missing status. §10 explains how our hardware can break the PO-33's limits. §11 is the v2 proposal for multi-**sketch** storage & restore (we call the unit a "sketch" rather than "song"). §12 is a cliff's-notes reading guide for the *Make: Electronic Music from Scratch* book. §13 is a glossary.
-- **Read the source.** The repo at the [project URL](https://ravinephoenix.1une.cc) (or wherever you got this document) is roughly 3,500 lines of C across `main/audio`, `main/sequencer`, `main/ui`, `main/storage`, `main/system`, and `main/tests`. The audio engine is entirely in the vendored AMY library.
+- **Read the source.** The repo at the [project URL](https://ravine.1une.cc) (or wherever you got this document) is roughly 3,500 lines of C across `main/audio`, `main/sequencer`, `main/ui`, `main/storage`, `main/system`, and `main/tests`. The audio engine is entirely in the vendored AMY library.
 
 If you are a complete novice, the recommended order is: §2 (concepts) → §3.1 (recording) → §5 (workflows) → build it → §10 (breaking limits) → §11 (multi-sketch) → §12 (the book).
 

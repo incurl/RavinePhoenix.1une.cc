@@ -6,7 +6,7 @@
 >
 > **Cost:** roughly **$15–$25** for the additional parts, on top of the **$5–$10** for the ESP32-S3 dev board itself.
 
-This guide is the build companion to **`docs/DESIGN.md`** (which explains *what* the firmware does and *why*) and to the [project website](https://ravinephoenix.1une.cc) (which has the web flasher). This document is the third leg: *how* you turn a pile of parts into a working PO-33 emulator.
+This guide is the build companion to **`docs/DESIGN.md`** (which explains *what* the firmware does and *why*) and to the [project website](https://ravine.1une.cc) (which has the web flasher). This document is the third leg: *how* you turn a pile of parts into a working PO-33 emulator.
 
 ---
 
@@ -29,7 +29,7 @@ You will be working with:
 - **A USB-C cable.** The ESP32-S3 is powered through USB. The board is 5 V. There is no mains voltage at any point in this build.
 - **A battery.** This guide's default is a single **2800 mAh protected Li-ion cell** (18650 form factor). It is *not* optional in the BOM — §3 part #8 — because the device's deep-sleep standby lifetime depends on it. If you are determined to skip the battery, run on USB only; the runtime tables in §4.10 will not apply. Safety rules: do not puncture the cell, do not short the + and − terminals together, do not charge a damaged battery, do not dispose of a spent cell in the trash.
 
-If you are unsure about any step, **stop and ask**. The [project Discussions page](https://github.com/peter/RavinePhoenix.1une.cc/discussions) (or wherever the project is hosted) is a good place to ask. There is no urgency.
+If you are unsure about any step, **stop and ask**. The [project Discussions page](https://github.com/incurl/ravine.1une.cc/discussions) (or wherever the project is hosted) is a good place to ask. There is no urgency.
 
 ### 1.3 Read this first
 
@@ -449,7 +449,7 @@ Lay every part out on a clean desk. Check the BOM in §3 against your pile. It's
 1. Plug the dev board into your laptop via USB-C.
 2. Open a serial monitor at **115200 baud** on the dev board's USB serial port (most boards expose this as `/dev/ttyUSB0` on Linux, `COM3` on Windows, `/dev/cu.usbserial-*` on macOS). Tools: `minicom`, `PuTTY`, `moserial`, the Arduino IDE Serial Monitor, or the ESP-IDF `idf.py monitor`.
 3. Press the dev board's RESET button. You should see boot messages — at minimum a chip ID line and an "ESP-ROM:..." line. If you see nothing, the board is broken or your cable is power-only — try a different cable.
-4. From the [project website](https://ravinephoenix.1une.cc), flash the firmware. After flashing, you should see `=== ESP32-S3 PO-33 K.O! boot ===` followed by PSRAM and heap stats. **At this stage the firmware will fail to initialize because the I²S DAC and TFT aren't wired yet — that's expected.**
+4. From the [project website](https://ravine.1une.cc), flash the firmware. After flashing, you should see `=== ESP32-S3 PO-33 K.O! boot ===` followed by PSRAM and heap stats. **At this stage the firmware will fail to initialize because the I²S DAC and TFT aren't wired yet — that's expected.**
 
 ### 5.3 Step 3 — Wire the audio DAC (PCM5102A)
 
