@@ -156,7 +156,7 @@ esp_err_t display_init(void)
 
     esp_lcd_panel_dev_config_t panel_cfg = {
         .reset_gpio_num = TFT_RST_GPIO,
-        .rgb_endian     = LCD_RGB_ENDIAN_BGR,
+        .data_endian     = LCD_RGB_DATA_ENDIAN_BIG,
         .bits_per_pixel = 16,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(s_io, &panel_cfg, &s_panel));

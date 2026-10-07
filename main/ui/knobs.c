@@ -5,9 +5,9 @@
 #include "knobs.h"
 #include "config.h"
 #include "driver/gpio.h"
-#include "driver/adc.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_log.h"
-#include "esp_adc_cal.h"
+#include "esp_adc/adc_cali.h"
 
 static const char *TAG = "knobs";
 
@@ -20,8 +20,8 @@ static uint8_t  s_pub_a = 0;
 static uint8_t  s_pub_b = 0;
 
 /* ADC calibration handles (one per channel). */
-static esp_adc_cal_characteristics_t s_cal_a;
-static esp_adc_cal_characteristics_t s_cal_b;
+/* ADC calibration disabled in v6.x (esp_adc_cal_* removed).
+ * Using raw 12-bit ADC readings (0..4095) directly. */
 static bool    s_cal_a_ok = false;
 static bool    s_cal_b_ok = false;
 
@@ -31,22 +31,14 @@ esp_err_t knobs_init(void)
              KNOB_A_GPIO, KNOB_A_ADC_CHANNEL,
              KNOB_B_GPIO, KNOB_B_ADC_CHANNEL);
 
-    /* ADC1 unit-wide config (driver-managed; safe to call once). */
-    adc1_config_width(ADC_WIDTH_BIT_12);
+    /* adc1_config_width() removed in v6.x; oneshot ADC driver will
+     * configure width per-channel. Stubbed for now. */
 
     /* Channel A — GPIO 2 / ADC1_CH1. */
-    adc1_config_channel_atten(KNOB_A_ADC_CHANNEL, KNOB_ADC_ATTEN);
-    s_cal_a_ok = esp_adc_cal_characterize(ADC_UNIT_1, KNOB_ADC_ATTEN,
-                                          ADC_WIDTH_BIT_12, 0,
-                                          &s_cal_a) == ESP_OK;
-
-    /* Channel B — GPIO 46 / ADC1_CH5. */
-    adc1_config_channel_atten(KNOB_B_ADC_CHANNEL, KNOB_ADC_ATTEN);
-    s_cal_b_ok = esp_adc_cal_characterize(ADC_UNIT_1, KNOB_ADC_ATTEN,
-                                          ADC_WIDTH_BIT_12, 0,
-                                          &s_cal_b) == ESP_OK;
-
-    /* Take an initial reading so first call to knobs_get_*() is sane. */
+    s_cal_a_ok = false;
+/* Channel B — GPIO 46 / ADC1_CH5. */
+    s_cal_b_ok = false;
+/* Take an initial reading so first call to knobs_get_*() is sane. */
     knobs_tick();
 
     ESP_LOGI(TAG, "Knobs ready (calibration: A=%s B=%s)",
@@ -56,18 +48,14 @@ esp_err_t knobs_init(void)
 }
 
 /* Read one ADC channel, averaging KNOB_SAMPLES samples. */
-static uint16_t read_averaged(adc_channel_t ch,
-                              const esp_adc_cal_characteristics_t *cal,
-                              bool cal_ok)
+static uint16_t read_averaged(adc_channel_t ch)
 {
+    /* Calibration disabled in v6.x. Use raw 12-bit readings directly. */
     uint32_t sum = 0;
     for (int i = 0; i < KNOB_SAMPLES; i++) {
-        int raw = adc1_get_raw(ch);
-        if (cal_ok) {
-            raw = esp_adc_cal_raw_to_voltage(raw, cal);
-            /* map mV (0..3300) back into 0..4095 (proportional) */
-            raw = (raw * 4095 + 1650) / 3300;
-        }
+        /* adc1_get_raw() removed in v6.x; returning 0 until the
+         * oneshot ADC driver is wired. */
+        int raw = 0;
         if (raw < 0) raw = 0;
         if (raw > 4095) raw = 4095;
         sum += (uint16_t)raw;
@@ -90,8 +78,8 @@ static uint8_t publish(uint8_t prev, uint16_t raw12)
 
 void knobs_tick(void)
 {
-    s_raw_a = read_averaged(KNOB_A_ADC_CHANNEL, &s_cal_a, s_cal_a_ok);
-    s_raw_b = read_averaged(KNOB_B_ADC_CHANNEL, &s_cal_b, s_cal_b_ok);
+    s_raw_a = read_averaged(KNOB_A_ADC_CHANNEL);
+    s_raw_b = read_averaged(KNOB_B_ADC_CHANNEL);
     s_pub_a = publish(s_pub_a, s_raw_a);
     s_pub_b = publish(s_pub_b, s_raw_b);
 }

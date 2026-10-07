@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include <string.h>
 

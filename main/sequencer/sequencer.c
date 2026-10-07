@@ -262,6 +262,8 @@ void sequencer_request_retrigger(void)
     s_retrigger_requested = true;
 }
 
+static void on_step(void *arg);
+
 void sequencer_tick(void)
 {
     /* F-031 sync IN. Run the same per-step logic as the esp_timer
@@ -541,11 +543,6 @@ void sequencer_set_swing(uint8_t level)
 }
 
 uint8_t sequencer_get_swing(void) { return s_swing; }
-
-void sequencer_tick(void)
-{
-    /* Called every render block. For now we let the timer fire on_step(). */
-}
 
 void sequencer_print_status(void)
 {

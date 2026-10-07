@@ -1,15 +1,14 @@
 ## ESP-IDF Component manifest for ESP32-S3 PO-33 K.O! firmware
-## Targets ESP-IDF v6.0
+## Targets ESP-IDF v6.1
 ##
 ## AMY is vendored locally under components/amy (see components/amy/README.md).
 ## All audio (oscillators, sample playback, effects, mixing, I2S) is delegated
 ## to AMY; we no longer depend on esp_audio_effects.
+##
+## Note: espressif/esp_lcd and espressif/esp_lcd_panel_io_additions are
+## bundled with ESP-IDF v6.1 — no longer pulled from the registry.
 dependencies:
-  espressif/esp_lcd:
-    version: "^3.0"
   espressif/esp_lcd_ili9341:
-    version: "^1.0"
+    version: "^2.0.0"
   joltwallet/littlefs:
     version: "^1.7"
-  espressif/esp_lcd_panel_io_additions:
-    version: "^1.0"

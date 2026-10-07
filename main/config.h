@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "driver/gpio.h"
 
 /* ─── Audio sample pool ──────────────────────────────────────── */
 #define SAMPLE_RATE_HZ            44100
@@ -184,7 +185,7 @@ enum {
  * sync pulse, which GPIO 19 cannot). The GPIO is still configured
  * as input with internal pull-up by `sync_init()`; no listener is
  * wired yet (F-031 ❌ missing). */
-#define SYNC_IN_GPIO              GPIO_NUM_25
+#define SYNC_IN_GPIO              GPIO_NUM_19
 
 /* ─── Status LEDs (optional) ─────────────────────────────────── */
 #define LED_REC_GPIO              GPIO_NUM_21
@@ -238,9 +239,9 @@ enum {
  * consumed by ESP32-S3 PCNT unit 0; the click-switch is a polled
  * GPIO debounced inside encoder_tick(). The encoder is REQUIRED at
  * build (no runtime fallback). */
-#define ENCODER_A_GPIO            GPIO_NUM_22      /* phase A    */
-#define ENCODER_B_GPIO            GPIO_NUM_23      /* phase B    */
-#define ENCODER_CLICK_GPIO        GPIO_NUM_24      /* click-switch */
+#define ENCODER_A_GPIO            GPIO_NUM_20      /* phase A; was GPIO_NUM_22 (invalid for S3 in v6.1) */
+#define ENCODER_B_GPIO            GPIO_NUM_26      /* phase B; was GPIO_NUM_23 (invalid for S3 in v6.1) */
+#define ENCODER_CLICK_GPIO        GPIO_NUM_45      /* click-switch; was GPIO_NUM_24 in old pin map (invalid for S3 in v6.1) */
 
 /* ─── Sequencer defaults ─────────────────────────────────────── */
 #define DEFAULT_BPM               120

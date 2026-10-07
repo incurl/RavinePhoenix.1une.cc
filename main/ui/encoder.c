@@ -47,7 +47,6 @@ static esp_err_t init_pcnt(void)
         .low_limit = -32768,
         .high_limit = 32767,
         .intr_priority = 0,
-        .flags.unit_zero_cross_mode = PCNT_UNIT_ZERO_CROSS_POS_ZERO, /* default */
     };
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_cfg, &s_pcnt_unit));
 

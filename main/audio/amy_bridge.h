@@ -9,7 +9,7 @@
  *     of the firmware (sequencer, buttons, storage).
  *
  *   All "sound" lives here. The rest of the firmware (sequencer/pattern.c,
- *   ui/buttons.c, storage/storage.c, ui/display.c, system/*) is unchanged
+ *   ui/buttons.c, storage/storage.c, ui/display.c, system/...) is unchanged
  *   from the pre-AMY plan.
  */
 #ifndef PO33_AMY_BRIDGE_H

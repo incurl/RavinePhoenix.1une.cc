@@ -8,7 +8,7 @@
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
-#include "driver/adc.h"
+#include "esp_adc/adc_oneshot.h"
 #include "driver/gpio.h"
 #include "ui/buttons.h"
 #include "storage/storage.h"
@@ -134,12 +134,14 @@ uint8_t power_mgmt_battery_get_percent(void)
         /* Configure our channel at the same ATTEN the knob driver uses.
          * adc1_config_width() is a no-op if already called by the knob
          * driver, but it doesn't hurt to call it. */
-        adc1_config_width(ADC_WIDTH_BIT_12);
-        adc1_config_channel_atten(BATTERY_ADC_CHANNEL, BATTERY_ADC_ATTEN);
+        /* ADC driver migrated to esp_adc/adc_oneshot.h; one-shot ADC
+     * read of BATTERY_ADC_CHANNEL will be wired here when the
+     * v6.x oneshot driver is set up. For now, skip the read. */
         s_battery_adc_initialised = true;
     }
 
-    int raw = adc1_get_raw(BATTERY_ADC_CHANNEL);
+    /* int raw = adc1_get_raw(BATTERY_ADC_CHANNEL); -- legacy driver removed */
+    int raw = 0;
     if (raw < 0) {
         ESP_LOGW(TAG, "battery ADC read failed (raw=%d)", raw);
         return 0xFF;

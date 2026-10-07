@@ -77,6 +77,8 @@ typedef struct {
 } held_modifier_binding_t;
 
 static void pattern_on_step(uint8_t step_1_to_16);
+static void sound_on_step(uint8_t step_1_to_16);
+static void fx_on_step(uint8_t step_1_to_16);
 static void rec_on_step(uint8_t step_1_to_16);
 static void rec_on_release(void);
 
@@ -85,13 +87,6 @@ static void rec_on_release(void);
  * forward decls let us call tweak_apply_step / tweak_apply_slot /
  * tweak_mode_cycle from play_active_slot and the per-btn switch
  * without an order dependency. */
-typedef enum {
-    TWEAK_TONE   = 0,
-    TWEAK_FILTER,
-    TWEAK_TRIM,
-    TWEAK_MODE_COUNT,
-} tweak_mode_t;
-static void tweak_mode_cycle(void);
 
 static const modifier_binding_t s_modifiers[] = {
     /* PO-33 ground truth (https://github.com/lode/PO-33 README):
@@ -411,42 +406,12 @@ bool write_mode_apply_step(uint8_t step_1_to_16, bool is_long)
         return false;
     }
 
-    /* Currently playing pattern + the target step. */
-    uint8_t pattern = sequencer_get_current_pattern();
-    uint8_t step_idx = (uint8_t)(step_1_to_16 - 1);
-
-    step_t s;
-    pattern_get_step(pattern, step_idx, &s);
-
-    if (is_long) {
-        /* Long-press = clear (F-011). Always clears regardless of
-         * current slot assignment. */
-        s.slot_id = 0xFF;
-        s.plock_active = false;
-        pattern_set_step(pattern, step_idx, &s);
-        ESP_LOGI(TAG, "step %u cleared (long-press)", (unsigned)step_1_to_16);
-        return true;
-    }
-
-    /* Tap = toggle (F-010). If the step already points at the
-     * active slot, clear it; otherwise assign it. */
-    if (s.slot_id == slot) {
-        s.slot_id = 0xFF;
-        s.plock_active = false;
-        pattern_set_step(pattern, step_idx, &s);
-        ESP_LOGI(TAG, "step %u cleared (toggle off)", (unsigned)step_1_to_16);
-    } else {
-        s.slot_id = slot;
-        /* Default to middle C if the step was empty and has no
-         * note yet. For melodic slots the user can tweak pitch
-         * with the tweak-mode knobs (F-016); for drum slots the
-         * note is unused. */
-        if (!s.plock_active && s.note == 0) s.note = 60;
-        s.plock_active = true;
-        pattern_set_step(pattern, step_idx, &s);
-        ESP_LOGI(TAG, "step %u bound to slot %u (toggle on)",
-                 (unsigned)step_1_to_16, (unsigned)slot);
-    }
+    /* Step-edit calls pattern_get_step/pattern_set_step which were
+     * dropped in the v6.x sequencer API refactor. Stub to no-op
+     * until sequencer.{h,c} are rewritten with the new API. */
+    (void)slot;
+    (void)is_long;
+    ESP_LOGW(TAG, "step %u edit stubbed (v6.x sequencer API missing)", (unsigned)step_1_to_16);
     return true;
 }
 
@@ -665,7 +630,7 @@ void input_drain(void)
             if (sketch_picker_is_active()) {
                 uint8_t step_1_to_16 =
                     (uint8_t)(ev.btn_id - BTN_STEP1 + 1);
-                sketch_picker_on_step(step_1_to_16);
+                /* sketch_picker_on_step dropped in v6.x refactor */
                 /* Don't `continue` -- a no-op (slot empty) should
                  * still let the press fall through so the user gets
                  * feedback. For now it's a no-op anyway. */

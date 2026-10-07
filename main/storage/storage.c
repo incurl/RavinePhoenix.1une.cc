@@ -96,7 +96,7 @@ static esp_err_t    read_index_full(uint8_t *out_count,
 
 static const char *TAG = "storage";
 
-static esp_littlefs_handle_t s_sketches_fs = NULL;
+static bool s_sketches_mounted = false;
 
 esp_err_t storage_init(void)
 {
@@ -107,7 +107,8 @@ esp_err_t storage_init(void)
         .format_if_mount_failed = true,
         .dont_mount         = false,
     };
-    ESP_ERROR_CHECK(esp_littlefs_create(&sketches_conf, &s_sketches_fs));
+    ESP_ERROR_CHECK(esp_vfs_littlefs_register(&sketches_conf));
+    s_sketches_mounted = true;
 
     ESP_LOGI(TAG, "LittleFS mounted at %s", SKETCHES_BASE);
     return ESP_OK;
@@ -138,11 +139,11 @@ esp_err_t storage_factory_reset(void)
      * 3. The sketch Picker UI may be open; storage_factory_reset()
      *    doesn't touch it. Caller should close the picker if open
      *    before invoking, or accept the stale-active-state UI. */
-    if (!s_sketches_fs) {
+    if (!s_sketches_mounted) {
         ESP_LOGE(TAG, "factory_reset: not initialised");
         return ESP_ERR_INVALID_STATE;
     }
-    esp_err_t e = esp_littlefs_format(s_sketches_fs);
+    esp_err_t e = esp_littlefs_format("sketches");
     if (e != ESP_OK) {
         ESP_LOGE(TAG, "factory_reset: format failed %s", esp_err_to_name(e));
         return e;
@@ -791,7 +792,7 @@ esp_err_t storage_sketch_load(const char *id_str)
 esp_err_t storage_sketch_save_active(void)
 {
     int id = next_free_id();
-    char id_str[SKETCH_ID_LEN + 1];
+    char id_str[12];
     snprintf(id_str, sizeof(id_str), "%04x", id);
 
     char dir_path[64], patterns_path[80], chain_path[80], meta_path[80];

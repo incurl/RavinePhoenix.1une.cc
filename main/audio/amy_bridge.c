@@ -17,6 +17,8 @@
  */
 #include "amy_bridge.h"
 #include "config.h"
+#include "driver/gpio.h"
+#include "sequencer/sequencer.h"
 
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -382,7 +384,7 @@ esp_err_t amy_bridge_init(void)
     cfg.playback_device_id  = 0;
     cfg.capture_device_id   = 0;
     cfg.features.startup_bleep = 0;
-    cfg.features.midi = AMY_MIDI_NONE;
+    cfg.midi = AMY_MIDI_IS_NONE;
 
     cfg.ram_caps_events = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
     cfg.ram_caps_oscs   = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
@@ -641,8 +643,8 @@ static void apply_fx(amy_event *e, po33_fx_t fx, uint8_t p1, uint8_t p2,
         e->midi_note = (uint8_t)(e->midi_note > 12 ? e->midi_note - 12 : 0); break;
     case PO33_FX_FILTER_SWEEP:
         e->filter_type     = FILTER_LPF;
-        e->filter_freq     = 200 + p1 * 2;
-        e->filter_resonance = 1.0f + p2 / 64.0f;
+        e->filter_freq_coefs[0]     = 200 + p1 * 2;
+        e->resonance = 1.0f + p2 / 64.0f;
         break;
     case PO33_FX_BITCRUSH:
         e->dist_bits = (uint8_t)(4 + (15 - p1 / 18));
@@ -715,8 +717,8 @@ esp_err_t amy_bridge_play_note(uint8_t slot, uint8_t midi_note,
      *   resonance 0..255 -> filter_resonance 1.0..6.0 (1.0 = no
      *     resonance, 6.0 = aggressive peak) */
     if (filter_cutoff > 0) {
-        e.filter_freq     = (float)filter_cutoff * 8000.0f / 255.0f;
-        e.filter_resonance = 1.0f + (float)filter_resonance / 51.0f;
+        e.filter_freq_coefs[0]     = (float)filter_cutoff * 8000.0f / 255.0f;
+        e.resonance = 1.0f + (float)filter_resonance / 51.0f;
         e.filter_type     = FILTER_LPF;
     }
 

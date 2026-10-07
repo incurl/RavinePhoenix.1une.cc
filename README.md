@@ -4,7 +4,7 @@ A firmware that emulates the **Teenage Engineering PO-33 K.O!** micro-sampler on
 
 **All sound is produced by [AMY](https://github.com/shorepine/amy)** — vendored under `components/amy`. AMY provides oscillators, PCM sample playback, filters, chorus/echo/reverb, a sequencer, voice stealing and I²S driver setup. Our firmware is a thin UI + sequencer + storage layer over AMY.
 
-> **Status:** Targets **ESP-IDF v6.0** APIs. v6.0 is not yet GA as of writing — see "Build" below.
+> **Status:** Targets **ESP-IDF v6.1** APIs.
 
 ---
 
@@ -55,8 +55,8 @@ for the static-site-generator decision.
 ## 🏗️ Build
 
 ```bash
-# 1. ESP-IDF v6.0 (or current RC)
-git clone --recursive https://github.com/espressif/esp-idf.git -b v6.0
+# 1. ESP-IDF v6.1
+git clone --recursive https://github.com/espressif/esp-idf.git -b v6.1
 cd esp-idf && ./install.sh esp32s3 && source export.sh
 
 # 2. Vendor AMY sources into components/amy/src/ (see components/amy/README.md)
@@ -230,11 +230,10 @@ The PSRAM sample pool is shared directly with AMY via a local `pcm_load_external
 
 ## ⚠️ Known Limitations / Roadmap
 
-- v6.0 is not GA; some AMY APIs may need a one-line rename when the toolchain goes final.
-- AMY's `i2s.c` uses `driver/i2s_std.h` (the new v6.0 channel API).
+- Targets ESP-IDF v6.1. AMY's `i2s.c` uses `driver/i2s_std.h` (the new v6.x channel API).
 - AMY's I²S RX block is shared; `amy_bridge_pump_capture()` runs from the button-scan task (10 ms) and pulls the latest block from AMY's internal `amy_in_block[]`.
 - Per-step parameter locks are encoded in `amy_event` fields — see `apply_fx()` in `amy_bridge.c`.
-- Power consumption on deep sleep ~ 10 µA — measured in v5.x, expected same on v6.0.
+- Power consumption on deep sleep ~ 10 µA — measured in v5.x, expected same on v6.1.
 
 ---
 

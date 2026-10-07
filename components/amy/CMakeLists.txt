@@ -12,14 +12,18 @@
 idf_component_register(
     SRC_DIRS "src"
     INCLUDE_DIRS "src"
-    PRIV_REQUIRES driver freertos esp_timer
-    REQUIRES
+    EXCLUDE_SRCS "src/usb.c"        # usb.c is the TinyUSB MIDI/CDC path;
+                                    # we don't depend on TinyUSB and don't
+                                    # define AMYBOARD/AMYBOARD_ARDUINO.
+    PRIV_REQUIRES driver freertos esp_timer esp_driver_i2s
+    REQUIRES esp_driver_uart
 )
 
 # Compile-time knobs AMY exposes. See src/amy.h.
+# Note: AMY_MCU and ESP_PLATFORM are set automatically by amy.h when
+# building for an ESP target (and by the IDF toolchain respectively).
+# Don't pass them here — doing so triggers "macro redefined -Werror".
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    AMY_MCU                    # select MCU paths in i2s.c
-    ESP_PLATFORM               # select ESP32 path in i2s.c
     AMY_WAVETABLE              # build the small built-in wavetable
     BLOCK_SIZE_BITS=8          # 256-frame render block
     AMY_NCHANS=2               # stereo output
